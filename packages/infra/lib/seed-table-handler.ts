@@ -24,7 +24,7 @@ export interface SeedTableDeps {
   now: () => string;
 }
 
-const SEEDED_TABLE_DEFAULTS = {
+export const SEEDED_TABLE_DEFAULTS = {
   defaultStack: 2000,
   maxSeats: 8,
   smallBlind: 1,

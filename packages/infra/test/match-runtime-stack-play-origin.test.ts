@@ -132,22 +132,24 @@ describe('MatchRuntimeStack play origin', () => {
     assert.doesNotMatch(css, /url\((['"]?)\/assets\//);
   });
 
-  it('stages riffle/config.json as public webSocketUrl only', () => {
+  it('stages riffle/config.json with webSocketUrl and the seeded table listing', () => {
     const { raw, marker } = stagedConfigForDeployment(synth.outdir, playDeploymentProps);
-    const markerMatch = raw.match(/^\{"webSocketUrl":(<<marker:[^>]+>>)\}$/);
-    assert.ok(markerMatch, `riffle config.json is webSocketUrl only: ${raw}`);
-    assert.equal(markerMatch[1], marker);
-
-    const markers = (playDeploymentProps.SourceMarkers as Array<Record<string, unknown>>).find(
-      (entry) => marker in entry,
+    assert.match(
+      raw,
+      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"Galaxy Class Table"/,
+      `riffle config.json includes webSocketUrl and seeded table listing: ${raw}`,
     );
-    assert.ok(markers);
-    const serialized = JSON.stringify({ raw, markerValue: markers[marker] });
+    assert.match(raw, /"maxSeats":8\}\]\}$/);
+
+    const markers = playDeploymentProps.SourceMarkers as Array<Record<string, unknown>>;
+    const webSocketMarker = markers.find((entry) => marker in entry);
+    assert.ok(webSocketMarker);
+    const serialized = JSON.stringify({ raw, markers });
     for (const pattern of CREDENTIAL_PATTERNS) {
       assert.doesNotMatch(serialized, pattern);
     }
     assert.doesNotMatch(serialized, /riffle\.seat|hole/i);
-    assert.doesNotMatch(serialized, new RegExp(seedLogicalId));
+    assert.match(serialized, new RegExp(seedLogicalId));
   });
 
   it('names the play-origin deploy layer for the cfn exec role', () => {

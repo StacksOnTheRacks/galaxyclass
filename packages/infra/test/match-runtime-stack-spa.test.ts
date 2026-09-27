@@ -108,7 +108,7 @@ describe('MatchRuntimeStack dashboard SPA hosting', () => {
     }
   });
 
-  it('deploys the dashboard artifact and a config.json with only webSocketUrl', () => {
+  it('deploys the dashboard artifact and a config.json with webSocketUrl and the seeded table listing', () => {
     const deployments = resourcesOfType(synth.template, 'Custom::CDKBucketDeployment');
     const root = deployments.find(
       ([, resource]) => resource.Properties?.DestinationBucketKeyPrefix === undefined,
@@ -125,15 +125,17 @@ describe('MatchRuntimeStack dashboard SPA hosting', () => {
     assert.doesNotMatch(rootHtml, /\/riffle\//);
 
     const { raw: rawConfig, marker } = stagedConfigForDeployment(synth.outdir, props);
-    const markerMatch = rawConfig.match(/^\{"webSocketUrl":(<<marker:[^>]+>>)\}$/);
-    assert.ok(markerMatch, `config.json has only webSocketUrl bound to a deploy-time token: ${rawConfig}`);
-    assert.equal(markerMatch[1], marker);
-
-    const markers = (props.SourceMarkers as Array<Record<string, unknown>>).find(
-      (entry) => marker in entry,
+    assert.match(
+      rawConfig,
+      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"Galaxy Class Table"/,
+      `config.json includes webSocketUrl and seeded table listing: ${rawConfig}`,
     );
-    assert.ok(markers, 'config.json marker is resolved at deploy time');
-    const markerValue = markers[marker] as { 'Fn::Join': [string, unknown[]] };
+    assert.match(rawConfig, /"maxSeats":8\}\]\}$/);
+
+    const markers = props.SourceMarkers as Array<Record<string, unknown>>;
+    const webSocketMarker = markers.find((entry) => marker in entry);
+    assert.ok(webSocketMarker, 'config.json webSocketUrl marker is resolved at deploy time');
+    const markerValue = webSocketMarker[marker] as { 'Fn::Join': [string, unknown[]] };
 
     const expected = synth.stack.resolve(synth.stack.webSocketUrl) as {
       'Fn::Join': [string, unknown[]];
@@ -143,7 +145,7 @@ describe('MatchRuntimeStack dashboard SPA hosting', () => {
     expectedParts[expectedParts.length - 1] = `${expectedParts.at(-1) as string}"`;
     assert.deepEqual(markerValue, { 'Fn::Join': ['', expectedParts] });
 
-    const serialized = JSON.stringify({ rawConfig, markerValue });
+    const serialized = JSON.stringify({ rawConfig, markers });
     for (const pattern of CREDENTIAL_PATTERNS) {
       assert.doesNotMatch(serialized, pattern);
     }

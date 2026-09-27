@@ -2,9 +2,10 @@ import type { OutboundMessage, TableSnapshotMessage } from '../../runtime/types.
 import { renderMyHandPanel } from '../dashboard/my-hand-panel.js';
 import { renderLoading } from '../surfaces/loading.js';
 import { loadPlayConfig } from './config.js';
-import { parseTableIdFromPath } from './route.js';
+import { isTableListPath, parseTableIdFromPath } from './route.js';
 import { renderSeatedControls, type SeatAction, type SeatedControlsState } from './seated-controls.js';
 import { createSitDraft, renderSitPanel, type SitDraft } from './sit-panel.js';
+import { renderTableList } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
 import { parseCard, renderSnapshotShell } from './view.js';
 
@@ -30,7 +31,7 @@ export interface DashboardPlayDeps {
 
 export interface DashboardPlaySession {
   readonly tableId: string | null;
-  readonly phase: 'not_found' | 'loading' | 'joined' | 'closed';
+  readonly phase: 'not_found' | 'loading' | 'list' | 'joined' | 'closed';
   readonly snapshot: TableSnapshotMessage | null;
   readonly seatId: string | null;
   readonly reconnecting: boolean;
@@ -358,8 +359,20 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   };
 
   if (!tableId) {
-    session.phase = 'not_found';
-    renderTableNotFound(root);
+    if (!isTableListPath(deps.pathname)) {
+      session.phase = 'not_found';
+      renderTableNotFound(root);
+      return session;
+    }
+
+    renderLoading(root, { copy: 'shared' });
+    const listConfig = await loadPlayConfig(deps.fetch);
+    if (!listConfig) {
+      failClosed();
+      return session;
+    }
+    session.phase = 'list';
+    renderTableList(root, listConfig.tables);
     return session;
   }
 

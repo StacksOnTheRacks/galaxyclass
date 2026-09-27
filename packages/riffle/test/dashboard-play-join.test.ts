@@ -64,9 +64,7 @@ function expectTableNotFound(root: HTMLElement): void {
   expect(alert?.querySelector('h1')?.textContent).toBe(TABLE_NOT_FOUND_TITLE);
   expect(alert?.textContent).toContain(TABLE_NOT_FOUND_BODY);
   expect(TABLE_NOT_FOUND_TITLE).toBe("Couldn't open this table");
-  expect(TABLE_NOT_FOUND_BODY).toBe(
-    'This table link is invalid or unavailable. There is no list of other tables.',
-  );
+  expect(TABLE_NOT_FOUND_BODY).toBe('This table link is invalid or unavailable.');
   expect(root.querySelector('button')).toBeNull();
   expect(root.querySelector('input')).toBeNull();
   expect(root.textContent).not.toMatch(/Sign in|Create account|lobby|Sit at Table/i);
@@ -107,7 +105,7 @@ describe('dashboard play GUID join', () => {
     setViewport(1440);
   });
 
-  it.each(['/', '/riffle', '/riffle/', `/play/${TABLE_ID}`, `/${TABLE_ID}/extra`, '/not-a-uuid'])(
+  it.each([`/play/${TABLE_ID}`, `/${TABLE_ID}/extra`, '/not-a-uuid'])(
     'fails closed on %s without fetching config or opening a socket',
     async (pathname) => {
       const { root, sockets, sessionPromise, fetchCalls } = await start(pathname);
@@ -241,10 +239,6 @@ describe('dashboard play GUID join', () => {
 
   it('renders the same surfaces at the narrow-iframe breakpoint', async () => {
     setViewport(390, 844);
-    const notFound = await start('/');
-    await notFound.sessionPromise;
-    expectTableNotFound(notFound.root);
-
     const joined = await start(`/${TABLE_ID}`);
     await joined.sessionPromise;
     joined.sockets[0]!.emit('open');

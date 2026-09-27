@@ -1,5 +1,6 @@
 import './dashboard/styles.css';
 import './dashboard-play/styles.css';
+import './dashboard-play/table-list.css';
 import { startDashboardPlay } from './dashboard-play/session.js';
 
 const root = typeof document !== 'undefined' ? document.getElementById('app') : null;

@@ -20,6 +20,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3Deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
+import { buildSeededTableListing } from './seeded-table-listing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.join(__dirname, '../../..');
@@ -120,64 +121,6 @@ export class MatchRuntimeStack extends Stack {
       value: table.tableName,
     });
 
-    const siteBucket = new s3.Bucket(this, 'DashboardSiteBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-    });
-
-    const spaFallback = (httpStatus: number): cloudfront.ErrorResponse => ({
-      httpStatus,
-      responseHttpStatus: 200,
-      responsePagePath: '/index.html',
-      ttl: Duration.seconds(0),
-    });
-
-    const distribution = new cloudfront.Distribution(this, 'DashboardDistribution', {
-      defaultBehavior: {
-        origin: cloudfrontOrigins.S3BucketOrigin.withOriginAccessControl(siteBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      },
-      defaultRootObject: 'index.html',
-      errorResponses: [spaFallback(403), spaFallback(404)],
-    });
-
-    new s3Deployment.BucketDeployment(this, 'DashboardSiteDeployment', {
-      destinationBucket: siteBucket,
-      sources: [
-        s3Deployment.Source.asset(DASHBOARD_ARTIFACT_DIR),
-        s3Deployment.Source.jsonData('config.json', { webSocketUrl: this.webSocketUrl }),
-      ],
-      distribution,
-      distributionPaths: ['/*'],
-    });
-
-    new CfnOutput(this, 'DashboardUrl', {
-      value: `https://${distribution.distributionDomainName}`,
-    });
-
-    const playOriginBucket = new s3.Bucket(this, 'PlayOriginBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      // GalaxyClassSite-prod owns the bucket policy (CloudFront read + TLS deny).
-      enforceSSL: false,
-    });
-    this.playOriginBucket = playOriginBucket;
-
-    const playOriginDeployment = new s3Deployment.BucketDeployment(this, 'PlayOriginDeployment', {
-      destinationBucket: playOriginBucket,
-      destinationKeyPrefix: 'riffle',
-      sources: [
-        s3Deployment.Source.asset(PLAY_ORIGIN_ARTIFACT_DIR),
-        s3Deployment.Source.jsonData('config.json', { webSocketUrl: this.webSocketUrl }),
-      ],
-    });
-    nameBucketDeployLayer(playOriginDeployment, PLAY_ORIGIN_DEPLOY_LAYER_NAME);
-
-    new CfnOutput(this, 'PlayOriginBucketName', {
-      value: playOriginBucket.bucketName,
-    });
-
     const seedHandler = new lambdaNodejs.NodejsFunction(this, 'SeedTableHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: path.join(__dirname, 'seed-table-handler.ts'),
@@ -208,6 +151,7 @@ export class MatchRuntimeStack extends Stack {
       properties: { TableName: table.tableName },
     });
     const seededTableId = seededTable.getAttString('TableId');
+    const seededTableListing = buildSeededTableListing(seededTableId);
 
     new CfnOutput(this, 'SeededTableId', {
       value: seededTableId,
@@ -216,6 +160,71 @@ export class MatchRuntimeStack extends Stack {
     new CfnOutput(this, 'PlayUrl', {
       value: `https://galaxyclass.app/riffle/${seededTableId}`,
     });
+
+    const siteBucket = new s3.Bucket(this, 'DashboardSiteBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+    });
+
+    const spaFallback = (httpStatus: number): cloudfront.ErrorResponse => ({
+      httpStatus,
+      responseHttpStatus: 200,
+      responsePagePath: '/index.html',
+      ttl: Duration.seconds(0),
+    });
+
+    const distribution = new cloudfront.Distribution(this, 'DashboardDistribution', {
+      defaultBehavior: {
+        origin: cloudfrontOrigins.S3BucketOrigin.withOriginAccessControl(siteBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+      defaultRootObject: 'index.html',
+      errorResponses: [spaFallback(403), spaFallback(404)],
+    });
+
+    new s3Deployment.BucketDeployment(this, 'DashboardSiteDeployment', {
+      destinationBucket: siteBucket,
+      sources: [
+        s3Deployment.Source.asset(DASHBOARD_ARTIFACT_DIR),
+        s3Deployment.Source.jsonData('config.json', {
+          webSocketUrl: this.webSocketUrl,
+          tables: [seededTableListing],
+        }),
+      ],
+      distribution,
+      distributionPaths: ['/*'],
+    });
+
+    new CfnOutput(this, 'DashboardUrl', {
+      value: `https://${distribution.distributionDomainName}`,
+    });
+
+    const playOriginBucket = new s3.Bucket(this, 'PlayOriginBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      // GalaxyClassSite-prod owns the bucket policy (CloudFront read + TLS deny).
+      enforceSSL: false,
+    });
+    this.playOriginBucket = playOriginBucket;
+
+    const playOriginDeployment = new s3Deployment.BucketDeployment(this, 'PlayOriginDeployment', {
+      destinationBucket: playOriginBucket,
+      destinationKeyPrefix: 'riffle',
+      sources: [
+        s3Deployment.Source.asset(PLAY_ORIGIN_ARTIFACT_DIR),
+        s3Deployment.Source.jsonData('config.json', {
+          webSocketUrl: this.webSocketUrl,
+          tables: [seededTableListing],
+        }),
+      ],
+    });
+    nameBucketDeployLayer(playOriginDeployment, PLAY_ORIGIN_DEPLOY_LAYER_NAME);
+
+    new CfnOutput(this, 'PlayOriginBucketName', {
+      value: playOriginBucket.bucketName,
+    });
+
   }
 }
 

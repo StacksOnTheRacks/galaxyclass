@@ -6,6 +6,7 @@ import { DASHBOARD_ARTIFACT_DIR, PLAY_ORIGIN_ARTIFACT_DIR } from '../lib/match-r
 import {
   listTextArtifacts,
   resourcesOfType,
+  stagedConfigForDeployment,
   synthMatchRuntimeStack,
   type SynthResult,
 } from './support.js';
@@ -74,7 +75,7 @@ describe('MatchRuntimeStack seeded table', () => {
     ]);
   });
 
-  it('keeps the seeded id out of the SPA artifact and config.json', () => {
+  it('keeps the seeded id out of the SPA artifact but publishes it in config.json', () => {
     for (const dir of [DASHBOARD_ARTIFACT_DIR, PLAY_ORIGIN_ARTIFACT_DIR]) {
       for (const file of listTextArtifacts(dir)) {
         const body = fs.readFileSync(file, 'utf8');
@@ -82,11 +83,14 @@ describe('MatchRuntimeStack seeded table', () => {
       }
     }
 
-    for (const [, deployment] of resourcesOfType(synth.template, 'Custom::CDKBucketDeployment')) {
-      assert.doesNotMatch(
-        JSON.stringify(deployment.Properties?.SourceMarkers),
-        new RegExp(seedLogicalId),
-      );
+    const deployments = resourcesOfType(synth.template, 'Custom::CDKBucketDeployment');
+    assert.equal(deployments.length, 2);
+    for (const [, deployment] of deployments) {
+      const props = deployment.Properties ?? {};
+      const { raw } = stagedConfigForDeployment(synth.outdir, props);
+      assert.match(raw, /Galaxy Class Table/);
+      assert.match(raw, /"maxSeats":8/);
+      assert.match(JSON.stringify(props.SourceMarkers), new RegExp(seedLogicalId));
     }
   });
 
