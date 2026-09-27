@@ -85,6 +85,9 @@ function parseTableItem(item: Record<string, unknown>): TableRecord {
       item.completeReason === 'fold_to_one' || item.completeReason === 'showdown'
         ? item.completeReason
         : null,
+    streetActions: Array.isArray(item.streetActions)
+      ? (item.streetActions as TableRecord['streetActions'])
+      : [],
   };
 }
 
@@ -393,7 +396,7 @@ export function createMatchStore(
               SK: META_SK,
             },
             UpdateExpression:
-              'SET #version = :nextVersion, #status = :status, handNumber = :handNumber, buttonSeatId = :buttonSeatId, street = :street, currentSeatId = :currentSeatId, pot = :pot, #board = :board, #phase = :phase, currentBet = :currentBet, lastRaiseSize = :lastRaiseSize, deckRemaining = :deckRemaining, burns = :burns, actedThisStreet = :actedThisStreet, lastAggressorSeatId = :lastAggressorSeatId, shortAllInMatchedFromBet = :shortAllInMatchedFromBet, pots = :pots, winners = :winners, completeReason = :completeReason',
+              'SET #version = :nextVersion, #status = :status, handNumber = :handNumber, buttonSeatId = :buttonSeatId, street = :street, currentSeatId = :currentSeatId, pot = :pot, #board = :board, #phase = :phase, currentBet = :currentBet, lastRaiseSize = :lastRaiseSize, deckRemaining = :deckRemaining, burns = :burns, actedThisStreet = :actedThisStreet, lastAggressorSeatId = :lastAggressorSeatId, shortAllInMatchedFromBet = :shortAllInMatchedFromBet, pots = :pots, winners = :winners, completeReason = :completeReason, streetActions = :streetActions',
             ConditionExpression: '#version = :expectedVersion',
             ExpressionAttributeNames: {
               '#version': 'version',
@@ -422,6 +425,7 @@ export function createMatchStore(
               ':pots': table.pots ?? null,
               ':winners': table.winners ?? null,
               ':completeReason': table.completeReason ?? null,
+              ':streetActions': table.streetActions ?? [],
             },
           }),
         );

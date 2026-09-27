@@ -148,6 +148,11 @@ export function buildSeatScopedSnapshot(
         snapshot.pots = pots;
       }
     }
+
+    snapshot.streetActions = (table.streetActions ?? []).flatMap((entry) => {
+      const seat = occupied.find((row) => row.seatId === entry.seatId);
+      return seat ? [{ ...entry, displayName: seat.displayName }] : [];
+    });
   }
 
   if (viewerSeatId && handState) {

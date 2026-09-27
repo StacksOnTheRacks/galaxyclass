@@ -19,7 +19,7 @@ export type EvaluatedHand = {
   score: number[];
 };
 
-const CATEGORY_ORDER: HandRankCategory[] = [
+export const CATEGORY_ORDER: HandRankCategory[] = [
   'high_card',
   'pair',
   'two_pair',

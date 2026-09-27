@@ -2,12 +2,13 @@ import type { OutboundMessage, TableSnapshotMessage } from '../../runtime/types.
 import { renderMyHandPanel } from '../dashboard/my-hand-panel.js';
 import { renderLoading } from '../surfaces/loading.js';
 import { loadPlayConfig } from './config.js';
+import { buildMyHandViewModel } from './my-hand-view.js';
 import { isTableListPath, parseTableIdFromPath } from './route.js';
 import { renderSeatedControls, type SeatAction, type SeatedControlsState } from './seated-controls.js';
 import { createSitDraft, renderSitPanel, type SitDraft } from './sit-panel.js';
 import { renderTableList } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
-import { parseCard, renderSnapshotShell } from './view.js';
+import { renderSnapshotShell } from './view.js';
 
 export interface PlaySocket {
   send(data: string): void;
@@ -194,12 +195,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       return;
     }
 
-    renderMyHandPanel(regions.myHand, {
-      pocketCards: snapshot.pocketCards?.map(parseCard),
-      bank: local.stack,
-      committedThisHand: snapshot.status === 'hand_in_progress' ? local.committed : undefined,
-      street: snapshot.street ?? undefined,
-    });
+    renderMyHandPanel(regions.myHand, buildMyHandViewModel(snapshot, local));
     renderSeatedControls(regions.actions, snapshot, local, seated, sendSeatAction);
   };
 
