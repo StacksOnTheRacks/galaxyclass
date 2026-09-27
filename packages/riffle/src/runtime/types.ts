@@ -7,6 +7,16 @@ export interface BlindsConfig {
   bigBlind: number;
 }
 
+export type StreetActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
+
+export interface StreetActionRecord {
+  seatId: string;
+  type: StreetActionType;
+  /** Seat's total committed on the street after the action (call, bet, raise). */
+  amount?: number;
+  allIn?: boolean;
+}
+
 export interface TableRecord {
   tableId: string;
   version: number;
@@ -32,6 +42,8 @@ export interface TableRecord {
   pots?: Pot[];
   winners?: Winner[] | null;
   completeReason?: 'fold_to_one' | 'showdown' | null;
+  /** Public betting actions on the current street, in order. */
+  streetActions?: StreetActionRecord[];
 }
 
 export interface SeatRecord {
@@ -108,6 +120,10 @@ export interface SnapshotPot {
   amount: number;
 }
 
+export interface SnapshotStreetAction extends StreetActionRecord {
+  displayName: string;
+}
+
 export interface TableSnapshotMessage {
   type: 'table_snapshot';
   tableId: string;
@@ -130,6 +146,7 @@ export interface TableSnapshotMessage {
   minRaiseTo?: number;
   seats: PlayerSnapshotSeat[];
   pocketCards?: [Card, Card];
+  streetActions?: SnapshotStreetAction[];
 }
 
 export interface ErrorMessage {

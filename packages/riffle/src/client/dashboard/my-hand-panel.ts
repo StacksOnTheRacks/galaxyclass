@@ -149,7 +149,7 @@ function toneFor(text: string): 'success' | 'warning' | 'danger' | 'neutral' {
   if (/call|medium|fair|draw/i.test(text)) {
     return 'warning';
   }
-  if (/raise|bet|strong|monster|nuts|won/i.test(text)) {
+  if (/raise|bet|all in|strong|monster|nuts|won/i.test(text)) {
     return 'success';
   }
   return 'neutral';
@@ -263,12 +263,12 @@ function createStrengthSection(
     meter.className = 'my-hand-meter';
     meter.dataset.field = 'meter';
     meter.setAttribute('role', 'img');
+    const filled = Math.max(0, Math.min(METER_LABELS.length, viewModel.meterFilled));
     meter.setAttribute(
       'aria-label',
-      `Hand strength meter: ${METER_LABELS[Math.max(0, Math.min(METER_LABELS.length - 1, viewModel.meterFilled))]}`,
+      `Hand strength meter: ${METER_LABELS[Math.max(0, filled - 1)]}`,
     );
 
-    const filled = Math.max(0, Math.min(METER_LABELS.length, viewModel.meterFilled));
     for (let index = 0; index < METER_LABELS.length; index += 1) {
       const segment = document.createElement('span');
       segment.className = 'my-hand-meter-segment';

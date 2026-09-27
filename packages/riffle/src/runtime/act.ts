@@ -1,5 +1,5 @@
 import { applyAction, finalizeTerminalHand } from '../rules/index.js';
-import type { Action, RulesErrorCode } from '../rules/types.js';
+import type { Action, HandState, RulesErrorCode } from '../rules/types.js';
 import {
   applyHandStateToSeats,
   applyHandStateToTable,
@@ -8,7 +8,13 @@ import {
 } from './hand-state.js';
 import { findSeatByToken } from './sit.js';
 import type { MatchStore } from './store.js';
-import type { ClientMessage, ConnectionRecord, SeatRecord, TableRecord } from './types.js';
+import type {
+  ClientMessage,
+  ConnectionRecord,
+  SeatRecord,
+  StreetActionRecord,
+  TableRecord,
+} from './types.js';
 
 export type ActErrorCode =
   | 'invalid_seat_token'
@@ -81,6 +87,35 @@ function mapRulesError(code: RulesErrorCode): ActErrorCode {
   }
 }
 
+/** Reads the entry from the state right after the action, before streets advance or pots settle. */
+function streetActionEntry(
+  applied: HandState,
+  seatId: string,
+  type: Action['type'],
+): StreetActionRecord {
+  const entry: StreetActionRecord = { seatId, type };
+  if (type === 'fold' || type === 'check') {
+    return entry;
+  }
+  const seat = applied.seats.find((row) => row.seatId === seatId);
+  entry.amount = seat?.streetCommitted ?? 0;
+  if (seat?.allIn) {
+    entry.allIn = true;
+  }
+  return entry;
+}
+
+function withStreetAction(
+  previous: TableRecord,
+  next: TableRecord,
+  entry: StreetActionRecord,
+): TableRecord {
+  if (next.street !== previous.street) {
+    return { ...next, streetActions: [] };
+  }
+  return { ...next, streetActions: [...(previous.streetActions ?? []), entry] };
+}
+
 /**
  * Folds every away (disconnected) seat whose turn it is, so a dropped player
  * cannot stall the hand. Keeps the table version as given.
@@ -112,7 +147,11 @@ export function foldAwayActors(
     if (!finalized.ok) {
       break;
     }
-    currentTable = applyHandStateToTable(currentTable, finalized.value, currentTable.version);
+    currentTable = withStreetAction(
+      currentTable,
+      applyHandStateToTable(currentTable, finalized.value, currentTable.version),
+      streetActionEntry(applied.value, actor.seatId, 'fold'),
+    );
     currentSeats = applyHandStateToSeats(finalized.value, currentSeats);
   }
 
@@ -164,7 +203,11 @@ export async function handleAct(ctx: ActContext): Promise<ActResult> {
   }
 
   const folded = foldAwayActors(
-    applyHandStateToTable(table, finalized.value, table.version + 1),
+    withStreetAction(
+      table,
+      applyHandStateToTable(table, finalized.value, table.version + 1),
+      streetActionEntry(applied.value, callerSeat.seatId, action.type),
+    ),
     applyHandStateToSeats(finalized.value, seats),
   );
   const updatedTable = folded.table;

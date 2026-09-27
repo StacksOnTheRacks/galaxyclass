@@ -245,6 +245,47 @@ describe('street betting on serverless runtime', () => {
     expect(afterPreflop?.currentSeatId).toBe('4');
   });
 
+  it('records the current street actions in the snapshot and clears them on a new street', async () => {
+    const { handler, store, sent } = createHarness(7);
+    await setupTable(handler, store);
+    const { tokenA, tokenB } = await sitTwoPlayers(handler, sent);
+    await startHeadsUpHand(handler, sent, tokenA);
+
+    const dealt = lastSnapshot(sent.get('conn-a'));
+    expect(dealt?.type === 'table_snapshot' && dealt.streetActions).toEqual([]);
+
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'raise', amount: 6, seatToken: tokenA })),
+      {},
+    );
+    await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'call', seatToken: tokenB })),
+      {},
+    );
+    const flop = lastSnapshot(sent.get('conn-a'));
+    expect(flop?.type === 'table_snapshot' && flop.street).toBe('flop');
+    expect(flop?.type === 'table_snapshot' && flop.streetActions).toEqual([]);
+
+    await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'bet', amount: 10, seatToken: tokenB })),
+      {},
+    );
+    const afterBet = lastSnapshot(sent.get('conn-a'));
+    expect(afterBet?.type === 'table_snapshot' && afterBet.streetActions).toEqual([
+      { seatId: '4', displayName: 'Bob', type: 'bet', amount: 10 },
+    ]);
+
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'fold', seatToken: tokenA })),
+      {},
+    );
+    const afterFold = lastSnapshot(sent.get('conn-b'));
+    expect(afterFold?.type === 'table_snapshot' && afterFold.streetActions).toEqual([
+      { seatId: '4', displayName: 'Bob', type: 'bet', amount: 10 },
+      { seatId: '1', displayName: 'Alice', type: 'fold' },
+    ]);
+  });
+
   it('auto-deals flop, turn, and river when betting rounds complete with two players in', async () => {
     const { handler, store, sent } = createHarness(7);
     await setupTable(handler, store);

@@ -110,6 +110,7 @@ export async function handleStartHand(ctx: StartHandContext): Promise<StartHandR
       ...table,
       handNumber: nextHandNumber,
       buttonSeatId,
+      streetActions: [],
     },
     handState,
     table.version + 1,
