@@ -80,7 +80,7 @@ test('deploys auth, match runtime, then site with locked CDK flags', () => {
     [checkout, node, assume, cdkInfra, auth, outputs, riffleBuild, wwwBuild, exportCheck, match, site, apex, rifflePath],
   );
   assert.match(yaml, /name: Install dependencies\n\s+run: npm ci/);
-  assert.match(yaml, /name: Install CDK CLI\n\s+run: npm ci\n\s+working-directory: packages\/infra/);
+  assert.doesNotMatch(yaml, /name: Install CDK CLI/);
   assert.equal(yaml.match(/actions\/setup-node@v4/g)?.length, 1);
   assert.equal(yaml.match(/--require-approval never/g)?.length, 3);
   assert.equal(yaml.match(/--toolkit-stack-name GalaxyClassToolkit/g)?.length, 3);
