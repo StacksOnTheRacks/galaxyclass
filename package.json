@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "esbuild": "^0.25.2",
     "vitest": "^5.0.2"
   },
   "overrides": {
