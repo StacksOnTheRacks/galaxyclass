@@ -1,0 +1,24 @@
+{
+  "name": "galaxyclass",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "vitest": "^5.0.2"
+  },
+  "scripts": {
+    "build": "npm run build:riffle && npm run build:www",
+    "build:www": "npm run build --workspace=@galaxyclass/www",
+    "build:riffle": "npm run build:client --workspace=@galaxyclass/riffle",
+    "test": "npm run test --workspace=@galaxyclass/www && npm run test --workspace=@galaxyclass/riffle && npm run test --workspace=@galaxyclass/infra",
+    "lint": "npm run lint --workspace=@galaxyclass/www"
+  }
+}

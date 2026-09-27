@@ -1,0 +1,128 @@
+name: Deploy Galaxy Class
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require deploy role
+        if: vars.AWS_DEPLOY_ROLE_ARN == ''
+        run: |
+          echo 'AWS_DEPLOY_ROLE_ARN is not configured for environment production.'
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CDK CLI
+        run: npm ci
+        working-directory: packages/infra
+
+      - name: Deploy GalaxyClassAuth-prod
+        working-directory: packages/infra
+        run: >
+          npx cdk deploy GalaxyClassAuth-prod
+          --require-approval never
+          --toolkit-stack-name GalaxyClassToolkit
+          --context @aws-cdk/core:bootstrapQualifier=galcls
+          -O "$RUNNER_TEMP/galaxyclass-auth-outputs.json"
+
+      - name: Map Cognito outputs
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync, readFileSync } from 'node:fs';
+
+          const outputsPath = `${process.env.RUNNER_TEMP}/galaxyclass-auth-outputs.json`;
+          const outputs = JSON.parse(readFileSync(outputsPath, 'utf8'));
+          const stack = outputs['GalaxyClassAuth-prod'] ?? {};
+          const mapped = {
+            NEXT_PUBLIC_COGNITO_USER_POOL_ID: String(stack.UserPoolId ?? '').trim(),
+            NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID: String(stack.UserPoolClientId ?? '').trim(),
+            NEXT_PUBLIC_COGNITO_REGION: String(stack.Region ?? '').trim(),
+          };
+          const empty = Object.entries(mapped).filter(([, value]) => value === '');
+          if (empty.length > 0) {
+            console.error(`Empty Cognito outputs: ${empty.map(([key]) => key).join(', ')}`);
+            process.exit(1);
+          }
+          appendFileSync(
+            process.env.GITHUB_ENV,
+            Object.entries(mapped).map(([key, value]) => `${key}=${value}\n`).join(''),
+          );
+          EOF
+
+      - name: Build Riffle client artifacts
+        run: npm run build:riffle
+
+      - name: Build studio static export
+        run: npm run build:www
+
+      - name: Require studio export
+        run: |
+          if [ ! -f packages/www/out/index.html ]; then
+            echo 'packages/www/out/index.html is missing before site deploy.'
+            exit 1
+          fi
+
+      - name: Deploy MatchRuntimeStack
+        working-directory: packages/infra
+        run: >
+          npx cdk deploy MatchRuntimeStack
+          --require-approval never
+          --toolkit-stack-name GalaxyClassToolkit
+          --context @aws-cdk/core:bootstrapQualifier=galcls
+
+      - name: Deploy GalaxyClassSite-prod
+        working-directory: packages/infra
+        run: >
+          npx cdk deploy GalaxyClassSite-prod
+          --require-approval never
+          --toolkit-stack-name GalaxyClassToolkit
+          --context @aws-cdk/core:bootstrapQualifier=galcls
+
+      - name: Verify apex
+        run: |
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://galaxyclass.app/ || true)"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 10
+            fi
+          done
+          echo 'https://galaxyclass.app/ did not return HTTP 200'
+          exit 1
+
+      - name: Verify Riffle subpath
+        run: |
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://galaxyclass.app/riffle/ || true)"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 10
+            fi
+          done
+          echo 'https://galaxyclass.app/riffle/ did not return HTTP 200'
+          exit 1

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.cdk.staging/
+cdk.out/
+.env
+.env.local
