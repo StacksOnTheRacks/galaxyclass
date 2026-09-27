@@ -1,6 +1,6 @@
 export const TABLE_NOT_FOUND_TITLE = "Couldn't open this table";
 export const TABLE_NOT_FOUND_BODY =
-  'This table link is invalid or unavailable. There is no list of other tables.';
+  'This table link is invalid or unavailable.';
 
 export function renderTableNotFound(root: HTMLElement): void {
   root.replaceChildren();
