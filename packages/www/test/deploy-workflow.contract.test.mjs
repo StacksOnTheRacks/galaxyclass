@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const workflowPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../.github/workflows/deploy.yml',
+  '../../../.github/workflows/deploy.yml',
 );
 const yaml = readFileSync(workflowPath, 'utf8');
 
@@ -16,9 +16,9 @@ function at(needle) {
   return index;
 }
 
-test('triggers only on push to main and workflow_dispatch', () => {
-  assert.match(yaml, /push:\n\s+branches:\s*\[main\]/);
+test('triggers only on workflow_dispatch', () => {
   assert.match(yaml, /^ {2}workflow_dispatch:\s*$/m);
+  assert.equal(yaml.includes('push:'), false);
   assert.equal(yaml.includes('pull_request'), false);
 });
 
@@ -58,27 +58,33 @@ test('assumes the OIDC role with the production vars and no long-lived keys', ()
   }
 });
 
-test('deploys auth then site with locked CDK flags and captured outputs', () => {
+test('deploys auth, match runtime, then site with locked CDK flags', () => {
   const checkout = at('actions/checkout@v4');
   const node = at("node-version: '22'");
   const assume = at('aws-actions/configure-aws-credentials@v4');
-  const cdkCi = at('working-directory: infra/cdk');
+  const cdkInfra = at('working-directory: packages/infra');
   const auth = at('npx cdk deploy GalaxyClassAuth-prod');
   const outputs = at('-O "$RUNNER_TEMP/galaxyclass-auth-outputs.json"');
-  const build = at('npm ci && npm run build');
-  const exportCheck = at('out/index.html');
+  const riffleBuild = at('npm run build:riffle');
+  const wwwBuild = at('npm run build:www');
+  const exportCheck = at('packages/www/out/index.html');
+  const match = at('npx cdk deploy MatchRuntimeStack');
   const site = at('npx cdk deploy GalaxyClassSite-prod');
   const apex = at('https://galaxyclass.app/');
+  const rifflePath = at('https://galaxyclass.app/riffle/');
 
   assert.deepEqual(
-    [checkout, node, assume, cdkCi, auth, outputs, build, exportCheck, site, apex].sort((a, b) => a - b),
-    [checkout, node, assume, cdkCi, auth, outputs, build, exportCheck, site, apex],
+    [checkout, node, assume, cdkInfra, auth, outputs, riffleBuild, wwwBuild, exportCheck, match, site, apex, rifflePath].sort(
+      (a, b) => a - b,
+    ),
+    [checkout, node, assume, cdkInfra, auth, outputs, riffleBuild, wwwBuild, exportCheck, match, site, apex, rifflePath],
   );
-  assert.match(yaml.slice(cdkCi, auth), /npm ci/);
+  assert.match(yaml, /name: Install dependencies\n\s+run: npm ci/);
+  assert.match(yaml, /name: Install CDK CLI\n\s+run: npm ci\n\s+working-directory: packages\/infra/);
   assert.equal(yaml.match(/actions\/setup-node@v4/g)?.length, 1);
-  assert.equal(yaml.match(/--require-approval never/g)?.length, 2);
-  assert.equal(yaml.match(/--toolkit-stack-name GalaxyClassToolkit/g)?.length, 2);
-  assert.equal(yaml.match(/--context @aws-cdk\/core:bootstrapQualifier=galcls/g)?.length, 2);
+  assert.equal(yaml.match(/--require-approval never/g)?.length, 3);
+  assert.equal(yaml.match(/--toolkit-stack-name GalaxyClassToolkit/g)?.length, 3);
+  assert.equal(yaml.match(/--context @aws-cdk\/core:bootstrapQualifier=galcls/g)?.length, 3);
   assert.equal(yaml.match(/-O "/g)?.length, 1);
 });
 
@@ -86,32 +92,37 @@ test('maps the three public Cognito outputs and fails when any is empty', () => 
   const pool = at('NEXT_PUBLIC_COGNITO_USER_POOL_ID');
   const client = at('NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID');
   const region = at('NEXT_PUBLIC_COGNITO_REGION');
-  const build = at('npm ci && npm run build');
-  assert.ok(pool < build && client < build && region < build);
-  assert.match(yaml.slice(Math.min(pool, client, region), build), /process\.exit\(1\)/);
+  const riffleBuild = at('npm run build:riffle');
+  assert.ok(pool < riffleBuild && client < riffleBuild && region < riffleBuild);
+  assert.match(yaml.slice(Math.min(pool, client, region), riffleBuild), /process\.exit\(1\)/);
   assert.match(yaml, /UserPoolId/);
   assert.match(yaml, /UserPoolClientId/);
   assert.match(yaml, /GalaxyClassAuth-prod/);
   assert.match(yaml, /GITHUB_ENV/);
 });
 
-test('builds on Node 22 and fails when out/index.html is missing before site deploy', () => {
+test('builds on Node 22 and fails when packages/www/out/index.html is missing before site deploy', () => {
   const node = at("node-version: '22'");
-  const build = at('npm ci && npm run build');
-  const exportCheck = at('out/index.html');
+  const wwwBuild = at('npm run build:www');
+  const exportCheck = at('packages/www/out/index.html');
+  const match = at('npx cdk deploy MatchRuntimeStack');
   const site = at('npx cdk deploy GalaxyClassSite-prod');
-  assert.ok(node < build);
-  assert.ok(build < exportCheck);
-  assert.ok(exportCheck < site);
-  assert.match(yaml.slice(exportCheck, site), /exit 1/);
+  assert.ok(node < wwwBuild);
+  assert.ok(wwwBuild < exportCheck);
+  assert.ok(exportCheck < match);
+  assert.ok(match < site);
+  assert.match(yaml.slice(exportCheck, match), /exit 1/);
 });
 
-test('retries the apex until HTTP 200 within 12 attempts 10 seconds apart', () => {
+test('retries apex and riffle until HTTP 200 within 12 attempts 10 seconds apart', () => {
   const site = at('npx cdk deploy GalaxyClassSite-prod');
   const apex = at('name: Verify apex');
+  const riffle = at('name: Verify Riffle subpath');
   const tail = yaml.slice(apex);
   assert.ok(site < apex);
+  assert.ok(apex < riffle);
   assert.match(tail, /https:\/\/galaxyclass\.app\//);
+  assert.match(tail, /https:\/\/galaxyclass\.app\/riffle\//);
   assert.match(tail, /seq 1 12/);
   assert.match(tail, /sleep 10/);
   assert.match(tail, /"200"/);
