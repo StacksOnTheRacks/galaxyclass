@@ -14,6 +14,7 @@ interface Player {
   session: DashboardPlaySession;
   storage: ReturnType<typeof memoryStorage>;
   sockets: FakePlaySocket[];
+  navigations: string[];
 }
 
 describe('continuous play on one table', () => {
@@ -39,12 +40,14 @@ describe('continuous play on one table', () => {
     const root = document.createElement('main');
     document.body.append(root);
     const sockets: FakePlaySocket[] = [];
+    const navigations: string[] = [];
     const session = await startDashboardPlay({
       root,
       pathname: `/${TABLE_ID}`,
       fetch: configFetch().fetchImpl,
       storage,
       reconnectDelayMs: 0,
+      assignLocation: (url) => navigations.push(url),
       createSocket: (url) => {
         const socket = bridge.createSocket(url);
         sockets.push(socket);
@@ -52,7 +55,7 @@ describe('continuous play on one table', () => {
       },
     });
     await settle();
-    return { root, session, storage, sockets };
+    return { root, session, storage, sockets, navigations };
   }
 
   function button(player: Player, field: string): HTMLButtonElement | null {
@@ -313,7 +316,7 @@ describe('continuous play on one table', () => {
     expect(alice.session.snapshot!.status).toBe('hand_in_progress');
   });
 
-  it('Leave table mid-hand detaches the player now and frees the seat after the hand', async () => {
+  it('Leave table mid-hand returns to the table list and frees the seat after the hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
     const carol = await openPlayer();
@@ -322,7 +325,7 @@ describe('continuous play on one table', () => {
     await click(bob, 'leave-table');
     expect(bob.session.hasSeatToken()).toBe(false);
     expect(bob.storage.items.size).toBe(0);
-    expect(button(bob, 'leave-table')).toBeNull();
+    expect(bob.navigations).toEqual(['/']);
     expect(alice.session.snapshot!.seats.find((seat) => seat.seatId === '2')?.away).toBe(true);
 
     await playHand([alice, carol], 'fold');

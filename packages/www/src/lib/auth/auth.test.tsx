@@ -19,6 +19,7 @@ import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { Nav } from "@/components/Nav";
+import { ACCOUNT_HINT_KEY } from "@/lib/auth/account-hint";
 import { COPY } from "@/lib/auth/messages";
 import { SessionProvider } from "@/lib/auth/session";
 
@@ -76,6 +77,7 @@ function fill(label: string, value: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
+  localStorage.clear();
   clearEnv();
   window.history.pushState({}, "", "/");
   vi.mocked(getCurrentUser).mockRejectedValue(
@@ -519,10 +521,14 @@ describe("nav session", () => {
       "href",
       "/account",
     );
+    expect(JSON.parse(localStorage.getItem(ACCOUNT_HINT_KEY) ?? "null")).toEqual({ email: EMAIL });
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => {
       expect(signOut).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(localStorage.getItem(ACCOUNT_HINT_KEY)).toBeNull();
     });
     expect(await screen.findByRole("link", { name: "Sign in" })).toHaveAttribute(
       "href",

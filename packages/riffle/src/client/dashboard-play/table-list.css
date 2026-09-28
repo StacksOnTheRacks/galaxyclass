@@ -92,6 +92,17 @@
   font-weight: 500;
 }
 
+.table-list-playing-as-label {
+  min-width: 0;
+}
+
+.table-list-playing-as-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .table-list-settings-button,
 .table-list-filter,
 .table-list-secondary-button {
