@@ -92,17 +92,13 @@ describe('continuous play on one table', () => {
         expect(finished, 'the finished hand should be shown').toBeDefined();
         return finished!;
       }
-      const actor = players.find(({ root }) => root.querySelector('[data-action="fold"]'));
+      const actor = players.find(({ root }) => root.querySelector('[data-field="action-controls"]'));
       expect(actor, `someone should be acting at step ${step}`).toBeDefined();
       const root = actor!.root;
-      const check = root.querySelector<HTMLButtonElement>('[data-action="check"]')!;
+      const button = (name: string) => root.querySelector<HTMLButtonElement>(`[data-action="${name}"]`);
       const choice =
-        action === 'fold'
-          ? root.querySelector<HTMLButtonElement>('[data-action="fold"]')!
-          : check.disabled
-            ? root.querySelector<HTMLButtonElement>('[data-action="call"]')!
-            : check;
-      choice.click();
+        action === 'fold' ? (button('fold') ?? button('check')) : (button('check') ?? button('call'));
+      choice!.click();
       await settle();
     }
     throw new Error('hand did not complete');
@@ -163,7 +159,7 @@ describe('continuous play on one table', () => {
 
     expect(carol.session.seatId).toBe('3');
     expect(carol.session.snapshot!.pocketCards).toBeUndefined();
-    expect(carol.root.querySelector('[data-action="fold"]')).toBeNull();
+    expect(carol.root.querySelector('[data-field="action-controls"]')).toBeNull();
     expect(statusText(carol)).toContain('Waiting for the next hand');
     expect(alice.root.querySelector('[data-region="player-row"]')?.textContent).toContain('Next hand');
 
@@ -180,7 +176,7 @@ describe('continuous play on one table', () => {
     await playHand([alice, bob], 'fold');
 
     const players = [alice, bob, carol];
-    const leaver = players.find(({ root }) => !root.querySelector('[data-action="fold"]'))!;
+    const leaver = players.find(({ root }) => !root.querySelector('[data-field="action-controls"]'))!;
     const leaverSeat = leaver.session.seatId!;
     const stayers = players.filter((player) => player !== leaver);
 
@@ -256,7 +252,7 @@ describe('continuous play on one table', () => {
     const bob = await openPlayer();
 
     const players = [alice, bob];
-    const acting = players.find(({ root }) => root.querySelector('[data-action="fold"]'))!;
+    const acting = players.find(({ root }) => root.querySelector('[data-field="action-controls"]'))!;
     const other = players.find((player) => player !== acting)!;
     const handNumber = other.session.snapshot!.handNumber;
     acting.session.dispose();
@@ -277,7 +273,7 @@ describe('continuous play on one table', () => {
     await playHand([alice, bob], 'fold');
 
     const players = [alice, bob, carol];
-    const acting = players.find(({ root }) => root.querySelector('[data-action="fold"]'))!;
+    const acting = players.find(({ root }) => root.querySelector('[data-field="action-controls"]'))!;
     const actingSeat = Number(acting.session.seatId);
     const nextSeat = String((actingSeat % 3) + 1);
     const next = players.find((player) => player.session.seatId === nextSeat)!;
@@ -338,7 +334,7 @@ describe('continuous play on one table', () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
 
-    const waiting = [alice, bob].find(({ root }) => !root.querySelector('[data-action="fold"]'))!;
+    const waiting = [alice, bob].find(({ root }) => !root.querySelector('[data-field="action-controls"]'))!;
     expect(button(waiting, 'leave-seat')).not.toBeNull();
   });
 });

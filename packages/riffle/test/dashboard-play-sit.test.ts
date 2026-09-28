@@ -242,7 +242,7 @@ describe('two anonymous players complete a hand through the runtime', () => {
       if (players[0]!.session.snapshot?.phase === 'complete') {
         return;
       }
-      const actor = players.find(({ root }) => root.querySelector('[data-action="fold"]'));
+      const actor = players.find(({ root }) => root.querySelector('[data-field="action-controls"]'));
       expect(actor, `someone should be acting at step ${step}`).toBeDefined();
       choose(actor!.root).click();
       await bridge.settle();
@@ -271,10 +271,12 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(bob.session.snapshot?.pocketCards).toHaveLength(2);
     expect(alice.session.snapshot?.pocketCards).not.toEqual(bob.session.snapshot?.pocketCards);
 
-    await playToCompletion([alice, bob], (root) => {
-      const check = root.querySelector<HTMLButtonElement>('[data-action="check"]')!;
-      return check.disabled ? root.querySelector<HTMLButtonElement>('[data-action="call"]')! : check;
-    });
+    await playToCompletion(
+      [alice, bob],
+      (root) =>
+        root.querySelector<HTMLButtonElement>('[data-action="check"]') ??
+        root.querySelector<HTMLButtonElement>('[data-action="call"]')!,
+    );
 
     const final = alice.session.snapshot!;
     expect(final.phase).toBe('complete');

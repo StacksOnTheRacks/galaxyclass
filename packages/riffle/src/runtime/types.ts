@@ -148,6 +148,7 @@ export interface TableSnapshotMessage {
   toCall?: number;
   currentBet?: number;
   minRaiseTo?: number;
+  bigBlind?: number;
   seats: PlayerSnapshotSeat[];
   pocketCards?: [Card, Card];
   streetActions?: SnapshotStreetAction[];

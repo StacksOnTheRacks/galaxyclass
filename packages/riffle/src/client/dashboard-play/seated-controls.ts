@@ -5,6 +5,16 @@ import {
   type ActionControlsViewModel,
   type ActionSubmitPayload,
 } from '../surfaces/action-controls.js';
+import { renderPreActions } from '../surfaces/pre-actions.js';
+import {
+  armPreAction,
+  buildPreActionsViewModel,
+  canPreAct,
+  createPreActionMemory,
+  reconcilePreAction,
+  resolvePreAction,
+  type PreActionMemory,
+} from './pre-action-state.js';
 
 export type SeatAction =
   | { action: 'start_hand' | 'leave' }
@@ -30,6 +40,8 @@ export function buildActionViewModel(
     minRaiseTo,
     allInTo,
     pot: snapshot.pot,
+    bigBlind: snapshot.bigBlind,
+    wager: currentBet === 0 ? 'bet' : 'raise',
   };
 }
 
@@ -84,6 +96,7 @@ function completeSummary(snapshot: TableSnapshotMessage): HTMLElement {
 export interface SeatedControlsState {
   pending: boolean;
   notice: string | null;
+  preActions?: PreActionMemory;
 }
 
 export function renderSeatedControls(
@@ -95,8 +108,19 @@ export function renderSeatedControls(
 ): void {
   const handInProgress = snapshot.status === 'hand_in_progress';
   const complete = snapshot.phase === 'complete';
+  const preActions = (state.preActions ??= createPreActionMemory());
+  reconcilePreAction(preActions, snapshot);
 
   if (handInProgress && !complete && local.acting && snapshot.phase === 'betting') {
+    const armed = preActions.armed;
+    preActions.clearedMessage = null;
+    if (armed && !state.pending) {
+      preActions.armed = null;
+      const action = resolvePreAction(armed, snapshot.toCall ?? 0);
+      if (action) {
+        send(action);
+      }
+    }
     renderActionControls(region, buildActionViewModel(snapshot, local), {
       onSubmit: (payload) => {
         if (state.pending) {
@@ -136,6 +160,24 @@ export function renderSeatedControls(
 
   if (local.waitingForNextHand) {
     region.append(leaveButton(state, send), statusLine(state.notice ?? WAITING_FOR_NEXT_HAND));
+    return;
+  }
+
+  if (canPreAct(snapshot, local)) {
+    renderPreActions(region, buildPreActionsViewModel(preActions, snapshot), {
+      onSelect: (id) => {
+        const focused = (document.activeElement as HTMLElement | null)?.dataset?.preAction;
+        armPreAction(preActions, id, snapshot);
+        renderSeatedControls(region, snapshot, local, state, send);
+        if (focused) {
+          region.querySelector<HTMLElement>(`[data-pre-action="${focused}"]`)?.focus();
+        }
+      },
+    });
+    region.append(leaveButton(state, send));
+    if (state.notice) {
+      region.append(statusLine(state.notice));
+    }
     return;
   }
 
