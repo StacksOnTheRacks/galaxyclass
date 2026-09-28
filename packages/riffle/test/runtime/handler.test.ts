@@ -187,6 +187,71 @@ describe('match runtime handler', () => {
     expect(store.hasConnection('conn-a')).toBe(true);
   });
 
+  it('lists seated counts for requested table ids without joining', async () => {
+    const { handler, store, sent } = createHarness();
+    await seedTable(store, 'table-a');
+    await seedTable(store, 'table-b');
+    await store.putSeat('table-a', {
+      seatId: '1',
+      displayName: 'Alice',
+      stack: 2000,
+      seatTokenHash: 'hash-a',
+    });
+    await store.putSeat('table-a', {
+      seatId: '2',
+      displayName: 'Bob',
+      stack: 2000,
+      seatTokenHash: 'hash-b',
+    });
+
+    await handler(wsEvent('$connect', 'conn-list'), {});
+    const bind = vi.spyOn(store, 'bindConnectionToTable');
+    const increment = vi.spyOn(store, 'incrementTableVersion');
+    const result = await handler(
+      wsEvent(
+        '$default',
+        'conn-list',
+        JSON.stringify({
+          action: 'list_tables',
+          tableIds: ['table-a', 'missing', 'table-b', 'table-a'],
+        }),
+      ),
+      {},
+    );
+
+    expect(result).toEqual({ statusCode: 200 });
+    expect(sent.get('conn-list')).toEqual([
+      {
+        type: 'table_list',
+        tables: [
+          { tableId: 'table-a', seatedCount: 2, maxSeats: 8 },
+          { tableId: 'table-b', seatedCount: 0, maxSeats: 8 },
+        ],
+      },
+    ]);
+    expect(bind).not.toHaveBeenCalled();
+    expect(increment).not.toHaveBeenCalled();
+    expect((await store.getConnection('conn-list'))?.tableId).toBeUndefined();
+    expect((await store.getTable('table-a'))?.version).toBe(1);
+  });
+
+  it('returns an empty table list when tableIds is missing or not an array', async () => {
+    const { handler, store, sent } = createHarness();
+    await seedTable(store);
+
+    await handler(wsEvent('$connect', 'conn-list'), {});
+    await handler(wsEvent('$default', 'conn-list', JSON.stringify({ action: 'list_tables' })), {});
+    await handler(
+      wsEvent('$default', 'conn-list', JSON.stringify({ action: 'list_tables', tableIds: 'table-uuid-1234' })),
+      {},
+    );
+
+    expect(sent.get('conn-list')).toEqual([
+      { type: 'table_list', tables: [] },
+      { type: 'table_list', tables: [] },
+    ]);
+  });
+
   it('treats ping as a silent keepalive', async () => {
     const { handler, sent } = createHarness();
     await handler(wsEvent('$connect', 'conn-a'), {});
