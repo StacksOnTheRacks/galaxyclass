@@ -1,12 +1,30 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import { randomDisplayName } from '../src/client/dashboard-play/random-name.js';
 import { startDashboardPlay, type DashboardPlaySession } from '../src/client/dashboard-play/session.js';
-import type { TableSnapshotMessage } from '../src/runtime/types.js';
+import { firstOpenSeat, TABLE_FULL_MESSAGE } from '../src/client/dashboard-play/sit-panel.js';
+import type { PlayerSnapshotSeat, TableSnapshotMessage } from '../src/runtime/types.js';
+import { validateDisplayName } from '../src/shared/display-name.js';
 import { configFetch, FakePlaySocket, flush, memoryStorage, setViewport } from './support/fake-play-socket.js';
 import { RuntimeBridge } from './support/runtime-bridge.js';
 
 const TABLE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+
+function seat(seatId: string, overrides: Partial<PlayerSnapshotSeat> = {}): PlayerSnapshotSeat {
+  return {
+    seatId,
+    displayName: `Player ${seatId}`,
+    isLocal: false,
+    stack: 2000,
+    inHand: false,
+    committed: 0,
+    position: null,
+    acting: false,
+    folded: false,
+    ...overrides,
+  };
+}
 
 function snapshot(overrides: Partial<TableSnapshotMessage> = {}): TableSnapshotMessage {
   return {
@@ -33,7 +51,12 @@ function addRoot(): HTMLElement {
   return root;
 }
 
-async function joinWithFakeSocket() {
+function sequence(values: number[]): () => number {
+  let index = 0;
+  return () => values[index++ % values.length]!;
+}
+
+async function joinWithFakeSocket(first = snapshot({ seats: [seat('1', { displayName: 'Alice' })] })) {
   const root = addRoot();
   let socket!: FakePlaySocket;
   const session = await startDashboardPlay({
@@ -41,143 +64,123 @@ async function joinWithFakeSocket() {
     pathname: `/${TABLE_ID}`,
     fetch: configFetch().fetchImpl,
     storage: memoryStorage(),
+    random: sequence([0, 0]),
     createSocket: (url) => {
       socket = new FakePlaySocket(url);
       return socket;
     },
   });
   socket.emit('open');
-  socket.receive(snapshot({ seats: [{ seatId: '1', displayName: 'Alice', isLocal: false, stack: 2000, inHand: false, committed: 0, position: null, acting: false, folded: false }], seatedPlayersLabel: '1 / 8' }));
+  socket.receive(first);
   return { root, socket, session };
 }
 
-function sitForm(root: HTMLElement) {
-  const form = root.querySelector<HTMLFormElement>('[data-field="sit-panel"]')!;
-  const input = root.querySelector<HTMLInputElement>('#sit-display-name')!;
-  const submit = root.querySelector<HTMLButtonElement>('.sit-panel-submit')!;
-  const status = root.querySelector<HTMLElement>('.sit-panel-status')!;
-  const error = root.querySelector<HTMLElement>('.sit-panel-error')!;
-  return { form, input, submit, status, error };
+function panelStatus(root: HTMLElement): string {
+  return root.querySelector('.sit-panel-status')?.textContent ?? '';
 }
 
-function typeName(root: HTMLElement, value: string): void {
-  const { input } = sitForm(root);
-  input.value = value;
-  input.dispatchEvent(new Event('input'));
-}
+describe('firstOpenSeat', () => {
+  it('picks the lowest empty seat', () => {
+    expect(firstOpenSeat(snapshot())).toBe('1');
+    expect(firstOpenSeat(snapshot({ seats: [seat('1'), seat('3')] }))).toBe('2');
+  });
 
-function pickSeat(root: HTMLElement, seatId: string): void {
-  const radio = root.querySelector<HTMLInputElement>(`input[name="seatId"][value="${seatId}"]`)!;
-  radio.checked = true;
-  radio.dispatchEvent(new Event('change'));
-}
+  it('skips seats the server just refused', () => {
+    expect(firstOpenSeat(snapshot({ seats: [seat('1')] }), new Set(['2', '3']))).toBe('4');
+  });
 
-function clickSit(root: HTMLElement): void {
-  sitForm(root).submit.click();
-}
+  it('falls back to an away seat once every seat is filled', () => {
+    const full = ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => seat(id));
+    expect(firstOpenSeat(snapshot({ seats: full }))).toBeNull();
 
-describe('dashboard play sit with display name', () => {
+    full[4] = seat('5', { away: true });
+    expect(firstOpenSeat(snapshot({ seats: full }))).toBe('5');
+  });
+
+  it('leaves an away seat alone while it still holds cards in the live hand', () => {
+    const full = ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => seat(id, { inHand: true }));
+    full[2] = seat('3', { away: true, inHand: true });
+    const live = snapshot({ status: 'hand_in_progress', phase: 'betting', seats: full });
+    expect(firstOpenSeat(live)).toBeNull();
+    expect(firstOpenSeat({ ...live, phase: 'complete' })).toBe('3');
+  });
+});
+
+describe('randomDisplayName', () => {
+  it('builds a valid two-word name', () => {
+    const name = randomDisplayName([], sequence([0, 0]));
+    expect(name).toBe('Lucky Otter');
+    expect(validateDisplayName(name).ok).toBe(true);
+  });
+
+  it('avoids names already at the table regardless of case', () => {
+    const name = randomDisplayName(['lucky otter'], sequence([0, 0, 0, 0.05]));
+    expect(name).toBe('Lucky Falcon');
+  });
+
+  it('falls back to a numbered name when every pick collides', () => {
+    const name = randomDisplayName(['Lucky Otter'], () => 0);
+    expect(name).toBe('Otter 100');
+    expect(validateDisplayName(name).ok).toBe(true);
+  });
+});
+
+describe('dashboard play automatic seating', () => {
   beforeEach(() => {
     document.body.replaceChildren();
     setViewport(1440);
   });
 
-  it('shows an unseated Pick a seat panel with open seats, a labeled name field, and Sit at Table', async () => {
-    const { root } = await joinWithFakeSocket();
-    const { input, submit } = sitForm(root);
+  it('sends sit for the first open seat with a random name right after joining', async () => {
+    const { root, socket } = await joinWithFakeSocket();
 
-    expect(root.textContent).toContain('Pick a seat');
-    expect(submit.textContent).toBe('Sit at Table');
-    const label = root.querySelector('label[for="sit-display-name"]');
-    expect(label?.textContent).toBe('Display name');
-    expect(input.id).toBe('sit-display-name');
-
-    const seat1 = root.querySelector<HTMLInputElement>('input[name="seatId"][value="1"]')!;
-    const seat2 = root.querySelector<HTMLInputElement>('input[name="seatId"][value="2"]')!;
-    expect(seat1.disabled).toBe(true);
-    expect(seat2.disabled).toBe(false);
-    expect(seat2.checked).toBe(true);
-    expect(root.querySelectorAll('input[name="seatId"]')).toHaveLength(8);
+    expect(socket.actions()).toEqual(['join_table', 'sit']);
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'Lucky Otter' });
+    expect(Object.keys(socket.sent.at(-1)!)).not.toContain('stack');
+    expect(panelStatus(root)).toBe('Taking your seat…');
+    expect(root.querySelector('[data-field="take-seat"]')).toBeNull();
+    expect(root.querySelector('#sit-display-name')).toBeNull();
     expect(root.textContent).not.toMatch(/Sign in|Create account|Mic|Camera/);
   });
 
-  it.each(['', '   ', 'Al', '  Al  ', 'x'.repeat(25), `  ${'y'.repeat(25)} `])(
-    'does not send sit for %j and shows the 3–24 message as text',
-    async (name) => {
-      const { root, socket } = await joinWithFakeSocket();
-      typeName(root, name);
-      clickSit(root);
-
-      expect(socket.actions()).toEqual(['join_table']);
-      const { error, input } = sitForm(root);
-      expect(error.hidden).toBe(false);
-      expect(error.getAttribute('role')).toBe('alert');
-      expect(error.textContent).toBe('Name must be 3–24 characters.');
-      expect(input.getAttribute('aria-invalid')).toBe('true');
-    },
-  );
-
-  it('sends seat id plus trimmed display name, then announces Taking your seat… with controls disabled', async () => {
-    const { root, socket } = await joinWithFakeSocket();
-    pickSeat(root, '3');
-    typeName(root, '  Bob  ');
-    clickSit(root);
-
-    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '3', displayName: 'Bob' });
-    expect(Object.keys(socket.sent.at(-1)!)).not.toContain('stack');
-
-    const { status, submit, input } = sitForm(root);
-    expect(status.textContent).toBe('Taking your seat…');
-    expect(status.getAttribute('aria-live')).toBe('polite');
-    expect(submit.disabled).toBe(true);
-    expect(input.disabled).toBe(true);
-    expect(root.querySelector<HTMLFieldSetElement>('.sit-panel-seats')!.disabled).toBe(true);
-
-    clickSit(root);
+  it('sends only one sit while the first is in flight', async () => {
+    const { socket } = await joinWithFakeSocket();
+    socket.receive(snapshot({ seats: [seat('1', { displayName: 'Alice' }), seat('3')] }));
     expect(socket.actions().filter((action) => action === 'sit')).toHaveLength(1);
   });
 
-  it('keeps the typed name when another player sits while unseated', async () => {
-    const { root, socket } = await joinWithFakeSocket();
-    typeName(root, 'Carol');
-    socket.receive(snapshot({ seatedPlayersLabel: '2 / 8', seats: [
-      { seatId: '1', displayName: 'Alice', isLocal: false, stack: 2000, inHand: false, committed: 0, position: null, acting: false, folded: false },
-      { seatId: '2', displayName: 'Dave', isLocal: false, stack: 2000, inHand: false, committed: 0, position: null, acting: false, folded: false },
-    ] }));
-
-    expect(sitForm(root).input.value).toBe('Carol');
-    expect(root.querySelector<HTMLInputElement>('input[name="seatId"][value="2"]')!.disabled).toBe(true);
-    expect(root.querySelector<HTMLInputElement>('input[name="seatId"][value="3"]')!.checked).toBe(true);
-  });
-
-  it('returns to the sit panel with a notice when the seat was taken', async () => {
-    const { root, socket } = await joinWithFakeSocket();
-    typeName(root, 'Bob');
-    clickSit(root);
+  it('moves to the next open seat when the chosen one was just taken', async () => {
+    const { socket } = await joinWithFakeSocket();
     socket.receive({ type: 'error', code: 'seat_occupied' });
 
-    const { status, submit } = sitForm(root);
-    expect(submit.disabled).toBe(false);
-    expect(status.textContent).toContain('That seat was just taken');
-    expect(root.dataset.surface).toBe('dashboard');
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '3', displayName: 'Lucky Otter' });
   });
 
-  it('keeps the seat token and sends it on start_hand and betting actions', async () => {
+  it('picks a fresh name when the server rejects the name', async () => {
+    const { socket } = await joinWithFakeSocket();
+    socket.receive({ type: 'error', code: 'invalid_display_name' });
+
+    expect(socket.actions().filter((action) => action === 'sit')).toHaveLength(2);
+    expect(socket.sent.at(-1)).toMatchObject({ action: 'sit', seatId: '2' });
+  });
+
+  it('shows a table-full notice and sits once a seat opens', async () => {
+    const full = ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => seat(id));
+    const { root, socket } = await joinWithFakeSocket(snapshot({ seats: full, seatedPlayersLabel: '8 / 8' }));
+
+    expect(socket.actions()).toEqual(['join_table']);
+    expect(panelStatus(root)).toBe(TABLE_FULL_MESSAGE);
+
+    socket.receive(snapshot({ seats: full.filter((row) => row.seatId !== '6'), seatedPlayersLabel: '7 / 8' }));
+    expect(socket.sent.at(-1)).toMatchObject({ action: 'sit', seatId: '6' });
+  });
+
+  it('keeps the seat token and sends it on betting actions', async () => {
     const { root, socket, session } = await joinWithFakeSocket();
-    typeName(root, 'Bob');
-    clickSit(root);
     socket.receive({ type: 'sat', seatId: '2', seatToken: 'token-abc' });
     expect(session.hasSeatToken()).toBe(true);
 
-    const seats = [
-      { seatId: '1', displayName: 'Alice', isLocal: false, stack: 2000, inHand: false, committed: 0, position: null, acting: false, folded: false },
-      { seatId: '2', displayName: 'Bob', isLocal: true, stack: 2000, inHand: false, committed: 0, position: null, acting: false, folded: false },
-    ];
-    socket.receive(snapshot({ seatedPlayersLabel: '2 / 8', seats }));
-
-    root.querySelector<HTMLButtonElement>('[data-field="deal-hand"]')!.click();
-    expect(socket.sent.at(-1)).toEqual({ action: 'start_hand', seatToken: 'token-abc' });
-
+    const seats = [seat('1', { displayName: 'Alice' }), seat('2', { displayName: 'Lucky Otter', isLocal: true })];
     socket.receive(snapshot({
       status: 'hand_in_progress',
       phase: 'betting',
@@ -195,6 +198,8 @@ describe('dashboard play sit with display name', () => {
       ],
     }));
 
+    expect(root.querySelector('[data-field="sit-panel"]')).toBeNull();
+    expect(root.querySelector('[data-field="deal-hand"]')).toBeNull();
     const call = root.querySelector<HTMLButtonElement>('[data-action="call"]')!;
     expect(call.textContent).toContain('Call');
     call.click();
@@ -222,21 +227,11 @@ describe('two anonymous players complete a hand through the runtime', () => {
       storage: memoryStorage(),
       createSocket: bridge.createSocket,
     });
-    await bridge.settle();
+    for (let round = 0; round < 3; round += 1) {
+      await bridge.settle();
+      await flush();
+    }
     return { root, session };
-  }
-
-  async function sit(root: HTMLElement, seatId: string, name: string): Promise<void> {
-    pickSeat(root, seatId);
-    typeName(root, name);
-    clickSit(root);
-    expect(sitForm(root).status.textContent).toBe('Taking your seat…');
-    await bridge.settle();
-    await flush();
-  }
-
-  function localTile(root: HTMLElement): string {
-    return root.querySelector('[data-region="player-row"]')?.textContent ?? '';
   }
 
   async function playToCompletion(
@@ -244,8 +239,7 @@ describe('two anonymous players complete a hand through the runtime', () => {
     choose: (root: HTMLElement) => HTMLButtonElement,
   ): Promise<void> {
     for (let step = 0; step < 40; step += 1) {
-      const phase = players[0]!.session.snapshot?.phase;
-      if (phase === 'complete') {
+      if (players[0]!.session.snapshot?.phase === 'complete') {
         return;
       }
       const actor = players.find(({ root }) => root.querySelector('[data-action="fold"]'));
@@ -257,28 +251,20 @@ describe('two anonymous players complete a hand through the runtime', () => {
     throw new Error('hand did not complete');
   }
 
-  it('goes unseated → sit → Your Turn and plays check/call to showdown with play chips', async () => {
+  it('sits both players automatically, deals, and plays check/call to showdown', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
 
-    await sit(alice.root, '1', 'Alice');
-    await sit(bob.root, '2', '  Bob Loblaw ');
-
     expect(alice.session.hasSeatToken()).toBe(true);
     expect(bob.session.hasSeatToken()).toBe(true);
-    expect((await bridge.store.getSeat(TABLE_ID, '1'))?.stack).toBe(2000);
-    expect((await bridge.store.getSeat(TABLE_ID, '2'))?.displayName).toBe('Bob Loblaw');
-    expect(localTile(alice.root)).toContain('Bob Loblaw');
+    const aliceSeat = alice.session.snapshot!.seats.find((row) => row.seatId === '1')!;
+    expect(aliceSeat.stack + aliceSeat.committed).toBe(2000);
+    const bobName = (await bridge.store.getSeat(TABLE_ID, '2'))!.displayName;
+    expect(validateDisplayName(bobName).ok).toBe(true);
+    expect(alice.root.querySelector('[data-region="player-row"]')?.textContent).toContain(bobName);
     expect(
       bob.root.querySelector('[data-local="true"] [data-field="avatar"]')?.getAttribute('src'),
     ).toMatch(/^\/assets\/avatars\/\d+\.webp$/);
-    expect(bob.root.querySelector('[data-region="my-hand"]')?.textContent).toContain('2,000');
-
-    const deal = alice.root.querySelector<HTMLButtonElement>('[data-field="deal-hand"]')!;
-    expect(deal.disabled).toBe(false);
-    deal.click();
-    await bridge.settle();
-    await flush();
 
     expect(alice.session.snapshot?.status).toBe('hand_in_progress');
     expect(alice.session.snapshot?.pocketCards).toHaveLength(2);
@@ -294,20 +280,15 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(final.phase).toBe('complete');
     expect(final.completeReason).toBe('showdown');
     expect(final.board).toHaveLength(5);
-    expect(final.seats.reduce((sum, seat) => sum + seat.stack, 0)).toBe(4000);
-    expect(final.seats.some((seat) => (seat.wonAmount ?? 0) > 0)).toBe(true);
+    expect(final.seats.reduce((sum, row) => sum + row.stack, 0)).toBe(4000);
+    expect(final.seats.some((row) => (row.wonAmount ?? 0) > 0)).toBe(true);
     expect(alice.root.textContent).toContain('Hand complete');
+    expect(alice.root.textContent).toContain('Next hand starts in a moment.');
   });
 
   it('completes a hand by fold-out', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice.root, '1', 'Alice');
-    await sit(bob.root, '2', 'Bob');
-
-    bob.root.querySelector<HTMLButtonElement>('[data-field="deal-hand"]')!.click();
-    await bridge.settle();
-    await flush();
 
     await playToCompletion([alice, bob], (root) =>
       root.querySelector<HTMLButtonElement>('[data-action="fold"]')!,
@@ -316,12 +297,11 @@ describe('two anonymous players complete a hand through the runtime', () => {
     const final = bob.session.snapshot!;
     expect(final.phase).toBe('complete');
     expect(final.completeReason).toBe('fold_to_one');
-    expect(final.seats.reduce((sum, seat) => sum + seat.stack, 0)).toBe(4000);
+    expect(final.seats.reduce((sum, row) => sum + row.stack, 0)).toBe(4000);
   });
 
   it('never sends create_table and rejects a client-supplied stack on sit', async () => {
-    const alice = await openPlayer();
-    await sit(alice.root, '1', 'Alice');
+    await openPlayer();
 
     const sent: string[] = [];
     const probe = bridge.createSocket('wss://probe');

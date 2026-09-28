@@ -38,7 +38,8 @@ export class RuntimeBridge {
   nowMs = Date.parse('2026-09-25T12:00:00.000Z');
   readonly handler;
 
-  constructor(rngSeed = 42) {
+  /** `nextHandDelayMs: null` leaves finished hands on the table; `0` deals the next hand right away. */
+  constructor(rngSeed = 42, nextHandDelayMs: number | null = null) {
     this.handler = createRuntimeHandler({
       store: this.store,
       postToConnection: async (connectionId, message) => {
@@ -46,6 +47,7 @@ export class RuntimeBridge {
       },
       now: () => new Date(this.nowMs).toISOString(),
       rngSeed: () => rngSeed,
+      nextHandDelayMs,
     });
   }
 

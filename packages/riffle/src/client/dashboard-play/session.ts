@@ -5,7 +5,14 @@ import { loadPlayConfig } from './config.js';
 import { buildMyHandViewModel } from './my-hand-view.js';
 import { isTableListPath, parseTableIdFromPath } from './route.js';
 import { renderSeatedControls, type SeatAction, type SeatedControlsState } from './seated-controls.js';
-import { createSitDraft, renderSitPanel, type SitDraft } from './sit-panel.js';
+import { randomDisplayName } from './random-name.js';
+import {
+  createAutoSitState,
+  firstOpenSeat,
+  renderSitPanel,
+  TABLE_FULL_MESSAGE,
+  type AutoSitState,
+} from './sit-panel.js';
 import { renderTableList } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
 import { renderSnapshotShell } from './view.js';
@@ -28,6 +35,8 @@ export interface DashboardPlayDeps {
   storage?: SeatTokenStorage | null;
   reconnectDelayMs?: number;
   keepAliveMs?: number;
+  /** Source of randomness for the table name. Defaults to Math.random. */
+  random?: () => number;
 }
 
 export interface DashboardPlaySession {
@@ -46,11 +55,7 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const DEFAULT_KEEP_ALIVE_MS = 5 * 60 * 1000;
 const DEFAULT_RECONNECT_DELAY_MS = 1000;
 
-const SIT_ERROR_NOTICES: Record<string, string> = {
-  seat_occupied: 'That seat was just taken. Pick another seat.',
-  table_full: 'The table is full.',
-  hand_in_progress: 'A hand is in progress. Try again between hands.',
-};
+const MAX_SIT_RETRIES = 8;
 
 const ACTION_ERROR_NOTICES: Record<string, string> = {
   insufficient_players: 'Waiting for another player to sit.',
@@ -96,7 +101,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   let leaving = false;
   let reconnectAttempts = 0;
   let disposed = false;
-  const sitDraft: SitDraft = createSitDraft();
+  let sitRetries = 0;
+  const random = deps.random ?? Math.random;
+  const autoSit: AutoSitState = createAutoSitState();
   const seated: SeatedControlsState = { pending: false, notice: null };
   let socket: PlaySocket | null = null;
   let webSocketUrl = '';
@@ -185,10 +192,12 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
 
     if (!local || !seatToken) {
       regions.myHand.replaceChildren();
-      renderSitPanel(regions.actions, snapshot.seats, sitDraft, {
-        onChange: render,
-        onSit: (seatId, displayName) => {
-          socket?.send(JSON.stringify({ action: 'sit', seatId, displayName }));
+      renderSitPanel(regions.actions, autoSit, {
+        onTakeSeat: () => {
+          autoSit.wantsSeat = true;
+          autoSit.notice = null;
+          sitRetries = 0;
+          trySit();
           render();
         },
       });
@@ -199,6 +208,40 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     renderSeatedControls(regions.actions, snapshot, local, seated, sendSeatAction);
   };
 
+  /** Claims the first open seat under a random name, unless already seated or asked not to. */
+  const trySit = (): void => {
+    const snapshot = session.snapshot;
+    if (
+      !snapshot ||
+      !socket ||
+      !autoSit.wantsSeat ||
+      autoSit.submitting ||
+      resuming ||
+      session.reconnecting ||
+      snapshot.seats.some((seat) => seat.isLocal)
+    ) {
+      return;
+    }
+    const seatId = firstOpenSeat(snapshot, autoSit.rejected);
+    if (!seatId) {
+      autoSit.notice = TABLE_FULL_MESSAGE;
+      return;
+    }
+    if (sitRetries >= MAX_SIT_RETRIES) {
+      autoSit.notice = "Couldn't take a seat. Refresh to try again.";
+      return;
+    }
+    sitRetries += 1;
+    const others = snapshot.seats.map((seat) => seat.displayName);
+    if (!autoSit.displayName || others.includes(autoSit.displayName)) {
+      autoSit.displayName = randomDisplayName(others, random);
+    }
+    autoSit.submitting = true;
+    autoSit.seatId = seatId;
+    autoSit.notice = null;
+    socket.send(JSON.stringify({ action: 'sit', seatId, displayName: autoSit.displayName }));
+  };
+
   const handleError = (code: string): void => {
     if (session.phase === 'loading' || code === 'table_not_found') {
       failClosed();
@@ -207,19 +250,25 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
 
     if (resuming) {
       resuming = false;
-      sitDraft.submitting = false;
+      autoSit.submitting = false;
       forgetSeat();
+      trySit();
       render();
       return;
     }
 
-    if (sitDraft.submitting) {
-      sitDraft.submitting = false;
+    if (autoSit.submitting) {
+      autoSit.submitting = false;
       if (code === 'invalid_display_name' || code === 'empty_display_name') {
-        sitDraft.nameError = true;
-      } else {
-        sitDraft.notice = SIT_ERROR_NOTICES[code] ?? "Couldn't take a seat.";
+        autoSit.displayName = null;
+      } else if (code === 'seat_occupied' && autoSit.seatId) {
+        autoSit.rejected.add(autoSit.seatId);
+      } else if (code === 'table_full') {
+        autoSit.notice = TABLE_FULL_MESSAGE;
+        render();
+        return;
       }
+      trySit();
       render();
       return;
     }
@@ -244,17 +293,29 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       if (token) {
         seatToken = token;
         resuming = true;
-        sitDraft.submitting = true;
+        autoSit.submitting = true;
         active.send(JSON.stringify({ action: 'resume_seat', seatToken: token }));
       }
     }
 
     if (seatToken && isSeatedHere) {
-      sitDraft.submitting = false;
+      autoSit.submitting = false;
+      sitRetries = 0;
     }
     if (leaving && !isSeatedHere) {
       leaving = false;
+      autoSit.wantsSeat = false;
       forgetSeat();
+    } else if (seatToken && !isSeatedHere && !resuming && !autoSit.submitting) {
+      // The seat went away without us (taken over after a long absence); sit again.
+      forgetSeat();
+    }
+    if (!autoSit.submitting) {
+      autoSit.rejected.clear();
+      if (!isSeatedHere && !seatToken) {
+        autoSit.notice = null;
+        trySit();
+      }
     }
     seated.pending = false;
     seated.notice = null;
@@ -336,7 +397,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       }
 
       if (message.type === 'sat') {
-        if (!sitDraft.submitting) {
+        if (!autoSit.submitting) {
           return;
         }
         resuming = false;

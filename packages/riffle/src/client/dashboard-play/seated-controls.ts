@@ -1,4 +1,5 @@
 import type { PlayerSnapshotSeat, TableSnapshotMessage } from '../../runtime/types.js';
+import { formatPlayChips } from '../dashboard/player-row.js';
 import {
   renderActionControls,
   type ActionControlsViewModel,
@@ -70,7 +71,12 @@ function completeSummary(snapshot: TableSnapshotMessage): HTMLElement {
   line.className = 'seated-summary';
   line.dataset.field = 'hand-summary';
   line.textContent = winners.length
-    ? `Hand complete · ${winners.map((seat) => `${seat.displayName} wins ${seat.wonAmount}`).join(' · ')}`
+    ? `Hand complete · ${winners
+        .map((seat) => {
+          const hand = seat.wonHandLabel ? ` with ${seat.wonHandLabel}` : '';
+          return `${seat.displayName} wins ${formatPlayChips(seat.wonAmount ?? 0)}${hand}`;
+        })
+        .join(' · ')}`
     : 'Hand complete';
   return line;
 }
@@ -115,24 +121,21 @@ export function renderSeatedControls(
     }
     const ready = snapshot.seats.filter((seat) => !seat.away && seat.stack > 0).length;
     const busted = local.stack <= 0;
-    const enough = ready >= 2 && !busted;
-
-    const deal = button('seated-deal-button', 'deal-hand', complete ? 'Deal next hand' : 'Deal hand');
-    deal.disabled = !enough || state.pending;
-    deal.addEventListener('click', () => {
-      if (!deal.disabled) {
-        send({ action: 'start_hand' });
-      }
-    });
-
-    const leave = leaveButton(state, send);
+    const enough = ready >= 2;
 
     const idle = busted
       ? 'Out of chips. Leave your seat and sit again to rebuy.'
-      : enough
-        ? 'Ready to deal.'
-        : 'Waiting for another player to sit.';
-    region.append(deal, leave, statusLine(state.notice ?? idle));
+      : complete && enough
+        ? 'Next hand starts in a moment.'
+        : enough
+          ? 'Dealing…'
+          : 'Waiting for another player to sit.';
+    region.append(leaveButton(state, send), statusLine(state.notice ?? idle));
+    return;
+  }
+
+  if (local.waitingForNextHand) {
+    region.append(leaveButton(state, send), statusLine(state.notice ?? WAITING_FOR_NEXT_HAND));
     return;
   }
 
@@ -142,6 +145,8 @@ export function renderSeatedControls(
     statusLine(state.notice ?? (acting ? `Waiting for ${acting.displayName}` : 'Waiting…')),
   );
 }
+
+export const WAITING_FOR_NEXT_HAND = 'Waiting for the next hand';
 
 function leaveButton(state: SeatedControlsState, send: (action: SeatAction) => void): HTMLButtonElement {
   const leave = button('seated-leave-button', 'leave-seat', 'Leave seat');

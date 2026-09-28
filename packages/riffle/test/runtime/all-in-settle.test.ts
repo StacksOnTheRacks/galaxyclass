@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { madeHandName } from '../../src/rules/hand-name.js';
 import { legalize } from '../../src/rules/legalize.js';
+import { evaluateSeven } from '../../src/rules/rank.js';
 import { createRuntimeHandler } from '../../src/runtime/handler.js';
 import type { MatchStore } from '../../src/runtime/store.js';
 import type {
@@ -161,6 +163,7 @@ function createHarness(rngSeed = 7) {
     postToConnection,
     now: () => '2026-09-25T12:00:00.000Z',
     rngSeed: () => rngSeed,
+    nextHandDelayMs: null,
   });
 
   return { handler, store, sent, postToConnection };
@@ -198,18 +201,17 @@ async function sitTwoPlayers(handler: ReturnType<typeof createHarness>['handler'
   return { tokenA, tokenB };
 }
 
+/** The second sit deals the hand. */
 async function startHeadsUpHand(
-  handler: ReturnType<typeof createHarness>['handler'],
+  _handler: ReturnType<typeof createHarness>['handler'],
   sent: Map<string, OutboundMessage[]>,
-  tokenA: string,
+  _tokenA: string,
 ) {
   sent.forEach((messages) => {
+    const dealt = lastSnapshot(messages);
+    expect(dealt?.status).toBe('hand_in_progress');
     messages.length = 0;
   });
-  await handler(
-    wsEvent('$default', 'conn-a', JSON.stringify({ action: 'start_hand', seatToken: tokenA })),
-    {},
-  );
 }
 
 describe('all-in settle on serverless runtime', () => {
@@ -248,6 +250,14 @@ describe('all-in settle on serverless runtime', () => {
     expect(JSON.stringify(snapA)).not.toContain('burns');
     expect(snapA?.seats.some((seat) => seat.holeCards?.length === 2)).toBe(true);
     expect(snapB?.seats.some((seat) => seat.holeCards?.length === 2)).toBe(true);
+    const winners = snapA!.seats.filter((seat) => (seat.wonAmount ?? 0) > 0);
+    expect(winners.length).toBeGreaterThan(0);
+    for (const winner of winners) {
+      expect(winner.wonHandLabel).toBe(madeHandName(evaluateSeven(winner.holeCards!, table!.board!)));
+    }
+    for (const loser of snapA!.seats.filter((seat) => !seat.wonAmount)) {
+      expect(loser.wonHandLabel).toBeUndefined();
+    }
     expect(store.updateTableWithVersionCalls - callsBefore).toBe(2);
   });
 

@@ -56,10 +56,6 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
     return { ok: false, code: 'not_table_member' };
   }
 
-  if (!isBetweenHands(table)) {
-    return { ok: false, code: 'hand_in_progress' };
-  }
-
   if (!isValidSeatId(message.seatId)) {
     return { ok: false, code: 'invalid_seat' };
   }
@@ -77,9 +73,13 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
     return { ok: false, code: 'already_seated' };
   }
 
-  // Between hands, an away seat can be taken over; its reclaim token stops working.
+  // An away seat can be taken over once it is out of the live hand; its reclaim token stops working.
+  // Empty seats can be taken mid-hand: the new player has no cards and joins the next deal.
   const existingSeat = seats.find((seat) => seat.seatId === message.seatId);
-  const replacesAwaySeat = existingSeat !== undefined && isSeatAway(existingSeat);
+  const replacesAwaySeat =
+    existingSeat !== undefined &&
+    isSeatAway(existingSeat) &&
+    (isBetweenHands(table) || !existingSeat.hole);
   if (seats.length >= table.maxSeats && !replacesAwaySeat) {
     return { ok: false, code: 'table_full' };
   }
@@ -101,17 +101,30 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
   await ctx.store.putSeat(table.tableId, newSeat);
   await ctx.store.bindConnectionToSeat(connection.connectionId, message.seatId);
 
-  const updatedTable = await ctx.store.incrementTableVersion(table.tableId, table.version);
+  // The seat is already stored; a concurrent betting action only moved the version on.
+  let updatedTable = await ctx.store.incrementTableVersion(table.tableId, table.version);
+  for (let attempt = 0; !updatedTable && attempt < 2; attempt += 1) {
+    const fresh = await ctx.store.getTable(table.tableId);
+    if (!fresh) {
+      break;
+    }
+    updatedTable = await ctx.store.incrementTableVersion(table.tableId, fresh.version);
+  }
   if (!updatedTable) {
     return { ok: false, code: 'version_conflict' };
   }
+
+  const currentSeats =
+    updatedTable.version === table.version + 1
+      ? [...otherSeats, newSeat].sort((a, b) => Number(a.seatId) - Number(b.seatId))
+      : await ctx.store.listSeats(table.tableId);
 
   return {
     ok: true,
     seatToken,
     seatId: message.seatId,
     table: updatedTable,
-    seats: [...otherSeats, newSeat].sort((a, b) => Number(a.seatId) - Number(b.seatId)),
+    seats: currentSeats,
   };
 }
 

@@ -5,6 +5,9 @@ import {
   smallBlindSeatId,
   toCall,
 } from '../rules/state.js';
+import { madeHandName } from '../rules/hand-name.js';
+import { evaluateSeven } from '../rules/rank.js';
+import type { Card } from '../rules/types.js';
 import { isSeatAway, rehydrateHandState } from './hand-state.js';
 import type {
   ConnectionRecord,
@@ -64,15 +67,23 @@ function winnerAmountForSeat(
   return winner?.amount;
 }
 
+/** Showdown hands are tabled; a fold-out winner's cards are shown with the win message. */
 function shouldRevealHoleCards(
-  table: TableRecord,
   handState: NonNullable<ReturnType<typeof rehydrateHandState>>,
   seat: SeatRecord,
+  won: boolean,
 ): boolean {
-  if (handState.completeReason !== 'showdown' || handState.phase !== 'complete') {
+  if (handState.phase !== 'complete' || !seat.hole || seat.folded) {
     return false;
   }
-  return !seat.folded && Boolean(seat.hole);
+  return handState.completeReason === 'showdown' || won;
+}
+
+function wonHandLabel(hole: [Card, Card], board: Card[]): string | undefined {
+  if (board.length < 3) {
+    return undefined;
+  }
+  return madeHandName(evaluateSeven(hole, board));
 }
 
 export function buildSeatScopedSnapshot(
@@ -107,6 +118,10 @@ export function buildSeatScopedSnapshot(
       snapshotSeat.away = true;
     }
 
+    if (table.status === 'hand_in_progress' && !seat.hole) {
+      snapshotSeat.waitingForNextHand = true;
+    }
+
     if (handState && isComplete) {
       const wonAmount = winnerAmountForSeat(table, handState, seat.seatId);
       if (wonAmount !== undefined && wonAmount > 0) {
@@ -114,8 +129,15 @@ export function buildSeatScopedSnapshot(
       }
     }
 
-    if (handState && shouldRevealHoleCards(table, handState, seat)) {
+    const won = snapshotSeat.wonAmount !== undefined;
+    if (handState && shouldRevealHoleCards(handState, seat, won)) {
       snapshotSeat.holeCards = [seat.hole![0], seat.hole![1]];
+      if (won && handState.completeReason === 'showdown') {
+        const label = wonHandLabel(snapshotSeat.holeCards, table.board ?? []);
+        if (label) {
+          snapshotSeat.wonHandLabel = label;
+        }
+      }
     }
 
     return snapshotSeat;

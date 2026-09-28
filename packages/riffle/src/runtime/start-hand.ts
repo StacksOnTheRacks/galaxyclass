@@ -81,8 +81,27 @@ export async function handleStartHand(ctx: StartHandContext): Promise<StartHandR
     return { ok: false, code: 'not_seated' };
   }
 
-  // Away (disconnected) and busted seats sit out rather than stall the hand.
-  const dealtIn = seats.filter((seat) => !isSeatAway(seat) && seat.stack > 0);
+  return dealNextHand(ctx.store, table, seats, ctx.rngSeed);
+}
+
+/** Seats that would be dealt into the next hand. */
+export function dealableSeats(seats: SeatRecord[]): SeatRecord[] {
+  // Away (disconnected), departing, and busted seats sit out rather than stall the hand.
+  return seats.filter((seat) => !isSeatAway(seat) && !seat.leaveAfterHand && seat.stack > 0);
+}
+
+/** Server-owned deal: no caller seat required. The table must be between hands. */
+export async function dealNextHand(
+  store: MatchStore,
+  table: TableRecord,
+  seats: SeatRecord[],
+  rngSeed?: number,
+): Promise<StartHandResult> {
+  if (!isBetweenHands(table)) {
+    return { ok: false, code: 'hand_in_progress' };
+  }
+
+  const dealtIn = dealableSeats(seats);
   if (dealtIn.length < 2) {
     return { ok: false, code: 'insufficient_players' };
   }
@@ -96,7 +115,7 @@ export async function handleStartHand(ctx: StartHandContext): Promise<StartHandR
     seats: dealtIn.map((seat) => ({ seatId: seat.seatId, stack: seat.stack })),
     buttonSeatId,
     blinds: table.blinds,
-    rng: createSeededRng(ctx.rngSeed ?? Date.now()),
+    rng: createSeededRng(rngSeed ?? Date.now()),
   });
 
   if (!dealResult.ok) {
@@ -117,7 +136,7 @@ export async function handleStartHand(ctx: StartHandContext): Promise<StartHandR
   );
 
   const updatedSeats = applyHandStateToSeats(handState, seats.map(clearSeatHand));
-  const persisted = await ctx.store.updateTableWithVersion(
+  const persisted = await store.updateTableWithVersion(
     table.tableId,
     table.version,
     updatedTable,

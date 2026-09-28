@@ -11,12 +11,15 @@ import { handleSeatDisconnect } from './disconnect.js';
 import { handleLeave, handleResumeSeat, handleSit } from './sit.js';
 import { reapDepartedSeats } from './reap.js';
 import { handleStartHand } from './start-hand.js';
+import { continueAfterHand, dealIfReady, isHandComplete, NEXT_HAND_DELAY_MS } from './auto-deal.js';
 import { createMatchStore, type MatchStore } from './store.js';
 import type {
   ErrorMessage,
   LambdaContext,
   OutboundMessage,
   RuntimeEnv,
+  SeatRecord,
+  TableRecord,
   WebSocketEvent,
 } from './types.js';
 
@@ -28,6 +31,8 @@ export interface RuntimeDeps {
   ) => Promise<void>;
   now: () => string;
   rngSeed?: () => number;
+  /** Pause before the next hand is dealt. `null` leaves finished hands for the caller to advance. */
+  nextHandDelayMs?: number | null;
 }
 
 function errorMessage(code: string): ErrorMessage {
@@ -35,6 +40,20 @@ function errorMessage(code: string): ErrorMessage {
 }
 
 export function createRuntimeHandler(deps: RuntimeDeps) {
+  const nextHandDelayMs =
+    deps.nextHandDelayMs === undefined ? NEXT_HAND_DELAY_MS : deps.nextHandDelayMs;
+
+  const afterUpdate = async (table: TableRecord, seats: SeatRecord[]): Promise<void> => {
+    await fanOutSeatScopedSnapshots(deps, table, seats);
+    if (isHandComplete(table)) {
+      if (nextHandDelayMs !== null) {
+        await continueAfterHand(deps, table.tableId, table.handNumber, nextHandDelayMs);
+      }
+      return;
+    }
+    await dealIfReady(deps, table, seats);
+  };
+
   return async function handler(
     event: WebSocketEvent,
     _context: LambdaContext,
@@ -58,11 +77,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
           deps.now(),
         );
         if (result) {
-          await fanOutSeatScopedSnapshots(
-            { store: deps.store, postToConnection: deps.postToConnection },
-            result.table,
-            result.seats,
-          );
+          await afterUpdate(result.table, result.seats);
         }
       }
       return { statusCode: 200 };
@@ -179,11 +194,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         seatId: result.seatId,
         seatToken: result.seatToken,
       });
-      await fanOutSeatScopedSnapshots(
-        { store: deps.store, postToConnection: deps.postToConnection },
-        result.table,
-        result.seats,
-      );
+      await afterUpdate(result.table, result.seats);
       return { statusCode: 200 };
     }
 
@@ -206,11 +217,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         seatId: result.seatId,
         seatToken: result.seatToken,
       });
-      await fanOutSeatScopedSnapshots(
-        { store: deps.store, postToConnection: deps.postToConnection },
-        result.table,
-        result.seats,
-      );
+      await afterUpdate(result.table, result.seats);
       return { statusCode: 200 };
     }
 
@@ -229,11 +236,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         return { statusCode: 200 };
       }
 
-      await fanOutSeatScopedSnapshots(
-        { store: deps.store, postToConnection: deps.postToConnection },
-        result.table,
-        result.seats,
-      );
+      await afterUpdate(result.table, result.seats);
       return { statusCode: 200 };
     }
 
@@ -257,11 +260,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         return { statusCode: 200 };
       }
 
-      await fanOutSeatScopedSnapshots(
-        { store: deps.store, postToConnection: deps.postToConnection },
-        result.table,
-        result.seats,
-      );
+      await afterUpdate(result.table, result.seats);
       return { statusCode: 200 };
     }
 
@@ -284,11 +283,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         return { statusCode: 200 };
       }
 
-      await fanOutSeatScopedSnapshots(
-        { store: deps.store, postToConnection: deps.postToConnection },
-        result.table,
-        result.seats,
-      );
+      await afterUpdate(result.table, result.seats);
       return { statusCode: 200 };
     }
 
