@@ -39,7 +39,7 @@ export interface DashboardPlayDeps {
   keepAliveMs?: number;
   /** Source of randomness for the table name. Defaults to Math.random. */
   random?: () => number;
-  /** Where the studio sign-in lives for the table list chip. Defaults to localStorage. */
+  /** Where the studio's account hint lives for the table list chip. Defaults to the browser store. */
   accountStorage?: AccountStorage | null;
   /** Full-page navigation. Defaults to window.location.assign. */
   assignLocation?: (url: string) => void;

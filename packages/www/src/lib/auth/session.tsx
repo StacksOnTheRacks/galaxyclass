@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { clearAccountHint, writeAccountHint } from "./account-hint";
 import { authResources, withAuth } from "./api";
 
 type Status = "loading" | "signed-out" | "signed-in";
@@ -45,6 +46,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!authResources()) {
+      clearAccountHint();
       setStatus("signed-out");
       setEmail("");
       return;
@@ -52,9 +54,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     try {
       const nextEmail = await readSignedInEmail();
+      writeAccountHint(nextEmail);
       setEmail(nextEmail);
       setStatus("signed-in");
     } catch {
+      clearAccountHint();
       setEmail("");
       setStatus("signed-out");
     }
@@ -70,6 +74,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // Local chrome still returns to signed-out.
       }
     }
+    clearAccountHint();
     setEmail("");
     setStatus("signed-out");
   }, []);

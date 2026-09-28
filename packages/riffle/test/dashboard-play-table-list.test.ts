@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { isTableListPath } from '../src/client/dashboard-play/route.js';
 import { startDashboardPlay } from '../src/client/dashboard-play/session.js';
 import type { TableListing } from '../src/client/dashboard-play/config.js';
-import type { AccountStorage } from '../src/client/dashboard-play/studio-account.js';
+import { ACCOUNT_HINT_KEY, type AccountStorage } from '../src/client/dashboard-play/studio-account.js';
 import { configFetch, FakePlaySocket, flush, mountRoot, setViewport } from './support/fake-play-socket.js';
 
 const TABLE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
@@ -25,25 +25,11 @@ function listConfigFetch(tables: unknown = [SAMPLE_TABLE]) {
 }
 
 function accountStorage(entries: Record<string, string> = {}): AccountStorage {
-  const keys = Object.keys(entries);
-  return {
-    get length() {
-      return keys.length;
-    },
-    key: (index) => keys[index] ?? null,
-    getItem: (key) => entries[key] ?? null,
-  };
+  return { getItem: (key) => entries[key] ?? null };
 }
 
 function signedInStorage(email: string): AccountStorage {
-  const prefix = 'CognitoIdentityServiceProvider.client123';
-  const user = 'b1c2d3e4-sub';
-  return accountStorage({
-    [`${prefix}.LastAuthUser`]: user,
-    [`${prefix}.${user}.accessToken`]: 'access',
-    [`${prefix}.${user}.refreshToken`]: 'refresh',
-    [`${prefix}.${user}.signInDetails`]: JSON.stringify({ loginId: email, authFlowType: 'USER_SRP_AUTH' }),
-  });
+  return accountStorage({ [ACCOUNT_HINT_KEY]: JSON.stringify({ email }) });
 }
 
 async function startList(
@@ -121,12 +107,11 @@ describe('dashboard play table list', () => {
     expect(root.querySelector('.table-list-subtitle')?.textContent).not.toContain('guest');
   });
 
-  it('stays Guest when the studio session was signed out', async () => {
-    const prefix = 'CognitoIdentityServiceProvider.client123';
+  it('stays Guest when the account hint is malformed', async () => {
     const { root } = await startList(
       '/riffle',
       listConfigFetch(),
-      accountStorage({ [`${prefix}.LastAuthUser`]: 'b1c2d3e4-sub' }),
+      accountStorage({ [ACCOUNT_HINT_KEY]: '{"email":' }),
     );
     expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
   });

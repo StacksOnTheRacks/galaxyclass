@@ -215,7 +215,17 @@ describe('MatchRuntimeStack play origin', () => {
       }
     }
     assert.match(bundle, /\/riffle/);
-    assert.doesNotMatch(bundle, /localStorage/);
+
+    // localStorage is allowed only for the studio's email-only account hint, read once.
+    const accountHintSource = path.join(repoRoot, 'src/client/dashboard-play/studio-account.ts');
+    for (const file of sources.filter((file) => file !== accountHintSource)) {
+      assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /localStorage/, file);
+    }
+    const hintReader = fs.readFileSync(accountHintSource, 'utf8');
+    assert.match(hintReader, /ACCOUNT_HINT_KEY = 'galaxyclass\.account'/);
+    assert.doesNotMatch(hintReader, /setItem|removeItem|\.key\(|\.length\b/);
+    assert.equal(bundle.match(/localStorage/g)?.length ?? 0, 1);
+    assert.match(bundle, /galaxyclass\.account/);
 
     const stackSource = fs.readFileSync(
       path.join(repoRoot, '../infra/lib/match-runtime-stack.ts'),
