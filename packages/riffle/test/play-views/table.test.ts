@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   bearerHeaders,
+  collectDenylistedKeys,
   playTableUrl,
   publicPlayTableUrl,
   seedOpenHandFixture,
 } from './helpers.js';
+
+function assertNoHoleCardsInJson(text: string, cards: readonly (string | undefined)[]): void {
+  for (const card of cards) {
+    if (card) {
+      expect(text).not.toContain(JSON.stringify(card));
+    }
+  }
+}
 
 describe('GET play seat table', () => {
   it('includes own hole and omits the other seat holes', async () => {
@@ -21,7 +30,7 @@ describe('GET play seat table', () => {
     expect(body.seatId).toBe(fixture.seatA);
     expect(body.hole).toEqual(fixture.holeA);
     expect(body.seats).toHaveLength(2);
-    expect(JSON.stringify(body)).not.toContain(fixture.holeB?.[0] ?? '');
+    assertNoHoleCardsInJson(JSON.stringify(body), fixture.holeB ?? []);
   });
 
   it('public table omits hole fields', async () => {
@@ -34,7 +43,7 @@ describe('GET play seat table', () => {
     expect(body.matchId).toBe(fixture.matchId);
     expect(body).not.toHaveProperty('hole');
     expect(body).not.toHaveProperty('view');
-    expect(JSON.stringify(body)).not.toContain(fixture.holeA?.[0] ?? '');
-    expect(JSON.stringify(body)).not.toContain(fixture.holeB?.[0] ?? '');
+    expect(collectDenylistedKeys(body).size).toBe(0);
+    assertNoHoleCardsInJson(JSON.stringify(body), [...(fixture.holeA ?? []), ...(fixture.holeB ?? [])]);
   });
 });
