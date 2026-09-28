@@ -1,5 +1,6 @@
 import type { OutboundMessage, TableSnapshotMessage } from '../../runtime/types.js';
 import { renderMyHandPanel } from '../dashboard/my-hand-panel.js';
+import { publicBase } from '../dashboard/public-base.js';
 import { renderLoading } from '../surfaces/loading.js';
 import { loadPlayConfig } from './config.js';
 import { buildMyHandViewModel } from './my-hand-view.js';
@@ -13,6 +14,7 @@ import {
   TABLE_FULL_MESSAGE,
   type AutoSitState,
 } from './sit-panel.js';
+import { readStudioAccount, type AccountStorage } from './studio-account.js';
 import { renderTableList } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
 import { renderSnapshotShell } from './view.js';
@@ -37,6 +39,10 @@ export interface DashboardPlayDeps {
   keepAliveMs?: number;
   /** Source of randomness for the table name. Defaults to Math.random. */
   random?: () => number;
+  /** Where the studio sign-in lives for the table list chip. Defaults to localStorage. */
+  accountStorage?: AccountStorage | null;
+  /** Full-page navigation. Defaults to window.location.assign. */
+  assignLocation?: (url: string) => void;
 }
 
 export interface DashboardPlaySession {
@@ -99,10 +105,13 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   let seatToken: string | null = null;
   let resuming = false;
   let leaving = false;
+  /** Leave table exits to the list; Leave seat stays on the table watching. */
+  let leavingTable = false;
   let reconnectAttempts = 0;
   let disposed = false;
   let sitRetries = 0;
   const random = deps.random ?? Math.random;
+  const assignLocation = deps.assignLocation ?? ((url: string) => window.location.assign(url));
   const autoSit: AutoSitState = createAutoSitState();
   const seated: SeatedControlsState = { pending: false, notice: null };
   let socket: PlaySocket | null = null;
@@ -161,13 +170,14 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     socket?.close();
   };
 
-  const sendSeatAction = (action: SeatAction): void => {
+  const sendSeatAction = (action: SeatAction, exitToList = false): void => {
     if (!socket || !seatToken || session.reconnecting) {
       return;
     }
     seated.pending = true;
     seated.notice = null;
     leaving = action.action === 'leave';
+    leavingTable = leaving && exitToList;
     socket.send(JSON.stringify({ ...action, seatToken }));
     render();
   };
@@ -184,7 +194,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       local && seatToken
         ? () => {
             if (!seated.pending) {
-              sendSeatAction({ action: 'leave' });
+              sendSeatAction({ action: 'leave' }, true);
             }
           }
         : undefined,
@@ -276,6 +286,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     if (seatToken) {
       seated.pending = false;
       leaving = false;
+      leavingTable = false;
       seated.notice = ACTION_ERROR_NOTICES[code] ?? "That didn't go through. Try again.";
       render();
     }
@@ -306,7 +317,14 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       leaving = false;
       autoSit.wantsSeat = false;
       forgetSeat();
-    } else if (seatToken && !isSeatedHere && !resuming && !autoSit.submitting) {
+      if (leavingTable) {
+        disposed = true;
+        socket?.close();
+        assignLocation(`${publicBase()}/`);
+        return;
+      }
+    }
+    if (seatToken && !isSeatedHere && !resuming && !autoSit.submitting) {
       // The seat went away without us (taken over after a long absence); sit again.
       forgetSeat();
     }
@@ -429,7 +447,11 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       return session;
     }
     session.phase = 'list';
-    renderTableList(root, listConfig.tables);
+    renderTableList(
+      root,
+      listConfig.tables,
+      deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage),
+    );
     return session;
   }
 

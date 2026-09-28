@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { isTableListPath } from '../src/client/dashboard-play/route.js';
 import { startDashboardPlay } from '../src/client/dashboard-play/session.js';
 import type { TableListing } from '../src/client/dashboard-play/config.js';
+import type { AccountStorage } from '../src/client/dashboard-play/studio-account.js';
 import { configFetch, FakePlaySocket, flush, mountRoot, setViewport } from './support/fake-play-socket.js';
 
 const TABLE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
@@ -23,13 +24,40 @@ function listConfigFetch(tables: unknown = [SAMPLE_TABLE]) {
   return configFetch({ webSocketUrl: WS_URL, tables });
 }
 
-async function startList(pathname: string, fetchSetup = listConfigFetch()) {
+function accountStorage(entries: Record<string, string> = {}): AccountStorage {
+  const keys = Object.keys(entries);
+  return {
+    get length() {
+      return keys.length;
+    },
+    key: (index) => keys[index] ?? null,
+    getItem: (key) => entries[key] ?? null,
+  };
+}
+
+function signedInStorage(email: string): AccountStorage {
+  const prefix = 'CognitoIdentityServiceProvider.client123';
+  const user = 'b1c2d3e4-sub';
+  return accountStorage({
+    [`${prefix}.LastAuthUser`]: user,
+    [`${prefix}.${user}.accessToken`]: 'access',
+    [`${prefix}.${user}.refreshToken`]: 'refresh',
+    [`${prefix}.${user}.signInDetails`]: JSON.stringify({ loginId: email, authFlowType: 'USER_SRP_AUTH' }),
+  });
+}
+
+async function startList(
+  pathname: string,
+  fetchSetup = listConfigFetch(),
+  storage: AccountStorage = accountStorage(),
+) {
   const root = mountRoot();
   const sockets: FakePlaySocket[] = [];
   const sessionPromise = startDashboardPlay({
     root,
     pathname,
     fetch: fetchSetup.fetchImpl,
+    accountStorage: storage,
     createSocket: (url) => {
       const socket = new FakePlaySocket(url);
       sockets.push(socket);
@@ -68,6 +96,39 @@ describe('dashboard play table list', () => {
     expect(root.textContent).toContain('$1 / $2');
     expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('1 open');
     expect(root.querySelector('.table-list-join-button')?.getAttribute('href')).toBe(`/${TABLE_ID}`);
+  });
+
+  it('labels every join control Join', async () => {
+    setViewport(834);
+    const { root } = await startList('/riffle');
+    const labels = Array.from(root.querySelectorAll('.table-list-join-button'), (link) => link.textContent);
+    expect(labels.length).toBeGreaterThan(1);
+    expect(new Set(labels)).toEqual(new Set(['Join']));
+  });
+
+  it('shows Guest when no studio account is signed in', async () => {
+    const { root } = await startList('/riffle');
+    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('guest');
+    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
+    expect(root.querySelector('.table-list-subtitle')?.textContent).toContain('play as a guest');
+  });
+
+  it('shows the signed-in studio account instead of Guest', async () => {
+    const { root } = await startList('/riffle', listConfigFetch(), signedInStorage('maya@example.com'));
+    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
+    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('maya@example.com');
+    expect(root.querySelector('.table-list-guest-avatar')?.textContent).toBe('M');
+    expect(root.querySelector('.table-list-subtitle')?.textContent).not.toContain('guest');
+  });
+
+  it('stays Guest when the studio session was signed out', async () => {
+    const prefix = 'CognitoIdentityServiceProvider.client123';
+    const { root } = await startList(
+      '/riffle',
+      listConfigFetch(),
+      accountStorage({ [`${prefix}.LastAuthUser`]: 'b1c2d3e4-sub' }),
+    );
+    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
   });
 
   it('renders inert controls with aria-disabled', async () => {

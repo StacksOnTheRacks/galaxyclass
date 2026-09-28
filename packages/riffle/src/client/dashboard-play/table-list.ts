@@ -1,6 +1,7 @@
 import { createIcon } from '../dashboard/assets.js';
 import { publicBase } from '../dashboard/public-base.js';
 import type { TableListing } from './config.js';
+import type { StudioAccount } from './studio-account.js';
 
 function inertButton(label: string, className: string): HTMLButtonElement {
   const button = document.createElement('button');
@@ -72,7 +73,7 @@ function renderTableRow(table: TableListing): HTMLElement {
   const join = document.createElement('a');
   join.className = 'table-list-join-button';
   join.href = `${publicBase()}/${table.id}`;
-  join.textContent = 'Join table';
+  join.textContent = 'Join';
   actionCol.append(join);
 
   row.append(tableCol, stakesCol, playersCol, actionCol);
@@ -114,13 +115,13 @@ function renderTableCard(table: TableListing): HTMLElement {
   const join = document.createElement('a');
   join.className = 'table-list-join-button table-list-join-button-block';
   join.href = `${publicBase()}/${table.id}`;
-  join.textContent = 'Join table';
+  join.textContent = 'Join';
 
   card.append(header, stakes, players, join);
   return card;
 }
 
-function renderTopBar(openCount: number): HTMLElement {
+function renderTopBar(openCount: number, account: StudioAccount | null): HTMLElement {
   const topBar = document.createElement('header');
   topBar.className = 'table-list-top-bar';
 
@@ -144,16 +145,18 @@ function renderTopBar(openCount: number): HTMLElement {
   controls.className = 'table-list-controls';
   const playingAs = document.createElement('div');
   playingAs.className = 'table-list-playing-as';
+  playingAs.dataset.account = account ? 'signed-in' : 'guest';
   const avatar = document.createElement('span');
   avatar.className = 'table-list-guest-avatar';
-  avatar.textContent = 'G';
+  avatar.textContent = account ? account.email.charAt(0).toUpperCase() : 'G';
   avatar.setAttribute('aria-hidden', 'true');
   const label = document.createElement('div');
   label.className = 'table-list-playing-as-label';
   const labelTop = document.createElement('p');
   labelTop.textContent = 'Playing as';
   const labelName = document.createElement('p');
-  labelName.textContent = 'Guest';
+  labelName.className = 'table-list-playing-as-name';
+  labelName.textContent = account ? account.email : 'Guest';
   label.append(labelTop, labelName);
   playingAs.append(avatar, label);
   controls.append(playingAs, inertIconButton('table-list-settings-button', 'settings', 'Settings'));
@@ -162,7 +165,7 @@ function renderTopBar(openCount: number): HTMLElement {
   return topBar;
 }
 
-function renderHeading(): HTMLElement {
+function renderHeading(signedIn: boolean): HTMLElement {
   const heading = document.createElement('section');
   heading.className = 'table-list-heading';
 
@@ -173,8 +176,9 @@ function renderHeading(): HTMLElement {
   title.textContent = 'Open tables';
   const subtitle = document.createElement('p');
   subtitle.className = 'table-list-subtitle';
-  subtitle.textContent =
-    "Pick a table and take a seat — no sign-up needed, you'll play as a guest.";
+  subtitle.textContent = signedIn
+    ? 'Pick a table and take a seat.'
+    : "Pick a table and take a seat — no sign-up needed, you'll play as a guest.";
   titleBlock.append(title, subtitle);
 
   heading.append(titleBlock, inertButton('Join with a link', 'table-list-secondary-button table-list-join-link-desktop'));
@@ -264,7 +268,11 @@ function renderResponsiveList(tables: TableListing[]): HTMLElement {
   return wrapper;
 }
 
-export function renderTableList(root: HTMLElement, tables: TableListing[]): void {
+export function renderTableList(
+  root: HTMLElement,
+  tables: TableListing[],
+  account: StudioAccount | null = null,
+): void {
   root.replaceChildren();
   root.dataset.surface = 'table-list';
   delete root.dataset.breakpoint;
@@ -273,8 +281,8 @@ export function renderTableList(root: HTMLElement, tables: TableListing[]): void
   page.className = 'table-list-page';
 
   page.append(
-    renderTopBar(tables.length),
-    renderHeading(),
+    renderTopBar(tables.length, account),
+    renderHeading(account !== null),
     renderToolbar(),
     renderDesktopList(tables),
     renderResponsiveList(tables),
