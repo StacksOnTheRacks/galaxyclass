@@ -187,6 +187,7 @@ export function buildSeatScopedSnapshot(
         snapshot.currentBet = handState.currentBet;
         snapshot.minRaiseTo =
           handState.currentBet === 0 ? minOpeningWager(handState) : minRaiseTo(handState);
+        snapshot.bigBlind = table.blinds.bigBlind;
       }
     }
   }

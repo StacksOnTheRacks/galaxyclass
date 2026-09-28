@@ -15,19 +15,12 @@ const BASE_VIEW: ActionControlsViewModel = {
   minRaiseTo: 200,
   allInTo: 2000,
   pot: 400,
+  bigBlind: 20,
 };
 
 function setViewport(width: number, height: number): void {
-  Object.defineProperty(window, 'innerWidth', {
-    configurable: true,
-    writable: true,
-    value: width,
-  });
-  Object.defineProperty(window, 'innerHeight', {
-    configurable: true,
-    writable: true,
-    value: height,
-  });
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
   window.dispatchEvent(new Event('resize'));
 }
 
@@ -38,7 +31,7 @@ function mountDashboard(width: number, height: number): HTMLElement {
   document.body.replaceChildren(root);
   renderDashboardTableShell(root, {
     tableName: 'Friday Night',
-    blindsLabel: '$1 / $2',
+    blindsLabel: '$10 / $20',
     seatedPlayersLabel: '3 / 8',
     handNumber: 4,
     street: 'Flop',
@@ -46,24 +39,34 @@ function mountDashboard(width: number, height: number): HTMLElement {
   return root;
 }
 
+type SubmitMock = ReturnType<typeof vi.fn<(payload: ActionSubmitPayload) => void>>;
+
 function renderAtViewport(
   width: number,
   height: number,
   viewModel: ActionControlsViewModel = BASE_VIEW,
-  onSubmit = vi.fn<(payload: ActionSubmitPayload) => void>(),
-): { root: HTMLElement; onSubmit: ReturnType<typeof vi.fn> } {
+): { root: HTMLElement; region: HTMLElement; onSubmit: SubmitMock } {
+  const onSubmit = vi.fn<(payload: ActionSubmitPayload) => void>();
   const root = mountDashboard(width, height);
   const region = root.querySelector('[data-region="actions"]') as HTMLElement;
   renderActionControls(region, viewModel, { onSubmit });
-  return { root, onSubmit };
+  return { root, region, onSubmit };
 }
 
 function actionButton(root: HTMLElement, action: string): HTMLButtonElement | null {
   return root.querySelector(`[data-action="${action}"]`);
 }
 
-function presetButton(root: HTMLElement, preset: string): HTMLButtonElement | null {
-  return root.querySelector(`[data-preset="${preset}"]`);
+function field<T extends HTMLElement = HTMLElement>(root: HTMLElement, name: string): T | null {
+  return root.querySelector<T>(`[data-field="${name}"]`);
+}
+
+function presetIds(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>('[data-preset]')].map((node) => node.dataset.preset!);
+}
+
+function press(key: string, target: EventTarget = document): void {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 }
 
 describe('action controls', () => {
@@ -76,252 +79,251 @@ describe('action controls', () => {
     ['desktop', 1280, 832],
     ['tablet', 834, 1194],
     ['phone', 402, 874],
-  ])('renders inside actions at %s breakpoint when your turn', (_label, width, height) => {
+  ])('renders inside actions at %s breakpoint when your turn', (label, width, height) => {
     const { root } = renderAtViewport(width, height);
-    expect(root.dataset.breakpoint).toBe(_label);
+    expect(root.dataset.breakpoint).toBe(label);
     expect(root.querySelector('[data-region="actions"] [data-field="action-controls"]')).not.toBeNull();
+    expect(field(root, 'your-turn')?.textContent).toBe('Your turn');
   });
 
-  it.each([
-    ['desktop', 1280, 832],
-    ['tablet', 834, 1194],
-    ['phone', 402, 874],
-  ])('leaves actions empty when not your turn at %s', (_label, width, height) => {
-    const { root } = renderAtViewport(width, height, { ...BASE_VIEW, yourTurn: false });
-    expect(root.querySelector('[data-region="actions"]')?.children).toHaveLength(0);
+  it('leaves actions empty when not your turn', () => {
+    const { region } = renderAtViewport(1280, 832, { ...BASE_VIEW, yourTurn: false });
+    expect(region.children).toHaveLength(0);
   });
 
-  it('enables fold always and toggles check and call from toCall', () => {
-    const facingBet = renderAtViewport(1280, 832);
-    expect(actionButton(facingBet.root, 'fold')?.disabled).toBe(false);
-    expect(actionButton(facingBet.root, 'check')?.disabled).toBe(true);
-    expect(actionButton(facingBet.root, 'check')?.textContent).toBe('Check');
-    expect(actionButton(facingBet.root, 'call')?.disabled).toBe(false);
-    expect(actionButton(facingBet.root, 'call')?.textContent).toBe('Call $100');
-
-    const noBet = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0 });
-    expect(actionButton(noBet.root, 'check')?.disabled).toBe(false);
-    expect(actionButton(noBet.root, 'call')?.disabled).toBe(true);
-    expect(actionButton(noBet.root, 'call')?.textContent).toBe('Call');
-  });
-
-  it('shows raise controls with desktop presets including Min amounts', () => {
-    const { root } = renderAtViewport(1280, 832);
-    expect(actionButton(root, 'raise')?.textContent).toBe('Raise to $300');
-    expect(presetButton(root, 'min')).not.toBeNull();
-    expect(presetButton(root, 'min')?.textContent).toContain('Min');
-    expect(presetButton(root, 'min')?.textContent).toContain('$200');
-    expect(root.querySelector('[data-field="raise-slider"]')).not.toBeNull();
-  });
-
-  it('omits Min preset and shortcut hints on phone', () => {
-    const { root } = renderAtViewport(402, 874);
-    expect(presetButton(root, 'min')).toBeNull();
-    expect(root.querySelectorAll('[data-field="shortcut"]')).toHaveLength(0);
-    expect(root.querySelector('[data-field="your-turn"]')?.textContent).toBe('Your turn');
-  });
-
-  it('updates slider from preset click without submitting', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832);
-    const slider = root.querySelector('[data-field="raise-slider"]') as HTMLInputElement;
-    presetButton(root, 'pot')?.click();
-    expect(slider.value).toBe('400');
-    expect(actionButton(root, 'raise')?.textContent).toBe('Raise to $400');
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it('does not update slider from a disabled preset', () => {
-    const { root } = renderAtViewport(1280, 832, {
-      ...BASE_VIEW,
-      pot: 50,
-      minRaiseTo: 200,
-      allInTo: 2000,
+  describe('legal buttons only', () => {
+    it('facing a bet shows Fold, Call, and Raise without Check', () => {
+      const { root } = renderAtViewport(1280, 832);
+      expect(actionButton(root, 'fold')?.textContent).toBe('Fold');
+      expect(actionButton(root, 'call')?.textContent).toBe('Call $100');
+      expect(actionButton(root, 'raise')?.textContent).toBe('Raise');
+      expect(actionButton(root, 'check')).toBeNull();
     });
-    const slider = root.querySelector('[data-field="raise-slider"]') as HTMLInputElement;
-    const initialValue = slider.value;
-    const halfPot = presetButton(root, 'half-pot');
-    expect(halfPot?.disabled).toBe(true);
-    halfPot?.click();
-    expect(slider.value).toBe(initialValue);
-  });
 
-  it('submits enabled actions with expected payloads', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832);
-    actionButton(root, 'fold')?.click();
-    expect(onSubmit).toHaveBeenLastCalledWith({ type: 'fold' });
-
-    renderActionControls(
-      root.querySelector('[data-region="actions"]') as HTMLElement,
-      { ...BASE_VIEW, toCall: 0 },
-      { onSubmit },
-    );
-    actionButton(root, 'check')?.click();
-    expect(onSubmit).toHaveBeenLastCalledWith({ type: 'check' });
-
-    renderActionControls(
-      root.querySelector('[data-region="actions"]') as HTMLElement,
-      BASE_VIEW,
-      { onSubmit },
-    );
-    actionButton(root, 'call')?.click();
-    expect(onSubmit).toHaveBeenLastCalledWith({ type: 'call' });
-
-    renderActionControls(
-      root.querySelector('[data-region="actions"]') as HTMLElement,
-      BASE_VIEW,
-      { onSubmit },
-    );
-    actionButton(root, 'raise')?.click();
-    expect(onSubmit).toHaveBeenLastCalledWith({ type: 'raise', amount: 300 });
-  });
-
-  it('does not submit disabled check or call', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832);
-    actionButton(root, 'check')?.click();
-    expect(onSubmit).not.toHaveBeenCalled();
-
-    renderActionControls(
-      root.querySelector('[data-region="actions"]') as HTMLElement,
-      { ...BASE_VIEW, toCall: 0 },
-      { onSubmit },
-    );
-    actionButton(root, 'call')?.click();
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it('shows all-in confirm for call and cancels without submit', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832, {
-      ...BASE_VIEW,
-      stack: 100,
-      toCall: 100,
+    it('checked to you shows Check and Bet without Fold or Call', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0, minRaiseTo: 20 });
+      expect(actionButton(root, 'check')?.textContent).toBe('Check');
+      expect(actionButton(root, 'raise')?.textContent).toBe('Bet');
+      expect(actionButton(root, 'fold')).toBeNull();
+      expect(actionButton(root, 'call')).toBeNull();
     });
-    actionButton(root, 'call')?.click();
-    expect(root.querySelector('[data-field="all-in-dialog"]')?.textContent).toContain(
-      'Go all-in for $100?',
-    );
-    root.querySelector('[data-field="all-in-cancel"]')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true }),
-    );
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
 
-  it('confirms all-in call and submits', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832, {
-      ...BASE_VIEW,
-      stack: 100,
-      toCall: 100,
+    it('uses Raise when the big blind has the option to check', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0, wager: 'raise' });
+      expect(actionButton(root, 'check')).not.toBeNull();
+      expect(actionButton(root, 'raise')?.textContent).toBe('Raise');
     });
-    actionButton(root, 'call')?.click();
-    root.querySelector('[data-field="all-in-confirm"]')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true }),
-    );
-    expect(onSubmit).toHaveBeenCalledWith({ type: 'call' });
-  });
 
-  it('shows all-in confirm when raise-to equals stack', () => {
-    const { root, onSubmit } = renderAtViewport(1280, 832, {
-      ...BASE_VIEW,
-      stack: 300,
-      minRaiseTo: 200,
-      allInTo: 2000,
-      pot: 400,
+    it('turns Call into All-in and hides Raise when the call covers the stack', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, stack: 80, toCall: 100, allInTo: 80 });
+      expect(actionButton(root, 'call')?.textContent).toBe('All-in $80');
+      expect(actionButton(root, 'raise')).toBeNull();
+      expect(field(root, 'raise-dropup')).toBeNull();
     });
-    const slider = root.querySelector('[data-field="raise-slider"]') as HTMLInputElement;
-    slider.value = '300';
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
-    actionButton(root, 'raise')?.click();
-    expect(root.querySelector('[data-field="all-in-message"]')?.textContent).toBe(
-      'Go all-in for $300?',
-    );
-    root.querySelector('[data-field="all-in-cancel"]')?.dispatchEvent(
-      new MouseEvent('click', { bubbles: true }),
-    );
-    expect(onSubmit).not.toHaveBeenCalled();
+
+    it('hides Raise when no raise is possible', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, minRaiseTo: 2500, allInTo: 2000 });
+      expect(actionButton(root, 'raise')).toBeNull();
+      expect(actionButton(root, 'fold')).not.toBeNull();
+    });
   });
 
-  it('activates desktop and tablet keyboard shortcuts for enabled controls', () => {
-    for (const viewport of [
-      [1280, 832],
-      [834, 1194],
-    ] as const) {
-      const { root, onSubmit } = renderAtViewport(viewport[0], viewport[1]);
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+  describe('context line', () => {
+    it('shows to call, pot, and min raise on desktop', () => {
+      const { root } = renderAtViewport(1280, 832);
+      expect(field(root, 'to-call')?.textContent).toBe('To call$100');
+      expect(field(root, 'hint')?.textContent).toBe('Pot $400 · min raise to $200');
+    });
+
+    it('shows min bet when nothing has been wagered', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0, minRaiseTo: 20 });
+      expect(field(root, 'hint')?.textContent).toBe('Pot $400 · min bet $20');
+    });
+
+    it('shows only the pot on phone', () => {
+      const { root } = renderAtViewport(402, 874);
+      expect(field(root, 'hint')?.textContent).toBe('Pot $400');
+    });
+  });
+
+  describe('sizing drop-up', () => {
+    it('starts closed and opens from the trigger without submitting', () => {
+      const { root, onSubmit } = renderAtViewport(1280, 832);
+      const dropUp = field(root, 'raise-dropup')!;
+      const trigger = actionButton(root, 'raise')!;
+      expect(dropUp.hidden).toBe(true);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+      trigger.click();
+      expect(dropUp.hidden).toBe(false);
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(field(root, 'raise-amount')?.textContent).toBe('$300');
+      expect(field(root, 'raise-confirm')?.textContent).toBe('Raise to $300');
+
+      trigger.click();
+      expect(dropUp.hidden).toBe(true);
+    });
+
+    it('lists presets in range with ¾ pot selected, and hides ones out of range', () => {
+      const wide = renderAtViewport(1280, 832);
+      expect(presetIds(wide.root)).toEqual(['min', 'half-pot', 'three-quarter-pot', 'pot', 'all-in']);
+      expect(wide.root.querySelector('[data-preset="three-quarter-pot"]')?.getAttribute('aria-pressed')).toBe('true');
+
+      const small = renderAtViewport(1280, 832, { ...BASE_VIEW, pot: 50 });
+      expect(presetIds(small.root)).toEqual(['min', 'all-in']);
+    });
+
+    it('keeps the same presets on phone and places the drop-up inside the sheet', () => {
+      const { root } = renderAtViewport(402, 874);
+      expect(presetIds(root)).toContain('min');
+      expect(root.querySelector('[data-field="action-controls"] [data-field="raise-dropup"]')).not.toBeNull();
+      expect(root.querySelectorAll('[data-field="shortcut"]')).toHaveLength(0);
+    });
+
+    it('sets the amount from a preset, then confirms it', () => {
+      const { root, onSubmit } = renderAtViewport(1280, 832);
+      actionButton(root, 'raise')!.click();
+      root.querySelector<HTMLButtonElement>('[data-preset="pot"]')!.click();
+      expect(field<HTMLInputElement>(root, 'raise-slider')!.value).toBe('400');
+      expect(field<HTMLInputElement>(root, 'raise-input')!.value).toBe('400');
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      field<HTMLButtonElement>(root, 'raise-confirm')!.click();
+      expect(onSubmit).toHaveBeenCalledWith({ type: 'raise', amount: 400 });
+      expect(field(root, 'raise-dropup')!.hidden).toBe(true);
+    });
+
+    it('steps by the big blind and snaps slider values to it', () => {
+      const { root } = renderAtViewport(1280, 832);
+      actionButton(root, 'raise')!.click();
+      field<HTMLButtonElement>(root, 'step-up')!.click();
+      expect(field(root, 'raise-amount')?.textContent).toBe('$320');
+      field<HTMLButtonElement>(root, 'step-down')!.click();
+      field<HTMLButtonElement>(root, 'step-down')!.click();
+      expect(field(root, 'raise-amount')?.textContent).toBe('$280');
+
+      const slider = field<HTMLInputElement>(root, 'raise-slider')!;
+      slider.value = '517';
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(field(root, 'raise-amount')?.textContent).toBe('$520');
+    });
+
+    it('never steps outside min raise and all-in', () => {
+      const { root } = renderAtViewport(1280, 832, { ...BASE_VIEW, pot: 0 });
+      actionButton(root, 'raise')!.click();
+      field<HTMLButtonElement>(root, 'step-down')!.click();
+      expect(field(root, 'raise-amount')?.textContent).toBe('$200');
+      root.querySelector<HTMLButtonElement>('[data-preset="all-in"]')!.click();
+      field<HTMLButtonElement>(root, 'step-up')!.click();
+      expect(field(root, 'raise-amount')?.textContent).toBe('$2,000');
+    });
+
+    it('accepts a typed amount, clamps it, and snaps on change', () => {
+      const { root } = renderAtViewport(1280, 832);
+      actionButton(root, 'raise')!.click();
+      const input = field<HTMLInputElement>(root, 'raise-input')!;
+      input.value = '$455';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(input.value).toBe('455');
+      expect(field(root, 'raise-amount')?.textContent).toBe('$455');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(input.value).toBe('460');
+
+      input.value = '99999';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(field(root, 'raise-amount')?.textContent).toBe('$2,000');
+    });
+
+    it('uses Bet copy when nothing has been wagered', () => {
+      const { root, onSubmit } = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0, minRaiseTo: 20, pot: 40 });
+      actionButton(root, 'raise')!.click();
+      expect(field(root, 'raise-dropup')?.textContent).toContain('Bet to');
+      expect(field(root, 'raise-confirm')?.textContent).toBe('Bet $30');
+      field<HTMLButtonElement>(root, 'raise-confirm')!.click();
+      expect(onSubmit).toHaveBeenCalledWith({ type: 'raise', amount: 30 });
+    });
+
+    it('closes on Escape and on an outside click without submitting', () => {
+      const { root, onSubmit } = renderAtViewport(1280, 832);
+      const dropUp = field(root, 'raise-dropup')!;
+      actionButton(root, 'raise')!.click();
+      press('Escape');
+      expect(dropUp.hidden).toBe(true);
+
+      actionButton(root, 'raise')!.click();
+      root.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(dropUp.hidden).toBe(true);
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('stays open and keeps the amount across a re-render of the same spot', () => {
+      const { root, region, onSubmit } = renderAtViewport(1280, 832);
+      actionButton(root, 'raise')!.click();
+      root.querySelector<HTMLButtonElement>('[data-preset="pot"]')!.click();
+      renderActionControls(region, BASE_VIEW, { onSubmit });
+      expect(field(root, 'raise-dropup')!.hidden).toBe(false);
+      expect(field(root, 'raise-amount')?.textContent).toBe('$400');
+
+      renderActionControls(region, { ...BASE_VIEW, pot: 600 }, { onSubmit });
+      expect(field(root, 'raise-dropup')!.hidden).toBe(true);
+    });
+  });
+
+  describe('keyboard', () => {
+    it.each([
+      ['desktop', 1280, 832],
+      ['tablet', 834, 1194],
+    ])('submits F / K / C and opens the drop-up with R on %s', (_label, width, height) => {
+      const { region, onSubmit } = renderAtViewport(width, height);
+      press('f');
       expect(onSubmit).toHaveBeenLastCalledWith({ type: 'fold' });
-
-      renderActionControls(
-        root.querySelector('[data-region="actions"]') as HTMLElement,
-        { ...BASE_VIEW, toCall: 0 },
-        { onSubmit },
-      );
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }));
-      expect(onSubmit).toHaveBeenLastCalledWith({ type: 'check' });
-
-      renderActionControls(
-        root.querySelector('[data-region="actions"]') as HTMLElement,
-        BASE_VIEW,
-        { onSubmit },
-      );
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+      press('c');
       expect(onSubmit).toHaveBeenLastCalledWith({ type: 'call' });
+      press('k');
+      expect(onSubmit).toHaveBeenCalledTimes(2);
 
-      renderActionControls(
-        root.querySelector('[data-region="actions"]') as HTMLElement,
-        BASE_VIEW,
-        { onSubmit },
-      );
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
-      expect(onSubmit).toHaveBeenLastCalledWith({ type: 'raise', amount: 300 });
-    }
+      press('r');
+      expect(field(region, 'raise-dropup')!.hidden).toBe(false);
+      press('ArrowUp');
+      expect(field(region, 'raise-amount')?.textContent).toBe('$320');
+      press('Enter');
+      expect(onSubmit).toHaveBeenLastCalledWith({ type: 'raise', amount: 320 });
+
+      renderActionControls(region, { ...BASE_VIEW, toCall: 0, minRaiseTo: 20 }, { onSubmit });
+      press('k');
+      expect(onSubmit).toHaveBeenLastCalledWith({ type: 'check' });
+      press('b');
+      expect(field(region, 'raise-dropup')!.hidden).toBe(false);
+    });
+
+    it('ignores letter shortcuts while typing an amount', () => {
+      const { root, onSubmit } = renderAtViewport(1280, 832);
+      actionButton(root, 'raise')!.click();
+      press('f', field(root, 'raise-input')!);
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('has no shortcuts on phone', () => {
+      const { onSubmit } = renderAtViewport(402, 874);
+      press('f');
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
   });
 
-  it('shows phone timer row only when timer is supplied', () => {
-    const withTimer = renderAtViewport(402, 874, {
-      ...BASE_VIEW,
-      timer: { label: '0:15', fraction: 0.5 },
-    });
-    expect(withTimer.root.querySelector('[data-field="timer-row"]')).not.toBeNull();
-    expect(withTimer.root.querySelector('[data-field="timer-label"]')?.textContent).toBe('0:15');
+  it('shows the timer only when one is supplied', () => {
+    const withTimer = renderAtViewport(1280, 832, { ...BASE_VIEW, timer: { label: '0:15', fraction: 0.5 } });
+    expect(field(withTimer.root, 'timer-row')).not.toBeNull();
+    expect(field(withTimer.root, 'timer-label')?.textContent).toBe('0:15');
 
     const withoutTimer = renderAtViewport(402, 874);
-    expect(withoutTimer.root.querySelector('[data-field="timer-row"]')).toBeNull();
+    expect(field(withoutTimer.root, 'timer-row')).toBeNull();
   });
 
-  it('shows desktop hint with to call and min raise, phone hint only when facing a bet', () => {
-    const desktop = renderAtViewport(1280, 832);
-    expect(desktop.root.querySelector('[data-field="hint"]')?.textContent).toBe(
-      '$100 to call · min raise $200',
-    );
-
-    const desktopNoBet = renderAtViewport(1280, 832, { ...BASE_VIEW, toCall: 0 });
-    expect(desktopNoBet.root.querySelector('[data-field="hint"]')?.textContent).toBe(
-      'min raise $200',
-    );
-
-    const phone = renderAtViewport(402, 874);
-    expect(phone.root.querySelector('[data-field="hint"]')?.textContent).toBe('$100 to call');
-
-    const phoneNoBet = renderAtViewport(402, 874, { ...BASE_VIEW, toCall: 0 });
-    expect(phoneNoBet.root.querySelector('[data-field="hint"]')?.hidden).toBe(true);
-  });
-
-  it('disables raise slider and presets when minRaiseTo exceeds allInTo', () => {
-    const { root } = renderAtViewport(1280, 832, {
-      ...BASE_VIEW,
-      minRaiseTo: 2500,
-      allInTo: 2000,
-    });
-    expect(actionButton(root, 'raise')?.disabled).toBe(true);
-    expect(root.querySelector('[data-field="raise-slider"]')?.hasAttribute('disabled')).toBe(true);
-    for (const preset of root.querySelectorAll('[data-preset]')) {
-      expect((preset as HTMLButtonElement).disabled).toBe(true);
-    }
-  });
-
-  it('exposes visible accessible names on action buttons', () => {
-    const { root } = renderAtViewport(1280, 832);
-    for (const action of ['fold', 'check', 'call', 'raise']) {
-      const button = actionButton(root, action);
-      expect(button?.textContent?.trim().length).toBeGreaterThan(0);
-    }
+  it('removes document listeners when re-rendered off-turn', () => {
+    const { region, onSubmit } = renderAtViewport(1280, 832);
+    renderActionControls(region, { ...BASE_VIEW, yourTurn: false }, { onSubmit });
+    press('f');
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
