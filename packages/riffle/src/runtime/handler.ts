@@ -39,6 +39,27 @@ function errorMessage(code: string): ErrorMessage {
   return { type: 'error', code };
 }
 
+const MAX_LIST_TABLE_IDS = 32;
+
+function parseRequestedTableIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !entry || seen.has(entry)) {
+      continue;
+    }
+    seen.add(entry);
+    ids.push(entry);
+    if (ids.length >= MAX_LIST_TABLE_IDS) {
+      break;
+    }
+  }
+  return ids;
+}
+
 export function createRuntimeHandler(deps: RuntimeDeps) {
   const nextHandDelayMs =
     deps.nextHandDelayMs === undefined ? NEXT_HAND_DELAY_MS : deps.nextHandDelayMs;
@@ -93,6 +114,24 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
     }
 
     if (message.action === 'ping') {
+      return { statusCode: 200 };
+    }
+
+    if (message.action === 'list_tables') {
+      const tables = [];
+      for (const tableId of parseRequestedTableIds(message.tableIds)) {
+        const table = await deps.store.getTable(tableId);
+        if (!table) {
+          continue;
+        }
+        const seats = await deps.store.listSeats(tableId);
+        tables.push({
+          tableId,
+          seatedCount: seats.filter((seat) => seat.displayName).length,
+          maxSeats: table.maxSeats,
+        });
+      }
+      await deps.postToConnection(connectionId, { type: 'table_list', tables });
       return { statusCode: 200 };
     }
 

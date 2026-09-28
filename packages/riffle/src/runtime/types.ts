@@ -72,6 +72,7 @@ export interface ConnectionRecord {
 export interface ClientMessage {
   action: string;
   tableId?: string;
+  tableIds?: unknown;
   seatId?: string;
   displayName?: string;
   seatToken?: string;
@@ -159,10 +160,22 @@ export interface ErrorMessage {
   code: string;
 }
 
+export interface TableListEntry {
+  tableId: string;
+  seatedCount: number;
+  maxSeats: number;
+}
+
+export interface TableListMessage {
+  type: 'table_list';
+  tables: TableListEntry[];
+}
+
 export type OutboundMessage =
   | TableCreatedMessage
   | SatMessage
   | TableSnapshotMessage
+  | TableListMessage
   | ErrorMessage;
 
 export interface WebSocketEvent {

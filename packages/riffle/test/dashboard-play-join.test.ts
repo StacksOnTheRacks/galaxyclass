@@ -233,6 +233,7 @@ describe('dashboard play GUID join', () => {
       'utf8',
     );
     expect(bundle).toContain('join_table');
+    expect(bundle).toContain('list_tables');
     expect(bundle).not.toMatch(/create_table|\/v1\/play\/matches|\/v1\/bootstrap|bootstrapToken/);
   });
 

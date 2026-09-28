@@ -14,6 +14,7 @@ import {
   TABLE_FULL_MESSAGE,
   type AutoSitState,
 } from './sit-panel.js';
+import { startListOccupancy, type OccupancyById } from './list-occupancy.js';
 import { readStudioAccount, type AccountStorage } from './studio-account.js';
 import { renderTableList } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
@@ -116,6 +117,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   const seated: SeatedControlsState = { pending: false, notice: null };
   let socket: PlaySocket | null = null;
   let webSocketUrl = '';
+  let stopListOccupancy: (() => void) | undefined;
 
   const session = {
     tableId,
@@ -126,6 +128,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     hasSeatToken: () => seatToken !== null,
     dispose: () => {
       disposed = true;
+      stopListOccupancy?.();
       socket?.close();
     },
   };
@@ -446,12 +449,29 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       failClosed();
       return session;
     }
+    const account =
+      deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage);
+    const occupancy: OccupancyById = {};
+    const paintList = (): void => {
+      if (disposed || session.phase !== 'list') {
+        return;
+      }
+      renderTableList(root, listConfig.tables, account, occupancy);
+    };
     session.phase = 'list';
-    renderTableList(
-      root,
-      listConfig.tables,
-      deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage),
-    );
+    paintList();
+    const listOccupancy = startListOccupancy({
+      webSocketUrl: listConfig.webSocketUrl,
+      tableIds: listConfig.tables.map((table) => table.id),
+      createSocket: deps.createSocket,
+      keepAliveMs,
+      reconnectDelayMs,
+      onUpdate: (next) => {
+        Object.assign(occupancy, next);
+        paintList();
+      },
+    });
+    stopListOccupancy = listOccupancy.dispose;
     return session;
   }
 

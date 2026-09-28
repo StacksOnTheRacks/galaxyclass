@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isTableListPath } from '../src/client/dashboard-play/route.js';
-import { startDashboardPlay } from '../src/client/dashboard-play/session.js';
+import { startDashboardPlay, type DashboardPlaySession } from '../src/client/dashboard-play/session.js';
 import type { TableListing } from '../src/client/dashboard-play/config.js';
+import { renderTableList } from '../src/client/dashboard-play/table-list.js';
 import { ACCOUNT_HINT_KEY, type AccountStorage } from '../src/client/dashboard-play/studio-account.js';
 import { configFetch, FakePlaySocket, flush, mountRoot, setViewport } from './support/fake-play-socket.js';
 
@@ -32,6 +33,8 @@ function signedInStorage(email: string): AccountStorage {
   return accountStorage({ [ACCOUNT_HINT_KEY]: JSON.stringify({ email }) });
 }
 
+const openSessions: DashboardPlaySession[] = [];
+
 async function startList(
   pathname: string,
   fetchSetup = listConfigFetch(),
@@ -51,7 +54,9 @@ async function startList(
     },
   });
   await flush();
-  return { root, sockets, session: await sessionPromise, fetchCalls: fetchSetup.calls };
+  const session = await sessionPromise;
+  openSessions.push(session);
+  return { root, sockets, session, fetchCalls: fetchSetup.calls };
 }
 
 describe('isTableListPath', () => {
@@ -69,19 +74,55 @@ describe('dashboard play table list', () => {
     setViewport(1280);
   });
 
+  afterEach(() => {
+    while (openSessions.length > 0) {
+      openSessions.pop()?.dispose();
+    }
+  });
+
   it.each(['/riffle', '/riffle/'])('renders the table list on %s', async (pathname) => {
     const { root, session, fetchCalls, sockets } = await startList(pathname);
 
     expect(session.phase).toBe('list');
     expect(session.tableId).toBeNull();
     expect(fetchCalls).toEqual(['/config.json']);
-    expect(sockets).toEqual([]);
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]?.url).toBe(WS_URL);
     expect(root.dataset.surface).toBe('table-list');
     expect(root.textContent).toContain('Open tables');
     expect(root.textContent).toContain('Galaxy Class Table');
     expect(root.textContent).toContain('$1 / $2');
     expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('1 open');
     expect(root.querySelector('.table-list-join-button')?.getAttribute('href')).toBe(`/${TABLE_ID}`);
+    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('0 / 8');
+  });
+
+  it('asks the runtime for seated counts and paints them on the list', async () => {
+    const { root, sockets } = await startList('/riffle');
+    const socket = sockets[0]!;
+
+    socket.emit('open');
+    expect(socket.sent).toEqual([{ action: 'list_tables', tableIds: [TABLE_ID] }]);
+    expect(socket.actions()).not.toContain('join_table');
+
+    socket.receive({
+      type: 'table_list',
+      tables: [{ tableId: TABLE_ID, seatedCount: 2, maxSeats: 8 }],
+    });
+
+    const counts = Array.from(root.querySelectorAll('.table-list-player-count'), (node) => node.textContent);
+    expect(counts).toContain('2 / 8');
+    expect(counts).toContain('2 / 8 seated');
+    expect(root.querySelectorAll('.table-list-row .table-list-seat-filled')).toHaveLength(2);
+    expect(root.querySelectorAll('.table-list-row .table-list-seat-open')).toHaveLength(6);
+  });
+
+  it('renders seated occupancy when the list is painted with live counts', () => {
+    const root = mountRoot();
+    renderTableList(root, [SAMPLE_TABLE], null, { [TABLE_ID]: 2 });
+    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('2 / 8');
+    expect(root.querySelectorAll('.table-list-row .table-list-seat-filled')).toHaveLength(2);
+    expect(root.querySelectorAll('.table-list-row .table-list-seat-open')).toHaveLength(6);
   });
 
   it('labels every join control Join', async () => {
@@ -147,9 +188,11 @@ describe('dashboard play table list', () => {
     const missing = await startList('/riffle', configFetch({ webSocketUrl: WS_URL }));
     expect(missing.root.querySelectorAll('.table-list-row')).toHaveLength(0);
     expect(missing.root.querySelector('.table-list-status-pill')?.textContent).toBe('0 open');
+    expect(missing.sockets).toEqual([]);
 
     const empty = await startList('/riffle', listConfigFetch([]));
     expect(empty.root.querySelectorAll('.table-list-row')).toHaveLength(0);
+    expect(empty.sockets).toEqual([]);
   });
 
   it('fails closed when config cannot be loaded', async () => {

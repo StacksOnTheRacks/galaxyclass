@@ -24,19 +24,30 @@ function inertIconButton(className: string, iconName: string, label: string): HT
   return button;
 }
 
-function renderSeatBar(maxSeats: number): HTMLElement {
+function seatedCountFor(table: TableListing, occupancy: Record<string, number>): number {
+  const count = occupancy[table.id];
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
+    return 0;
+  }
+  return Math.min(count, table.maxSeats);
+}
+
+function renderSeatBar(maxSeats: number, seatedCount: number): HTMLElement {
   const seats = document.createElement('div');
   seats.className = 'table-list-seat-bar';
   seats.setAttribute('aria-hidden', 'true');
   for (let index = 0; index < maxSeats; index += 1) {
     const seat = document.createElement('span');
-    seat.className = 'table-list-seat table-list-seat-open';
+    const filled = index < seatedCount;
+    seat.className = filled
+      ? 'table-list-seat table-list-seat-filled'
+      : 'table-list-seat table-list-seat-open';
     seats.append(seat);
   }
   return seats;
 }
 
-function renderTableRow(table: TableListing): HTMLElement {
+function renderTableRow(table: TableListing, occupancy: Record<string, number>): HTMLElement {
   const row = document.createElement('article');
   row.className = 'table-list-row';
   row.dataset.tableId = table.id;
@@ -61,12 +72,13 @@ function renderTableRow(table: TableListing): HTMLElement {
   buyIn.textContent = table.buyInLabel;
   stakesCol.append(blinds, buyIn);
 
+  const seatedCount = seatedCountFor(table, occupancy);
   const playersCol = document.createElement('div');
   playersCol.className = 'table-list-col table-list-col-players';
   const count = document.createElement('p');
   count.className = 'table-list-player-count';
-  count.textContent = `0 / ${table.maxSeats}`;
-  playersCol.append(count, renderSeatBar(table.maxSeats));
+  count.textContent = `${seatedCount} / ${table.maxSeats}`;
+  playersCol.append(count, renderSeatBar(table.maxSeats, seatedCount));
 
   const actionCol = document.createElement('div');
   actionCol.className = 'table-list-col table-list-col-action';
@@ -80,7 +92,7 @@ function renderTableRow(table: TableListing): HTMLElement {
   return row;
 }
 
-function renderTableCard(table: TableListing): HTMLElement {
+function renderTableCard(table: TableListing, occupancy: Record<string, number>): HTMLElement {
   const card = document.createElement('article');
   card.className = 'table-list-card';
   card.dataset.tableId = table.id;
@@ -105,12 +117,13 @@ function renderTableCard(table: TableListing): HTMLElement {
   buyIn.textContent = table.buyInLabel;
   stakes.append(blinds, buyIn);
 
+  const seatedCount = seatedCountFor(table, occupancy);
   const players = document.createElement('div');
   players.className = 'table-list-card-players';
   const count = document.createElement('p');
   count.className = 'table-list-player-count';
-  count.textContent = `0 / ${table.maxSeats} seated`;
-  players.append(count, renderSeatBar(table.maxSeats));
+  count.textContent = `${seatedCount} / ${table.maxSeats} seated`;
+  players.append(count, renderSeatBar(table.maxSeats, seatedCount));
 
   const join = document.createElement('a');
   join.className = 'table-list-join-button table-list-join-button-block';
@@ -219,7 +232,7 @@ function renderToolbar(): HTMLElement {
   return toolbar;
 }
 
-function renderDesktopList(tables: TableListing[]): HTMLElement {
+function renderDesktopList(tables: TableListing[], occupancy: Record<string, number>): HTMLElement {
   const list = document.createElement('section');
   list.className = 'table-list-panel table-list-panel-desktop';
   list.setAttribute('aria-label', 'Open tables');
@@ -239,17 +252,17 @@ function renderDesktopList(tables: TableListing[]): HTMLElement {
 
   list.append(header);
   for (const table of tables) {
-    list.append(renderTableRow(table));
+    list.append(renderTableRow(table, occupancy));
   }
   return list;
 }
 
-function renderResponsiveList(tables: TableListing[]): HTMLElement {
+function renderResponsiveList(tables: TableListing[], occupancy: Record<string, number>): HTMLElement {
   const grid = document.createElement('section');
   grid.className = 'table-list-grid';
   grid.setAttribute('aria-label', 'Open tables');
   for (const table of tables) {
-    grid.append(renderTableCard(table));
+    grid.append(renderTableCard(table, occupancy));
   }
 
   const joinPanel = document.createElement('section');
@@ -272,6 +285,7 @@ export function renderTableList(
   root: HTMLElement,
   tables: TableListing[],
   account: StudioAccount | null = null,
+  occupancy: Record<string, number> = {},
 ): void {
   root.replaceChildren();
   root.dataset.surface = 'table-list';
@@ -284,8 +298,8 @@ export function renderTableList(
     renderTopBar(tables.length, account),
     renderHeading(account !== null),
     renderToolbar(),
-    renderDesktopList(tables),
-    renderResponsiveList(tables),
+    renderDesktopList(tables, occupancy),
+    renderResponsiveList(tables, occupancy),
   );
 
   root.append(page);
