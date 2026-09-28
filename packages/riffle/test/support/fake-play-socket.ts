@@ -4,6 +4,7 @@ type Listener = (event?: { data: unknown }) => void;
 
 export class FakePlaySocket implements PlaySocket {
   readonly sent: Array<Record<string, unknown>> = [];
+  readonly received: unknown[] = [];
   closed = false;
   private listeners = new Map<string, Listener[]>();
 
@@ -32,6 +33,7 @@ export class FakePlaySocket implements PlaySocket {
   }
 
   receive(message: unknown): void {
+    this.received.push(message);
     for (const listener of this.listeners.get('message') ?? []) {
       listener({ data: JSON.stringify(message) });
     }

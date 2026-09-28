@@ -183,7 +183,7 @@ describe('player row tiles', () => {
     ).toBe('$40 in');
   });
 
-  it('renders phone opponents without You, card backs, or timer', () => {
+  it('renders phone tiles with You first and no card backs or timer', () => {
     const root = renderAtViewport(402, 874, [
       baseSeat({
         seatId: 's0',
@@ -207,8 +207,10 @@ describe('player row tiles', () => {
 
     expect(root.dataset.breakpoint).toBe('phone');
     const tiles = root.querySelectorAll('.player-row-tile');
-    expect(tiles).toHaveLength(2);
-    expect(root.querySelector('[data-local="true"]')).toBeNull();
+    expect(tiles).toHaveLength(3);
+    expect(tiles[0]?.getAttribute('data-local')).toBe('true');
+    expect(tiles[0]?.getAttribute('data-acting')).toBe('true');
+    expect(tiles[0]?.querySelector('[data-field="name"]')?.textContent).toBe('You');
     expect(root.querySelector('[data-field="cards"]')).toBeNull();
     expect(root.querySelector('[data-field="timer"]')).toBeNull();
     expect(root.querySelector('[role="status"]')).toBeNull();
@@ -217,6 +219,35 @@ describe('player row tiles', () => {
       'RI',
     );
     expect(root.querySelector('[data-seat="s2"] [data-field="fold"]')).toBeNull();
+  });
+
+  it('puts You first and keeps the rest in seat rotation after You', () => {
+    const seats = ['1', '2', '5', '7'].map((seatId) =>
+      baseSeat({ seatId, displayName: `Seat ${seatId}`, isLocal: seatId === '5' }),
+    );
+    const root = renderAtViewport(1280, 832, [seats[3]!, seats[0]!, seats[2]!, seats[1]!]);
+    const order = Array.from(root.querySelectorAll<HTMLElement>('.player-row-tile'), (tile) => tile.dataset.seat);
+    expect(order).toEqual(['5', '7', '1', '2']);
+  });
+
+  it('keeps plain seat order for someone watching without a seat', () => {
+    const root = renderAtViewport(1280, 832, [
+      baseSeat({ seatId: '3' }),
+      baseSeat({ seatId: '1' }),
+      baseSeat({ seatId: '2' }),
+    ]);
+    const order = Array.from(root.querySelectorAll<HTMLElement>('.player-row-tile'), (tile) => tile.dataset.seat);
+    expect(order).toEqual(['1', '2', '3']);
+  });
+
+  it('marks only the player whose turn it is as acting', () => {
+    const root = renderAtViewport(1280, 832, [
+      baseSeat({ seatId: '1', isLocal: true }),
+      baseSeat({ seatId: '2', acting: true, turnRemainingMs: 10_000, turnBudgetMs: 30_000 }),
+    ]);
+    expect(root.querySelector('[data-seat="1"]')?.hasAttribute('data-acting')).toBe(false);
+    expect(root.querySelector('[data-seat="2"]')?.getAttribute('data-acting')).toBe('true');
+    expect(root.querySelectorAll('[data-acting="true"]')).toHaveLength(1);
   });
 
   it('omits media controls and escapes HTML display names', () => {
@@ -301,5 +332,40 @@ describe('player row tiles', () => {
     expect(root.textContent).toContain('All-in');
     expect(root.textContent).toContain('$0');
     expect(root.textContent).toContain('Won $1,800');
+  });
+
+  it('shows the win panel on the winner avatar with the amount, made hand, and cards', () => {
+    const root = renderAtViewport(1280, 832, [
+      baseSeat({ seatId: 's1', displayName: 'Riley', inHand: true, holeCards: [
+        { rank: '9', suit: 'c' },
+        { rank: '8', suit: 'c' },
+      ] }),
+      baseSeat({
+        seatId: 's2',
+        displayName: 'Sam',
+        stack: 2500,
+        inHand: true,
+        wonAmount: 1800,
+        wonHandLabel: 'Pair of Aces',
+        holeCards: [
+          { rank: 'A', suit: 'h' },
+          { rank: 'K', suit: 'd' },
+        ],
+        phase: 'complete',
+      }),
+    ]);
+
+    const winner = root.querySelector<HTMLElement>('[data-seat="s2"]')!;
+    expect(winner.dataset.won).toBe('true');
+    const panel = winner.querySelector<HTMLElement>('.player-row-video [data-field="win"]')!;
+    expect(panel.getAttribute('role')).toBe('status');
+    expect(panel.querySelector('[data-field="won"]')?.textContent).toBe('Won $1,800');
+    expect(panel.querySelector('[data-field="won-hand"]')?.textContent).toBe('Pair of Aces');
+    expect(panel.querySelector('[data-field="won-cards"]')?.getAttribute('aria-label')).toMatch(/Ace of Hearts/i);
+    expect(winner.querySelector('.player-row-stack-row [data-cards]')).toBeNull();
+
+    const loser = root.querySelector<HTMLElement>('[data-seat="s1"]')!;
+    expect(loser.querySelector('[data-field="win"]')).toBeNull();
+    expect(loser.querySelector('.player-row-stack-row [data-cards="faces"]')).not.toBeNull();
   });
 });

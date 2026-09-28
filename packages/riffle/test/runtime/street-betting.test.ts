@@ -164,6 +164,7 @@ function createHarness(rngSeed = 7) {
     postToConnection,
     now: () => '2026-09-25T12:00:00.000Z',
     rngSeed: () => rngSeed,
+    nextHandDelayMs: null,
   });
 
   return { handler, store, sent, postToConnection };
@@ -205,18 +206,17 @@ async function sitTwoPlayers(handler: ReturnType<typeof createHarness>['handler'
   return { tokenA, tokenB };
 }
 
+/** The second sit deals the hand; keep only each player's dealt snapshot. */
 async function startHeadsUpHand(
-  handler: ReturnType<typeof createHarness>['handler'],
+  _handler: ReturnType<typeof createHarness>['handler'],
   sent: Map<string, OutboundMessage[]>,
-  tokenA: string,
+  _tokenA: string,
 ) {
-  sent.forEach((messages) => {
-    messages.length = 0;
+  sent.forEach((messages, connectionId) => {
+    const dealt = lastSnapshot(messages);
+    expect(dealt?.type === 'table_snapshot' && dealt.status, connectionId).toBe('hand_in_progress');
+    messages.splice(0, messages.length, dealt!);
   });
-  await handler(
-    wsEvent('$default', 'conn-a', JSON.stringify({ action: 'start_hand', seatToken: tokenA })),
-    {},
-  );
 }
 
 describe('street betting on serverless runtime', () => {
@@ -570,7 +570,7 @@ describe('street betting on serverless runtime', () => {
     expect(lastSnapshot(sent.get('conn-b'))?.board).toHaveLength(3);
   });
 
-  it('snapshots hide foreign holes at terminal phases and omit deck or burns', async () => {
+  it('snapshots hide the folded hole cards, show the fold-out winner, and omit deck or burns', async () => {
     const { handler, store, sent } = createHarness(7);
     await setupTable(handler, store);
     const { tokenA, tokenB } = await sitTwoPlayers(handler, sent);
@@ -589,7 +589,9 @@ describe('street betting on serverless runtime', () => {
     expect(snapA?.pocketCards).toHaveLength(2);
     expect(snapB?.pocketCards).toHaveLength(2);
     expect(snapA?.pocketCards).not.toEqual(snapB?.pocketCards);
-    expect(snapA?.seats.find((seat) => seat.seatId === '4')?.holeCards).toBeUndefined();
+    const winnerSeen = snapA?.seats.find((seat) => seat.seatId === '4');
+    expect(winnerSeen?.holeCards).toEqual(snapB?.pocketCards);
+    expect(winnerSeen?.wonHandLabel).toBeUndefined();
     expect(snapB?.seats.find((seat) => seat.seatId === '1')?.holeCards).toBeUndefined();
 
     for (const snapshot of [snapA, snapB]) {

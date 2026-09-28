@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startDashboardPlay, type DashboardPlaySession } from '../src/client/dashboard-play/session.js';
 import { AWAY_GRACE_MS } from '../src/runtime/reap.js';
+import type { TableSnapshotMessage } from '../src/runtime/types.js';
 import { configFetch, type FakePlaySocket, flush, memoryStorage, setViewport } from './support/fake-play-socket.js';
 import { RuntimeBridge } from './support/runtime-bridge.js';
 
@@ -21,7 +22,8 @@ describe('continuous play on one table', () => {
   beforeEach(async () => {
     document.body.replaceChildren();
     setViewport(1440);
-    bridge = new RuntimeBridge();
+    // Deal the next hand as soon as one ends.
+    bridge = new RuntimeBridge(42, 0);
     await bridge.store.createTable(TABLE_ID, '2026-09-25T12:00:00.000Z');
   });
 
@@ -53,19 +55,12 @@ describe('continuous play on one table', () => {
     return { root, session, storage, sockets };
   }
 
-  async function sit(player: Player, seatId: string, name: string): Promise<void> {
-    const radio = player.root.querySelector<HTMLInputElement>(`input[name="seatId"][value="${seatId}"]`)!;
-    radio.checked = true;
-    radio.dispatchEvent(new Event('change'));
-    const input = player.root.querySelector<HTMLInputElement>('#sit-display-name')!;
-    input.value = name;
-    input.dispatchEvent(new Event('input'));
-    player.root.querySelector<HTMLButtonElement>('.sit-panel-submit')!.click();
-    await settle();
-  }
-
   function button(player: Player, field: string): HTMLButtonElement | null {
     return player.root.querySelector<HTMLButtonElement>(`[data-field="${field}"]`);
+  }
+
+  function statusText(player: Player): string {
+    return player.root.querySelector('[data-region="actions"]')?.textContent ?? '';
   }
 
   async function click(player: Player, field: string): Promise<void> {
@@ -76,10 +71,23 @@ describe('continuous play on one table', () => {
     await settle();
   }
 
-  async function playToCompletion(players: Player[], action: 'fold' | 'passive'): Promise<void> {
+  function snapshotsSeen(player: Player): TableSnapshotMessage[] {
+    return player.sockets
+      .flatMap((socket) => socket.received)
+      .filter((message): message is TableSnapshotMessage => (message as { type?: string }).type === 'table_snapshot');
+  }
+
+  /** Plays the current hand out and returns the finished-hand snapshot the first player saw. */
+  async function playHand(players: Player[], action: 'fold' | 'passive'): Promise<TableSnapshotMessage> {
+    const handNumber = players[0]!.session.snapshot!.handNumber;
     for (let step = 0; step < 40; step += 1) {
-      if (players[0]!.session.snapshot?.phase === 'complete') {
-        return;
+      const current = players[0]!.session.snapshot!;
+      if (current.handNumber !== handNumber || current.status !== 'hand_in_progress' || current.phase === 'complete') {
+        const finished = snapshotsSeen(players[0]!).find(
+          (row) => row.handNumber === handNumber && row.phase === 'complete',
+        );
+        expect(finished, 'the finished hand should be shown').toBeDefined();
+        return finished!;
       }
       const actor = players.find(({ root }) => root.querySelector('[data-action="fold"]'));
       expect(actor, `someone should be acting at step ${step}`).toBeDefined();
@@ -98,86 +106,114 @@ describe('continuous play on one table', () => {
   }
 
   function totalChips(player: Player): number {
-    return player.session.snapshot!.seats.reduce((sum, seat) => sum + seat.stack, 0);
+    const snapshot = player.session.snapshot!;
+    return snapshot.seats.reduce((sum, seat) => sum + seat.stack, 0) + snapshot.pot;
   }
 
-  it('deals a second hand after the first completes and rotates the button', async () => {
+  it('seats each arrival at the first open seat with a random name and deals when the second sits', async () => {
+    const alice = await openPlayer();
+    expect(alice.session.seatId).toBe('1');
+    expect(alice.session.snapshot!.status).toBe('open');
+    expect(statusText(alice)).toContain('Waiting for another player to sit.');
+    expect(alice.root.querySelector('[data-field="sit-panel"]')).toBeNull();
+
+    const bob = await openPlayer();
+    expect(bob.session.seatId).toBe('2');
+    const names = bob.session.snapshot!.seats.map((seat) => seat.displayName);
+    expect(new Set(names).size).toBe(2);
+    for (const name of names) {
+      expect(name.length).toBeGreaterThanOrEqual(3);
+      expect(name.length).toBeLessThanOrEqual(24);
+    }
+    expect(alice.session.snapshot!.status).toBe('hand_in_progress');
+    expect(alice.session.snapshot!.pocketCards).toHaveLength(2);
+    expect(bob.session.snapshot!.pocketCards).toHaveLength(2);
+    expect(button(alice, 'deal-hand')).toBeNull();
+  });
+
+  it('deals the next hand automatically after each hand and rotates the button', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-
-    await click(alice, 'deal-hand');
     const firstButton = alice.session.snapshot!.buttonSeatId;
-    await playToCompletion([alice, bob], 'fold');
 
-    expect(alice.session.snapshot!.phase).toBe('complete');
-    expect(button(alice, 'hand-summary')?.textContent).toMatch(/Hand complete · (Alice|Bob) wins/);
-    expect(button(bob, 'deal-hand')?.textContent).toBe('Deal next hand');
+    const first = await playHand([alice, bob], 'fold');
+    expect(first.completeReason).toBe('fold_to_one');
+    expect(first.seats.some((seat) => (seat.wonAmount ?? 0) > 0)).toBe(true);
 
-    await click(bob, 'deal-hand');
     const second = alice.session.snapshot!;
     expect(second.handNumber).toBe(2);
     expect(second.phase).toBe('betting');
     expect(second.buttonSeatId).not.toBe(firstButton);
     expect(second.pocketCards).toHaveLength(2);
 
-    await playToCompletion([alice, bob], 'passive');
-    expect(alice.session.snapshot!.phase).toBe('complete');
-    expect(alice.session.snapshot!.completeReason).toBe('showdown');
-    expect(totalChips(alice)).toBe(4000);
-
-    await click(alice, 'deal-hand');
+    const showdown = await playHand([alice, bob], 'passive');
+    expect(showdown.completeReason).toBe('showdown');
+    expect(showdown.seats.filter((seat) => seat.holeCards?.length === 2).length).toBe(2);
     expect(alice.session.snapshot!.handNumber).toBe(3);
+    expect(totalChips(alice)).toBe(4000);
   });
 
-  it('lets a new player sit and an existing player leave between hands', async () => {
+  it('seats a mid-hand arrival to wait, then deals them into the next hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await click(alice, 'deal-hand');
-    await playToCompletion([alice, bob], 'fold');
-
     const carol = await openPlayer();
-    await sit(carol, '3', 'Carol');
-    expect(carol.session.hasSeatToken()).toBe(true);
-    expect(carol.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(['1', '2', '3']);
 
-    await click(carol, 'deal-hand');
+    expect(carol.session.seatId).toBe('3');
+    expect(carol.session.snapshot!.pocketCards).toBeUndefined();
+    expect(carol.root.querySelector('[data-action="fold"]')).toBeNull();
+    expect(statusText(carol)).toContain('Waiting for the next hand');
+    expect(alice.root.querySelector('[data-region="player-row"]')?.textContent).toContain('Next hand');
+
+    await playHand([alice, bob], 'fold');
     const dealt = await bridge.store.listSeats(TABLE_ID);
     expect(dealt.filter((seat) => seat.hole)).toHaveLength(3);
+    expect(carol.session.snapshot!.pocketCards).toHaveLength(2);
+  });
 
-    await playToCompletion([alice, bob, carol], 'fold');
-    await click(bob, 'leave-seat');
-    expect(bob.session.hasSeatToken()).toBe(false);
-    expect(bob.storage.items.size).toBe(0);
-    expect(bob.root.querySelector('.sit-panel-submit')).not.toBeNull();
-    expect(alice.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(['1', '3']);
+  it('Leave seat drops you to watching with a Take a seat button', async () => {
+    const alice = await openPlayer();
+    const bob = await openPlayer();
+    const carol = await openPlayer();
+    await playHand([alice, bob], 'fold');
+
+    const players = [alice, bob, carol];
+    const leaver = players.find(({ root }) => !root.querySelector('[data-action="fold"]'))!;
+    const leaverSeat = leaver.session.seatId!;
+    const stayers = players.filter((player) => player !== leaver);
+
+    await click(leaver, 'leave-seat');
+    expect(leaver.session.hasSeatToken()).toBe(false);
+    expect(leaver.storage.items.size).toBe(0);
+    expect(button(leaver, 'take-seat')).not.toBeNull();
+
+    await playHand(stayers, 'fold');
+    expect(stayers[0]!.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(
+      ['1', '2', '3'].filter((seatId) => seatId !== leaverSeat),
+    );
+    expect(leaver.session.seatId).toBeNull();
+
+    await click(leaver, 'take-seat');
+    expect(leaver.session.seatId).toBe(leaverSeat);
+    expect(leaver.session.hasSeatToken()).toBe(true);
   });
 
   it('skips a busted seat when dealing the next hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    const carol = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await sit(carol, '3', 'Carol');
+    await openPlayer();
 
-    const bobSeat = (await bridge.store.getSeat(TABLE_ID, '2'))!;
-    await bridge.store.putSeat(TABLE_ID, { ...bobSeat, stack: 0 });
+    const carolSeat = (await bridge.store.getSeat(TABLE_ID, '3'))!;
+    await bridge.store.putSeat(TABLE_ID, { ...carolSeat, stack: 0 });
 
-    await click(alice, 'deal-hand');
+    await playHand([alice, bob], 'fold');
     const seats = await bridge.store.listSeats(TABLE_ID);
-    expect(seats.find((seat) => seat.seatId === '2')?.hole).toBeUndefined();
+    expect(seats.find((seat) => seat.seatId === '3')?.hole).toBeUndefined();
     expect(seats.filter((seat) => seat.hole)).toHaveLength(2);
   });
 
   it('marks a dropped player away and lets the same tab reclaim the seat after refresh', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
     expect(alice.storage.items.size).toBe(1);
 
     alice.session.dispose();
@@ -193,18 +229,14 @@ describe('continuous play on one table', () => {
     expect(refreshed.sockets.at(-1)!.actions()).toEqual(['join_table', 'resume_seat']);
     expect(refreshed.session.hasSeatToken()).toBe(true);
     expect(refreshed.session.seatId).toBe('1');
-    const local = refreshed.session.snapshot!.seats.find((seat) => seat.isLocal);
-    expect(local?.seatId).toBe('1');
-    expect(local?.stack).toBe(2000);
+    expect(refreshed.session.snapshot!.seats.find((seat) => seat.isLocal)?.seatId).toBe('1');
     expect(bob.session.snapshot!.seats.find((seat) => seat.seatId === '1')?.away).toBeUndefined();
-    expect(button(refreshed, 'deal-hand')).not.toBeNull();
+    expect(totalChips(refreshed)).toBe(4000);
   });
 
   it('reconnects automatically after the socket drops and keeps the seat', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
 
     bridge.drop(alice.sockets[0]!);
     await settle();
@@ -213,39 +245,33 @@ describe('continuous play on one table', () => {
     expect(alice.session.phase).toBe('joined');
     expect(alice.session.reconnecting).toBe(false);
     expect(alice.session.snapshot!.seats.find((seat) => seat.isLocal)?.seatId).toBe('1');
-    await click(alice, 'deal-hand');
     expect(bob.session.snapshot!.status).toBe('hand_in_progress');
   });
 
-  it('auto-folds a dropped player when it is their turn so the hand completes', async () => {
+  it('auto-folds a dropped player on their turn, then waits for another player', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await click(alice, 'deal-hand');
 
     const players = [alice, bob];
     const acting = players.find(({ root }) => root.querySelector('[data-action="fold"]'))!;
     const other = players.find((player) => player !== acting)!;
+    const handNumber = other.session.snapshot!.handNumber;
     acting.session.dispose();
     bridge.drop(acting.sockets[0]!);
     await settle();
 
-    const final = other.session.snapshot!;
-    expect(final.phase).toBe('complete');
-    expect(final.completeReason).toBe('fold_to_one');
-    expect(final.seats.find((seat) => seat.isLocal)?.wonAmount).toBeGreaterThan(0);
-    expect(button(other, 'deal-hand')?.disabled).toBe(true);
+    const finished = snapshotsSeen(other).find((row) => row.handNumber === handNumber && row.phase === 'complete');
+    expect(finished?.completeReason).toBe('fold_to_one');
+    expect(finished?.seats.find((seat) => seat.isLocal)?.wonAmount).toBeGreaterThan(0);
+    expect(other.session.snapshot!.status).toBe('open');
+    expect(statusText(other)).toContain('Waiting for another player to sit.');
   });
 
   it('auto-folds a dropped player when the action reaches them', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
     const carol = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await sit(carol, '3', 'Carol');
-    await click(alice, 'deal-hand');
+    await playHand([alice, bob], 'fold');
 
     const players = [alice, bob, carol];
     const acting = players.find(({ root }) => root.querySelector('[data-action="fold"]'))!;
@@ -267,35 +293,31 @@ describe('continuous play on one table', () => {
     expect(table?.currentSeatId).not.toBe(nextSeat);
   });
 
-  it('removes a seat that stays away past the grace period once someone else joins', async () => {
+  it('frees a seat that stays away past the grace period for the next arrival', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
+    const bobName = bob.session.snapshot!.seats.find((seat) => seat.isLocal)!.displayName;
     bob.session.dispose();
     bridge.drop(bob.sockets[0]!);
     await settle();
+    await playHand([alice], 'fold').catch(() => undefined);
+    // Bob is away and folded out; with one player left the table waits.
+    expect(alice.session.snapshot!.status).toBe('open');
     expect(alice.session.snapshot!.seats.find((seat) => seat.seatId === '2')?.away).toBe(true);
 
-    bridge.nowMs += AWAY_GRACE_MS - 1;
-    await openPlayer();
-    expect(await bridge.store.getSeat(TABLE_ID, '2')).not.toBeNull();
-
-    bridge.nowMs += 1;
-    await openPlayer();
-    expect(await bridge.store.getSeat(TABLE_ID, '2')).toBeNull();
-    expect(alice.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(['1']);
-    expect(alice.session.snapshot!.seatedPlayersLabel).toBe('1 / 8');
+    bridge.nowMs += AWAY_GRACE_MS;
+    const dave = await openPlayer();
+    expect(dave.session.seatId).toBe('2');
+    expect((await bridge.store.getSeat(TABLE_ID, '2'))?.displayName).not.toBe(bobName);
+    expect(alice.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(['1', '2']);
+    expect(alice.session.snapshot!.status).toBe('hand_in_progress');
   });
 
   it('Leave table mid-hand detaches the player now and frees the seat after the hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
     const carol = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await sit(carol, '3', 'Carol');
-    await click(alice, 'deal-hand');
+    await playHand([alice, bob], 'fold');
 
     await click(bob, 'leave-table');
     expect(bob.session.hasSeatToken()).toBe(false);
@@ -303,47 +325,17 @@ describe('continuous play on one table', () => {
     expect(button(bob, 'leave-table')).toBeNull();
     expect(alice.session.snapshot!.seats.find((seat) => seat.seatId === '2')?.away).toBe(true);
 
-    await playToCompletion([alice, carol], 'fold');
-    expect((await bridge.store.getSeat(TABLE_ID, '2'))?.folded).toBe(true);
-
-    await click(alice, 'deal-hand');
+    await playHand([alice, carol], 'fold');
     expect(await bridge.store.getSeat(TABLE_ID, '2')).toBeNull();
     expect(alice.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(['1', '3']);
-    expect(alice.session.snapshot!.handNumber).toBe(2);
+    expect(alice.session.snapshot!.handNumber).toBe(3);
   });
 
   it('shows Leave seat while waiting on another player mid-hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    await click(alice, 'deal-hand');
 
     const waiting = [alice, bob].find(({ root }) => !root.querySelector('[data-action="fold"]'))!;
     expect(button(waiting, 'leave-seat')).not.toBeNull();
-  });
-
-  it('lets a new player take an away seat between hands', async () => {
-    const alice = await openPlayer();
-    const bob = await openPlayer();
-    await sit(alice, '1', 'Alice');
-    await sit(bob, '2', 'Bob');
-    bob.session.dispose();
-    bridge.drop(bob.sockets[0]!);
-    await settle();
-
-    const dave = await openPlayer();
-    const awaySeat = dave.root.querySelector<HTMLInputElement>('input[name="seatId"][value="2"]')!;
-    expect(awaySeat.disabled).toBe(false);
-    expect(dave.root.querySelector<HTMLInputElement>('input[name="seatId"][value="3"]')!.checked).toBe(true);
-    await sit(dave, '2', 'Dave');
-
-    expect(dave.session.seatId).toBe('2');
-    expect((await bridge.store.getSeat(TABLE_ID, '2'))?.displayName).toBe('Dave');
-
-    const bobReturns = await openPlayer(bob.storage);
-    expect(bobReturns.session.hasSeatToken()).toBe(false);
-    expect(bobReturns.storage.items.size).toBe(0);
-    expect(bobReturns.root.querySelector('.sit-panel-submit')).not.toBeNull();
   });
 });

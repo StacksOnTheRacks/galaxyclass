@@ -91,81 +91,7 @@ body {
   max-width: 36rem;
 }
 
-.sit-panel-title {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
-}
-
-.sit-panel-seats {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.sit-panel-seats legend {
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.sit-panel-seat {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-subtle, #27272a);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-background-accent, #27272a);
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.sit-panel-seat:has(input:disabled) {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.sit-panel-seat:has(input:checked) {
-  border-color: var(--color-text-default, #fafafa);
-}
-
-.sit-panel-seat input {
-  accent-color: var(--color-text-default, #fafafa);
-}
-
-.sit-panel-name-label {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.sit-panel-name-input {
-  padding: 10px 12px;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border-strong, #52525b);
-  background: var(--color-background-primary, #09090b);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 14px;
-}
-
-.sit-panel-name-input[aria-invalid='true'] {
-  border-color: var(--danger);
-}
-
-.sit-panel-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 12px;
-}
-
-.sit-panel-submit,
-.seated-deal-button {
+.sit-panel-submit {
   align-self: flex-start;
   padding: 8px 24px;
   border: 1px solid var(--color-action-primary, #fafafa);
@@ -177,14 +103,6 @@ body {
   line-height: 24px;
   font-weight: 500;
   cursor: pointer;
-}
-
-.sit-panel-submit:disabled,
-.seated-deal-button:disabled {
-  border-color: var(--color-background-accent, #27272a);
-  background: var(--color-background-accent, #27272a);
-  color: var(--text-muted);
-  cursor: not-allowed;
 }
 
 .seated-leave-button {
@@ -204,16 +122,6 @@ body {
 .seated-leave-button:disabled {
   color: var(--text-muted);
   cursor: not-allowed;
-}
-
-.dashboard-region-actions:has(.seated-deal-button) {
-  flex-flow: row wrap;
-  align-items: center;
-}
-
-.dashboard-region-actions:has(.seated-deal-button) .seated-summary,
-.dashboard-region-actions:has(.seated-deal-button) .seated-status {
-  flex-basis: 100%;
 }
 
 .seated-summary {

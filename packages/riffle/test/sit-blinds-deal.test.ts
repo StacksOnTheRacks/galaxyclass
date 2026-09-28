@@ -156,7 +156,7 @@ class MemoryStore implements MatchStore {
   }
 }
 
-function createHarness(rngSeed = 42) {
+function createHarness(rngSeed = 42, nextHandDelayMs: number | null = null) {
   const store = new MemoryStore();
   const sent = new Map<string, OutboundMessage[]>();
 
@@ -169,6 +169,7 @@ function createHarness(rngSeed = 42) {
     },
     now: () => '2026-09-25T12:00:00.000Z',
     rngSeed: () => rngSeed,
+    nextHandDelayMs,
   });
 
   return { handler, store, sent };
@@ -333,14 +334,31 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
     const tokenB = (sent.get('conn-b')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
+    expect((await store.getTable('table-1'))?.status).toBe('hand_in_progress');
 
     await handler(
       wsEvent('$default', 'conn-b', JSON.stringify({ action: 'leave', seatToken: tokenB })),
       {},
     );
-    expect(await store.getSeat('table-1', '3')).toBeNull();
     expect((await store.getConnection('conn-b'))?.seatId).toBeUndefined();
-    expect(lastSnapshot(sent.get('conn-b'))?.seatedPlayersLabel).toBe('1 / 8');
+    const departing = await store.getSeat('table-1', '3');
+    expect(departing?.leaveAfterHand).toBe(true);
+    expect(departing?.connectionId).toBeUndefined();
+    expect(lastSnapshot(sent.get('conn-b'))?.seats.some((seat) => seat.isLocal)).toBe(false);
+
+    // Alice (button) acts first; the action then reaches departed Bob, who is folded.
+    await handler(wsEvent('$default', 'conn-a', JSON.stringify({ action: 'call', seatToken: tokenA })), {});
+    const finished = await store.getTable('table-1');
+    expect(finished?.phase).toBe('complete');
+    expect(finished?.completeReason).toBe('fold_to_one');
+
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'start_hand', seatToken: tokenA })),
+      {},
+    );
+    expect(await store.getSeat('table-1', '3')).toBeNull();
+    expect(lastSnapshot(sent.get('conn-a'))?.seatedPlayersLabel).toBe('1 / 8');
+    expect(sent.get('conn-a')?.at(-1)).toEqual({ type: 'error', code: 'insufficient_players' });
 
     await handler(
       wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '3', displayName: 'Bob' })),
@@ -351,38 +369,146 @@ describe('sit, leave, and start_hand', () => {
     expect(tokenB2).not.toBe(tokenB);
 
     await handler(
-      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'start_hand', seatToken: tokenA })),
-      {},
-    );
-
-    await handler(
       wsEvent('$default', 'conn-a', JSON.stringify({ action: 'leave', seatToken: tokenA })),
       {},
     );
-    expect(sent.get('conn-a')?.at(-1)).toMatchObject({ type: 'table_snapshot' });
+    expect(await store.getSeat('table-1', '1')).toBeNull();
     expect((await store.getConnection('conn-a'))?.seatId).toBeUndefined();
-    const departing = await store.getSeat('table-1', '1');
-    expect(departing?.leaveAfterHand).toBe(true);
-    expect(departing?.connectionId).toBeUndefined();
-    expect(lastSnapshot(sent.get('conn-a'))?.seats.some((seat) => seat.isLocal)).toBe(false);
+    expect(lastSnapshot(sent.get('conn-b'))?.seatedPlayersLabel).toBe('1 / 8');
+  });
 
-    if ((await store.getTable('table-1'))?.phase !== 'complete') {
-      await handler(
-        wsEvent('$default', 'conn-b', JSON.stringify({ action: 'call', seatToken: tokenB2 })),
-        {},
-      );
-    }
-    const finished = await store.getTable('table-1');
-    expect(finished?.phase).toBe('complete');
-    expect(finished?.completeReason).toBe('fold_to_one');
+  it('deals as soon as a second player sits', async () => {
+    const { handler, store, sent } = createHarness(7);
+    await setupTable(handler, store);
 
     await handler(
-      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'start_hand', seatToken: tokenB2 })),
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '1', displayName: 'Alice' })),
       {},
     );
-    expect(await store.getSeat('table-1', '1')).toBeNull();
-    expect(lastSnapshot(sent.get('conn-b'))?.seatedPlayersLabel).toBe('1 / 8');
-    expect(sent.get('conn-b')?.at(-1)).toEqual({ type: 'error', code: 'insufficient_players' });
+    expect((await store.getTable('table-1'))?.status).toBe('open');
+
+    await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '4', displayName: 'Bob' })),
+      {},
+    );
+    const snapshot = lastSnapshot(sent.get('conn-a'));
+    expect(snapshot).toMatchObject({ status: 'hand_in_progress', handNumber: 1, street: 'preflop' });
+    expect(snapshot?.pocketCards).toHaveLength(2);
+  });
+
+  it('seats a player who arrives mid-hand without cards and deals them into the next hand', async () => {
+    const { handler, store, sent } = createHarness(11, 0);
+    await setupTable(handler, store);
+
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '2', displayName: 'Alice' })),
+      {},
+    );
+    const tokenA = (sent.get('conn-a')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
+    await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '5', displayName: 'Bob' })),
+      {},
+    );
+    await handler(wsEvent('$connect', 'conn-c'), {});
+    await handler(
+      wsEvent('$default', 'conn-c', JSON.stringify({ action: 'join_table', tableId: 'table-1' })),
+      {},
+    );
+    await handler(
+      wsEvent('$default', 'conn-c', JSON.stringify({ action: 'sit', seatId: '7', displayName: 'Carol' })),
+      {},
+    );
+
+    expect(sent.get('conn-c')?.some((m) => m.type === 'sat')).toBe(true);
+    const waiting = lastSnapshot(sent.get('conn-c'));
+    expect(waiting?.handNumber).toBe(1);
+    expect(waiting?.pocketCards).toBeUndefined();
+    expect(waiting?.seats.find((seat) => seat.seatId === '7')).toMatchObject({
+      isLocal: true,
+      inHand: false,
+      waitingForNextHand: true,
+    });
+    expect((await store.getSeat('table-1', '7'))?.hole).toBeUndefined();
+
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'fold', seatToken: tokenA })),
+      {},
+    );
+
+    const next = lastSnapshot(sent.get('conn-c'));
+    expect(next).toMatchObject({ handNumber: 2, buttonSeatId: '5', currentSeatId: '5', pot: 3 });
+    expect(next?.pocketCards).toHaveLength(2);
+    expect(next?.seats.find((seat) => seat.seatId === '5')).toMatchObject({ position: 'D', acting: true });
+    expect(next?.seats.find((seat) => seat.seatId === '7')).toMatchObject({ position: 'SB' });
+    expect(next?.seats.find((seat) => seat.seatId === '2')).toMatchObject({ position: 'BB' });
+    const finishedSnapshots = sent
+      .get('conn-c')
+      ?.filter((m) => m.type === 'table_snapshot' && m.phase === 'complete');
+    expect(finishedSnapshots?.length).toBeGreaterThan(0);
+  });
+
+  it('does not let a newcomer take an away seat that is still in the hand', async () => {
+    const { handler, store, sent } = createHarness(7);
+    await setupTable(handler, store);
+    for (const [conn, seatId, name] of [
+      ['conn-a', '1', 'Alice'],
+      ['conn-b', '4', 'Bob'],
+    ] as const) {
+      await handler(wsEvent('$default', conn, JSON.stringify({ action: 'sit', seatId, displayName: name })), {});
+    }
+    await handler(wsEvent('$connect', 'conn-c'), {});
+    await handler(wsEvent('$connect', 'conn-d'), {});
+    for (const conn of ['conn-c', 'conn-d']) {
+      await handler(wsEvent('$default', conn, JSON.stringify({ action: 'join_table', tableId: 'table-1' })), {});
+    }
+    // Carol sits mid-hand with no cards, then drops: her away seat is free to take.
+    await handler(
+      wsEvent('$default', 'conn-c', JSON.stringify({ action: 'sit', seatId: '6', displayName: 'Carol' })),
+      {},
+    );
+    await handler(wsEvent('$disconnect', 'conn-c'), {});
+    await handler(
+      wsEvent('$default', 'conn-d', JSON.stringify({ action: 'sit', seatId: '6', displayName: 'Dave' })),
+      {},
+    );
+    expect((await store.getSeat('table-1', '6'))?.displayName).toBe('Dave');
+
+    // Seat 1 (the button) acts first heads-up, so Bob in seat 4 stays in the hand while away.
+    expect((await store.getTable('table-1'))?.currentSeatId).toBe('1');
+    await handler(wsEvent('$disconnect', 'conn-b'), {});
+    await handler(wsEvent('$connect', 'conn-e'), {});
+    await handler(wsEvent('$default', 'conn-e', JSON.stringify({ action: 'join_table', tableId: 'table-1' })), {});
+    await handler(
+      wsEvent('$default', 'conn-e', JSON.stringify({ action: 'sit', seatId: '4', displayName: 'Eve' })),
+      {},
+    );
+    expect(sent.get('conn-e')?.at(-1)).toEqual({ type: 'error', code: 'seat_occupied' });
+    expect((await store.getSeat('table-1', '4'))?.displayName).toBe('Bob');
+  });
+
+  it('returns the table to open after the hand when only one player can continue', async () => {
+    const { handler, store, sent } = createHarness(7, 0);
+    await setupTable(handler, store);
+    await handler(
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '1', displayName: 'Alice' })),
+      {},
+    );
+    await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '4', displayName: 'Bob' })),
+      {},
+    );
+    const tokenB = (sent.get('conn-b')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
+
+    const tokenA = (sent.get('conn-a')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
+    await handler(wsEvent('$default', 'conn-b', JSON.stringify({ action: 'leave', seatToken: tokenB })), {});
+    await handler(wsEvent('$default', 'conn-a', JSON.stringify({ action: 'call', seatToken: tokenA })), {});
+
+    const table = await store.getTable('table-1');
+    expect(table).toMatchObject({ status: 'open', handNumber: 1, pot: 0, winners: null });
+    expect(await store.getSeat('table-1', '4')).toBeNull();
+    const snapshot = lastSnapshot(sent.get('conn-a'));
+    expect(snapshot).toMatchObject({ status: 'open', seatedPlayersLabel: '1 / 8' });
+    expect(snapshot?.seats.find((seat) => seat.seatId === '1')?.wonAmount).toBeUndefined();
   });
 
   it('rejects start_hand with fewer than two players, while in progress, or from non-seated caller', async () => {
@@ -474,16 +600,11 @@ describe('sit, leave, and start_hand', () => {
   });
 
   it('three or more players assign SB left of button, BB left of SB, first-to-act left of BB', async () => {
-    const { handler, store, sent } = createHarness(11);
+    const { handler, store, sent } = createHarness(11, 0);
     await setupTable(handler, store);
 
     await handler(
       wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '2', displayName: 'Alice' })),
-      {},
-    );
-    const tokenA = (sent.get('conn-a')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
-    await handler(
-      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '5', displayName: 'Bob' })),
       {},
     );
     await handler(wsEvent('$connect', 'conn-c'), {});
@@ -492,27 +613,33 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
     await handler(
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '5', displayName: 'Bob' })),
+      {},
+    );
+    await handler(
       wsEvent('$default', 'conn-c', JSON.stringify({ action: 'sit', seatId: '7', displayName: 'Carol' })),
       {},
     );
-
+    // Heads-up hand 1 (button 2 acts first); folding deals hand 2 with all three.
+    const tokenA = (sent.get('conn-a')?.find((m) => m.type === 'sat') as { seatToken: string }).seatToken;
     await handler(
-      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'start_hand', seatToken: tokenA })),
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'fold', seatToken: tokenA })),
       {},
     );
 
     const snapshot = lastSnapshot(sent.get('conn-a'));
     expect(snapshot).toMatchObject({
-      buttonSeatId: '2',
-      currentSeatId: '2',
+      handNumber: 2,
+      buttonSeatId: '5',
+      currentSeatId: '5',
       pot: 3,
     });
-    expect(snapshot?.seats.find((seat) => seat.seatId === '2')).toMatchObject({
+    expect(snapshot?.seats.find((seat) => seat.seatId === '5')).toMatchObject({
       position: 'D',
       acting: true,
     });
-    expect(snapshot?.seats.find((seat) => seat.seatId === '5')).toMatchObject({ position: 'SB' });
-    expect(snapshot?.seats.find((seat) => seat.seatId === '7')).toMatchObject({ position: 'BB' });
+    expect(snapshot?.seats.find((seat) => seat.seatId === '7')).toMatchObject({ position: 'SB' });
+    expect(snapshot?.seats.find((seat) => seat.seatId === '2')).toMatchObject({ position: 'BB' });
   });
 
   it('includes two hole faces only on the owning seat snapshot', async () => {
@@ -575,7 +702,7 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
 
-    const versionBefore = (await store.getTable('table-1'))?.version;
+    const before = await store.getTable('table-1');
     await handler(
       wsEvent(
         '$default',
@@ -585,8 +712,8 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
     expect(sent.get('conn-a')?.at(-1)).toEqual({ type: 'error', code: 'client_supplied_state' });
-    expect((await store.getTable('table-1'))?.version).toBe(versionBefore);
-    expect((await store.getTable('table-1'))?.status).toBe('open');
+    expect((await store.getTable('table-1'))?.version).toBe(before?.version);
+    expect((await store.getTable('table-1'))?.pot).toBe(before?.pot);
   });
 
   it('public snapshots never include seat tokens', async () => {

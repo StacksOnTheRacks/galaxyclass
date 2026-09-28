@@ -17,6 +17,8 @@ export interface PlayerRowSeat {
   turnRemainingMs: number | null;
   turnBudgetMs: number | null;
   wonAmount?: number;
+  /** Winning made hand, e.g. "Pair of Aces"; absent on a fold-out win. */
+  wonHandLabel?: string;
   holeCards?: Array<{ rank: string; suit: 'h' | 'd' | 'c' | 's' }>;
   phase?: 'betting' | 'complete';
   /** Amount the local seat must call on its turn; shown on the local tile. */
@@ -209,6 +211,41 @@ function createCardBacks(): HTMLElement {
   return cards;
 }
 
+function hasFaceCards(
+  cards: PlayerRowSeat['holeCards'],
+): cards is Array<{ rank: string; suit: 'h' | 'd' | 'c' | 's' }> {
+  return Boolean(cards && cards.length === 2 && isHoleFaceCard(cards[0]) && isHoleFaceCard(cards[1]));
+}
+
+function createWinOverlay(seat: PlayerRowSeat, amount: number): HTMLElement {
+  const overlay = document.createElement('div');
+  overlay.className = 'player-row-win';
+  overlay.dataset.field = 'win';
+  overlay.setAttribute('role', 'status');
+  overlay.setAttribute('aria-live', 'polite');
+
+  const won = createTextField('won', `Won ${formatPlayChips(amount)}`);
+  won.className = 'player-row-win-amount';
+  overlay.append(won);
+
+  if (seat.wonHandLabel) {
+    const hand = document.createElement('span');
+    hand.className = 'player-row-win-hand';
+    hand.dataset.field = 'won-hand';
+    hand.textContent = seat.wonHandLabel;
+    overlay.append(hand);
+  }
+
+  if (hasFaceCards(seat.holeCards)) {
+    const cards = createCardFaces(seat.holeCards);
+    cards.dataset.field = 'won-cards';
+    cards.classList.add('player-row-win-cards');
+    overlay.append(cards);
+  }
+
+  return overlay;
+}
+
 function createTimer(
   seat: PlayerRowSeat,
 ): { timerText: HTMLElement; timerBar: HTMLElement } | null {
@@ -292,11 +329,10 @@ function createSeatTile(
   if (seat.allIn && seat.inHand) {
     badges.push(asBadge(createTextField('all-in', 'All-in'), 'info'));
   }
-  if (seat.wonAmount !== undefined && seat.wonAmount > 0) {
-    const won = createTextField('won', `Won ${formatPlayChips(seat.wonAmount)}`);
-    won.setAttribute('role', 'status');
-    won.setAttribute('aria-live', 'polite');
-    badges.push(asBadge(won, 'success'));
+  const wonAmount = seat.wonAmount !== undefined && seat.wonAmount > 0 ? seat.wonAmount : null;
+  if (wonAmount !== null) {
+    tile.dataset.won = 'true';
+    video.append(createWinOverlay(seat, wonAmount));
   }
   if (seat.lastAction && !localTurn) {
     badges.push(asBadge(createTextField('last-action', seat.lastAction), actionTone(seat.lastAction)));
@@ -321,13 +357,10 @@ function createSeatTile(
   stackRow.append(createStackField(breakpoint, seat.stack));
 
   if (!seat.isLocal) {
-    if (
-      seat.holeCards &&
-      seat.holeCards.length === 2 &&
-      isHoleFaceCard(seat.holeCards[0]) &&
-      isHoleFaceCard(seat.holeCards[1])
-    ) {
-      stackRow.append(createCardFaces(seat.holeCards));
+    if (hasFaceCards(seat.holeCards)) {
+      if (wonAmount === null) {
+        stackRow.append(createCardFaces(seat.holeCards));
+      }
     } else if (seat.inHand) {
       stackRow.append(createCardBacks());
     } else {
@@ -369,6 +402,23 @@ function createSeatTile(
   return tile;
 }
 
+function seatNumber(seat: PlayerRowSeat): number {
+  const value = Number.parseInt(seat.seatId.replace(/\D+/g, ''), 10);
+  return Number.isNaN(value) ? Number.MAX_SAFE_INTEGER : value;
+}
+
+/** Seat order starting from the local player, so "You" is always left-most and turn order reads left to right. */
+export function orderSeatsFromLocal(seats: PlayerRowSeat[]): PlayerRowSeat[] {
+  const sorted = [...seats].sort(
+    (a, b) => seatNumber(a) - seatNumber(b) || a.seatId.localeCompare(b.seatId),
+  );
+  const localIndex = sorted.findIndex((seat) => seat.isLocal);
+  if (localIndex <= 0) {
+    return sorted;
+  }
+  return [...sorted.slice(localIndex), ...sorted.slice(0, localIndex)];
+}
+
 export function renderPlayerRow(
   region: HTMLElement,
   seats: PlayerRowSeat[],
@@ -376,8 +426,7 @@ export function renderPlayerRow(
   region.replaceChildren();
 
   const breakpoint = getDashboardBreakpoint(region);
-  const visibleSeats =
-    breakpoint === 'phone' ? seats.filter((seat) => !seat.isLocal) : seats;
+  const visibleSeats = orderSeatsFromLocal(seats);
 
   const list = document.createElement('div');
   list.className = 'player-row-tiles';

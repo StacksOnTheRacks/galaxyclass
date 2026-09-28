@@ -111,8 +111,12 @@ export interface PlayerSnapshotSeat {
   folded: boolean;
   allIn?: boolean;
   away?: boolean;
+  /** Seated after the deal; plays from the next hand. */
+  waitingForNextHand?: boolean;
   holeCards?: [Card, Card];
   wonAmount?: number;
+  /** Winner's made hand at showdown, e.g. "Pair of Aces". */
+  wonHandLabel?: string;
 }
 
 export interface SnapshotPot {

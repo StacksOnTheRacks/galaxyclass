@@ -19,7 +19,13 @@ function toPlayerRowSeat(seat: PlayerSnapshotSeat, snapshot: TableSnapshotMessag
     stack: seat.stack,
     inHand: seat.inHand,
     allIn: seat.allIn,
-    lastAction: seat.away ? 'Away' : seat.folded ? 'Fold' : null,
+    lastAction: seat.away
+      ? 'Away'
+      : seat.waitingForNextHand
+        ? 'Next hand'
+        : seat.folded
+          ? 'Fold'
+          : null,
     committed: seat.committed,
     position: seat.position,
     acting: seat.acting,
@@ -29,6 +35,9 @@ function toPlayerRowSeat(seat: PlayerSnapshotSeat, snapshot: TableSnapshotMessag
   };
   if (seat.wonAmount !== undefined) {
     row.wonAmount = seat.wonAmount;
+  }
+  if (seat.wonHandLabel) {
+    row.wonHandLabel = seat.wonHandLabel;
   }
   if (seat.holeCards) {
     row.holeCards = seat.holeCards.map(parseCard);

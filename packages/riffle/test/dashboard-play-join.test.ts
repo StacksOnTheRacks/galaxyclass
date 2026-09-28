@@ -153,7 +153,7 @@ describe('dashboard play GUID join', () => {
     expect(root.dataset.surface).toBe('dashboard');
   });
 
-  it('reads /config.json, connects to webSocketUrl, sends only join_table, and renders the dashboard shell', async () => {
+  it('reads /config.json, connects to webSocketUrl, joins then sits, and renders the dashboard shell', async () => {
     const { root, sockets, sessionPromise, fetchCalls } = await start(`/${TABLE_ID}/`);
     const session = await sessionPromise;
 
@@ -174,9 +174,8 @@ describe('dashboard play GUID join', () => {
       expect(root.querySelector(`[data-region="${region}"]`)).not.toBeNull();
     }
     expect(root.textContent).toContain('$1 / $2');
-    expect(socket.actions()).toEqual(['join_table']);
+    expect(socket.actions()).toEqual(['join_table', 'sit']);
     expect(socket.actions()).not.toContain('create_table');
-    expect(socket.actions()).not.toContain('sit');
   });
 
   it('fails closed when the server answers table_not_found', async () => {
