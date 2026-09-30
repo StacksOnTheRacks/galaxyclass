@@ -132,6 +132,13 @@ describe('MatchRuntimeStack play origin', () => {
     assert.doesNotMatch(css, /url\((['"]?)\/assets\//);
   });
 
+  it('serves both Riffle artifacts with no-cache so browsers and CloudFront revalidate after a deploy', () => {
+    const deployments = resourcesOfType(synth.template, 'Custom::CDKBucketDeployment');
+    for (const [, deployment] of deployments) {
+      assert.deepEqual(deployment.Properties?.SystemMetadata, { 'cache-control': 'no-cache' });
+    }
+  });
+
   it('stages riffle/config.json with webSocketUrl and the seeded table listing', () => {
     const { raw, marker } = stagedConfigForDeployment(synth.outdir, playDeploymentProps);
     assert.match(

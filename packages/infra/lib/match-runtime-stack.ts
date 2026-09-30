@@ -228,6 +228,7 @@ export class MatchRuntimeStack extends Stack {
       ],
       distribution,
       distributionPaths: ['/*'],
+      cacheControl: [s3Deployment.CacheControl.noCache()],
     });
 
     new CfnOutput(this, 'DashboardUrl', {
@@ -253,6 +254,8 @@ export class MatchRuntimeStack extends Stack {
           ...clientAuthConfig,
         }),
       ],
+      // Entry files are not content-hashed; a stale client must not outlive a runtime protocol change.
+      cacheControl: [s3Deployment.CacheControl.noCache()],
     });
     nameBucketDeployLayer(playOriginDeployment, PLAY_ORIGIN_DEPLOY_LAYER_NAME);
 
