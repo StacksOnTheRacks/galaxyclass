@@ -38,6 +38,8 @@ export class GalaxyClassAuthStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // Name is fixed so GalaxyClassWwwCfnExec can allow this table only.
+    // See packages/infra/iam/galaxy-class-www-cfn-exec.json.
     const profiles = new Table(this, 'Profiles', {
       tableName: 'galaxyclass-profiles-prod',
       partitionKey: { name: 'pk', type: AttributeType.STRING },

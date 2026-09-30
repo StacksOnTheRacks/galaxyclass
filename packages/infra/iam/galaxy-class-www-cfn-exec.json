@@ -1,0 +1,268 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CloudFormationStacks",
+            "Effect": "Allow",
+            "Action": "cloudformation:*",
+            "Resource": [
+                "arn:aws:cloudformation:us-east-1:903395879533:stack/GalaxyClassAuth-prod/*",
+                "arn:aws:cloudformation:us-east-1:903395879533:stack/GalaxyClassSite-prod/*",
+                "arn:aws:cloudformation:us-east-1:903395879533:stack/GalaxyClassToolkit/*"
+            ]
+        },
+        {
+            "Sid": "CloudFormationRead",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:Describe*",
+                "cloudformation:Get*",
+                "cloudformation:List*",
+                "cloudformation:ValidateTemplate",
+                "cloudformation:CreateUploadBucket",
+                "cloudformation:EstimateTemplateCost"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AppAndToolkitLambda",
+            "Effect": "Allow",
+            "Action": "lambda:*",
+            "Resource": [
+                "arn:aws:lambda:us-east-1:903395879533:function:GalaxyClass*",
+                "arn:aws:lambda:us-east-1:903395879533:layer:GalaxyClass*"
+            ]
+        },
+        {
+            "Sid": "AppLogs",
+            "Effect": "Allow",
+            "Action": "logs:*",
+            "Resource": [
+                "arn:aws:logs:us-east-1:903395879533:log-group:/aws/lambda/GalaxyClass*",
+                "arn:aws:logs:us-east-1:903395879533:log-group:/aws/lambda/GalaxyClass*:*"
+            ]
+        },
+        {
+            "Sid": "LogsDescribe",
+            "Effect": "Allow",
+            "Action": [
+                "logs:Describe*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ScopedIamRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:UpdateRole",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:PassRole",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRoleTags"
+            ],
+            "Resource": [
+                "arn:aws:iam::903395879533:role/GalaxyClassAuth-prod*",
+                "arn:aws:iam::903395879533:role/GalaxyClassSite-prod*",
+                "arn:aws:iam::903395879533:role/cdk-galcls-*"
+            ]
+        },
+        {
+            "Sid": "CognitoEmailServiceLinkedRole",
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::903395879533:role/aws-service-role/email.cognito-idp.amazonaws.com/AWSServiceRoleForAmazonCognitoIdpEmailService",
+            "Condition": {
+                "StringLike": {
+                    "iam:AWSServiceName": "email.cognito-idp.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "ReadAwsManagedPolicies",
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion"
+            ],
+            "Resource": "arn:aws:iam::aws:policy/*"
+        },
+        {
+            "Sid": "ToolkitAndAppBuckets",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::cdk-galcls-assets-903395879533-us-east-1",
+                "arn:aws:s3:::cdk-galcls-assets-903395879533-us-east-1/*",
+                "arn:aws:s3:::galaxyclassauth-prod-*",
+                "arn:aws:s3:::galaxyclassauth-prod-*/*",
+                "arn:aws:s3:::galaxyclasssite-prod-*",
+                "arn:aws:s3:::galaxyclasssite-prod-*/*"
+            ]
+        },
+        {
+            "Sid": "ToolkitEcr",
+            "Effect": "Allow",
+            "Action": "ecr:*",
+            "Resource": "arn:aws:ecr:us-east-1:903395879533:repository/cdk-galcls-container-assets-903395879533-us-east-1"
+        },
+        {
+            "Sid": "EcrAuth",
+            "Effect": "Allow",
+            "Action": "ecr:GetAuthorizationToken",
+            "Resource": "*"
+        },
+        {
+            "Sid": "SsmParameters",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:PutParameter",
+                "ssm:DeleteParameter",
+                "ssm:AddTagsToResource",
+                "ssm:RemoveTagsFromResource",
+                "ssm:ListTagsForResource"
+            ],
+            "Resource": [
+                "arn:aws:ssm:us-east-1:903395879533:parameter/cdk-bootstrap/galcls/version",
+                "arn:aws:ssm:us-east-1:903395879533:parameter/galaxyclass/riffle/play-origin-bucket"
+            ]
+        },
+        {
+            "Sid": "CognitoPools",
+            "Effect": "Allow",
+            "Action": "cognito-idp:*",
+            "Resource": "arn:aws:cognito-idp:us-east-1:903395879533:userpool/*"
+        },
+        {
+            "Sid": "CognitoCreate",
+            "Effect": "Allow",
+            "Action": [
+                "cognito-idp:CreateUserPool",
+                "cognito-idp:ListUserPools",
+                "cognito-idp:DescribeUserPoolDomain"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ProfileDynamoDB",
+            "Effect": "Allow",
+            "Action": "dynamodb:*",
+            "Resource": [
+                "arn:aws:dynamodb:us-east-1:903395879533:table/galaxyclass-profiles-prod",
+                "arn:aws:dynamodb:us-east-1:903395879533:table/galaxyclass-profiles-prod/index/*"
+            ]
+        },
+        {
+            "Sid": "CloudFrontResources",
+            "Effect": "Allow",
+            "Action": "cloudfront:*",
+            "Resource": [
+                "arn:aws:cloudfront::903395879533:distribution/*",
+                "arn:aws:cloudfront::903395879533:origin-access-control/*",
+                "arn:aws:cloudfront::903395879533:function/*",
+                "arn:aws:cloudfront::903395879533:response-headers-policy/*",
+                "arn:aws:cloudfront::903395879533:cache-policy/*",
+                "arn:aws:cloudfront::903395879533:origin-request-policy/*"
+            ]
+        },
+        {
+            "Sid": "CloudFrontCreateAndList",
+            "Effect": "Allow",
+            "Action": [
+                "cloudfront:CreateDistribution",
+                "cloudfront:CreateDistributionWithTags",
+                "cloudfront:CreateOriginAccessControl",
+                "cloudfront:CreateFunction",
+                "cloudfront:CreateResponseHeadersPolicy",
+                "cloudfront:CreateCachePolicy",
+                "cloudfront:CreateOriginRequestPolicy",
+                "cloudfront:List*",
+                "cloudfront:Get*",
+                "cloudfront:Describe*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Route53Zone",
+            "Effect": "Allow",
+            "Action": [
+                "route53:GetHostedZone",
+                "route53:ListResourceRecordSets",
+                "route53:ChangeResourceRecordSets",
+                "route53:ListTagsForResource",
+                "route53:ChangeTagsForResource",
+                "route53:GetChange"
+            ],
+            "Resource": [
+                "arn:aws:route53:::hostedzone/Z02927871LCJW2KMZGKOP",
+                "arn:aws:route53:::change/*"
+            ]
+        },
+        {
+            "Sid": "Route53List",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ListHostedZones",
+                "route53:ListHostedZonesByName",
+                "route53:GetChange"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AcmCertificates",
+            "Effect": "Allow",
+            "Action": [
+                "acm:RequestCertificate",
+                "acm:DeleteCertificate",
+                "acm:DescribeCertificate",
+                "acm:GetCertificate",
+                "acm:ListCertificates",
+                "acm:AddTagsToCertificate",
+                "acm:RemoveTagsFromCertificate",
+                "acm:ListTagsForCertificate"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "SesGalaxyClassIdentity",
+            "Effect": "Allow",
+            "Action": "ses:*",
+            "Resource": [
+                "arn:aws:ses:us-east-1:903395879533:identity/galaxyclass.app",
+                "arn:aws:ses:us-east-1:903395879533:identity/noreply@galaxyclass.app"
+            ]
+        },
+        {
+            "Sid": "SesReadAccount",
+            "Effect": "Allow",
+            "Action": [
+                "ses:GetAccount",
+                "ses:ListIdentities",
+                "ses:GetSendQuota"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "RifflePlayOriginBucketPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy",
+                "s3:DeleteBucketPolicy"
+            ],
+            "Resource": "arn:aws:s3:::matchruntimestack-playoriginbucket*"
+        }
+    ]
+}
