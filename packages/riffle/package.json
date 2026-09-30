@@ -22,6 +22,7 @@
     "@aws-sdk/client-apigatewaymanagementapi": "^3.787.0",
     "@aws-sdk/client-dynamodb": "^3.787.0",
     "@aws-sdk/lib-dynamodb": "^3.787.0",
+    "@galaxyclass/accounts": "*",
     "@hono/node-server": "^1.14.1",
     "@turnur/sdk": "file:./vendor/turnur-sdk",
     "hono": "^4.7.7",

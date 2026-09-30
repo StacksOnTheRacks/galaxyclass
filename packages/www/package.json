@@ -10,6 +10,7 @@
     "test": "vitest run --root ."
   },
   "dependencies": {
+    "@galaxyclass/accounts": "*",
     "aws-amplify": "^6.22.0",
     "framer-motion": "^11.18.2",
     "next": "^15.1.6",

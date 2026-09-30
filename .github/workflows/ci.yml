@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test accounts
+        run: npm run test --workspace=@galaxyclass/accounts
+
       - name: Test studio site
         run: npm run test --workspace=@galaxyclass/www
 
