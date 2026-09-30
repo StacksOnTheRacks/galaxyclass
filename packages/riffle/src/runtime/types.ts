@@ -48,9 +48,12 @@ export interface TableRecord {
 
 export interface SeatRecord {
   seatId: string;
+  /** The verified account's gamer tag, or a server-picked guest name. */
   displayName: string;
-  /** Galaxy Class avatar id: the signed-in player's pick, or random for anonymous players. */
+  /** Galaxy Class avatar id: the verified account's pick, or random for guests. */
   avatarId?: number;
+  /** Cognito `sub` of a verified account; never sent to clients. */
+  playerSub?: string;
   stack: number;
   seatTokenHash: string;
   connectionId?: string;
@@ -76,8 +79,8 @@ export interface ClientMessage {
   tableId?: string;
   tableIds?: unknown;
   seatId?: string;
-  displayName?: string;
-  avatarId?: unknown;
+  /** Cognito access token on `sit`; the seat's name and avatar come only from the verified account. */
+  accessToken?: unknown;
   seatToken?: string;
   amount?: number;
   stack?: number;
@@ -199,6 +202,9 @@ export interface LambdaContext {
 export interface RuntimeEnv {
   tableName: string;
   awsRegion?: string;
+  cognitoUserPoolId?: string;
+  cognitoClientId?: string;
+  profileTableName?: string;
 }
 
 export const TABLE_DEFAULTS = {

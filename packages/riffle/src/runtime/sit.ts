@@ -1,7 +1,8 @@
-import { isAvatarId, randomAvatarId } from '@galaxyclass/accounts/avatars';
-import { validateDisplayName } from '../shared/display-name.js';
+import { randomAvatarId } from '@galaxyclass/accounts/avatars';
+import { randomDisplayName } from '../shared/random-name.js';
 import { foldAwayActors } from './act.js';
 import { isBetweenHands, isSeatAway } from './hand-state.js';
+import type { VerifiedPlayer } from './player-identity.js';
 import { hashSeatToken, mintSeatToken, verifySeatToken } from './seat-token.js';
 import type { MatchStore } from './store.js';
 import type { ClientMessage, ConnectionRecord, SeatRecord, TableRecord } from './types.js';
@@ -13,9 +14,8 @@ export type SitErrorCode =
   | 'hand_in_progress'
   | 'seat_occupied'
   | 'already_seated'
+  | 'account_already_seated'
   | 'table_full'
-  | 'empty_display_name'
-  | 'invalid_display_name'
   | 'invalid_seat'
   | 'client_supplied_state'
   | 'invalid_seat_token'
@@ -28,8 +28,10 @@ export interface SitContext {
   table: TableRecord;
   seats: SeatRecord[];
   message: ClientMessage;
+  /** The account behind a verified access token; absent for guests. */
+  player?: VerifiedPlayer | null;
   now?: string;
-  /** Picks the anonymous avatar. Defaults to Math.random. */
+  /** Picks guest names and avatars. Defaults to Math.random. */
   random?: () => number;
 }
 
@@ -63,17 +65,13 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
     return { ok: false, code: 'invalid_seat' };
   }
 
-  if (!(message.displayName ?? '').trim()) {
-    return { ok: false, code: 'empty_display_name' };
-  }
-  const validatedName = validateDisplayName(message.displayName);
-  if (!validatedName.ok) {
-    return { ok: false, code: 'invalid_display_name' };
-  }
-  const displayName = validatedName.value;
-
   if (connection.seatId) {
     return { ok: false, code: 'already_seated' };
+  }
+
+  const player = ctx.player ?? null;
+  if (player && seats.some((seat) => seat.playerSub === player.sub && seat.seatId !== message.seatId)) {
+    return { ok: false, code: 'account_already_seated' };
   }
 
   // An away seat can be taken over once it is out of the live hand; its reclaim token stops working.
@@ -95,13 +93,16 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
   const seatTokenHash = hashSeatToken(seatToken);
   const newSeat: SeatRecord = {
     seatId: message.seatId,
-    displayName,
-    // Display-only: signed-in clients send their Galaxy Class pick; anyone else gets a random face.
-    avatarId: isAvatarId(message.avatarId) ? message.avatarId : randomAvatarId(ctx.random),
+    displayName:
+      player?.gamerTag ?? randomDisplayName(otherSeats.map((seat) => seat.displayName), ctx.random),
+    avatarId: player?.avatarId ?? randomAvatarId(ctx.random),
     stack: table.defaultStack,
     seatTokenHash,
     connectionId: connection.connectionId,
   };
+  if (player) {
+    newSeat.playerSub = player.sub;
+  }
 
   await ctx.store.putSeat(table.tableId, newSeat);
   await ctx.store.bindConnectionToSeat(connection.connectionId, message.seatId);

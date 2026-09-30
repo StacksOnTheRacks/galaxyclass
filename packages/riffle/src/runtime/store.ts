@@ -106,6 +106,9 @@ function parseSeatItem(item: Record<string, unknown>): SeatRecord {
   if (typeof item.avatarId === 'number') {
     seat.avatarId = item.avatarId;
   }
+  if (typeof item.playerSub === 'string' && item.playerSub) {
+    seat.playerSub = item.playerSub;
+  }
   if (item.awaySince) {
     seat.awaySince = String(item.awaySince);
   }

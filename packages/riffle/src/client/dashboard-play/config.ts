@@ -13,9 +13,35 @@ export interface TableListing {
   maxSeats: number;
 }
 
+/** Public Cognito ids for the Galaxy Class player pool; no secrets. */
+export interface PlayAuthConfig {
+  userPoolId: string;
+  userPoolClientId: string;
+}
+
 export interface PlayConfig {
   webSocketUrl: string;
   tables: TableListing[];
+  auth?: PlayAuthConfig;
+}
+
+const USER_POOL_ID_RE = /^[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]+$/;
+const CLIENT_ID_RE = /^[a-z0-9]{1,128}$/;
+
+function parseAuthConfig(value: unknown): PlayAuthConfig | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const { userPoolId, userPoolClientId } = value as Record<string, unknown>;
+  if (
+    typeof userPoolId !== 'string' ||
+    !USER_POOL_ID_RE.test(userPoolId) ||
+    typeof userPoolClientId !== 'string' ||
+    !CLIENT_ID_RE.test(userPoolClientId)
+  ) {
+    return undefined;
+  }
+  return { userPoolId, userPoolClientId };
 }
 
 function parseTableListing(value: unknown): TableListing | null {
@@ -52,7 +78,7 @@ export async function loadPlayConfig(fetchImpl: typeof fetch): Promise<PlayConfi
     if (typeof body !== 'object' || body === null) {
       return null;
     }
-    const { webSocketUrl, tables } = body as Record<string, unknown>;
+    const { webSocketUrl, tables, auth } = body as Record<string, unknown>;
     if (typeof webSocketUrl !== 'string' || !/^wss?:\/\//.test(webSocketUrl)) {
       return null;
     }
@@ -61,7 +87,10 @@ export async function loadPlayConfig(fetchImpl: typeof fetch): Promise<PlayConfi
           .map(parseTableListing)
           .filter((entry): entry is TableListing => entry !== null)
       : [];
-    return { webSocketUrl, tables: parsedTables };
+    const parsedAuth = parseAuthConfig(auth);
+    return parsedAuth
+      ? { webSocketUrl, tables: parsedTables, auth: parsedAuth }
+      : { webSocketUrl, tables: parsedTables };
   } catch {
     return null;
   }

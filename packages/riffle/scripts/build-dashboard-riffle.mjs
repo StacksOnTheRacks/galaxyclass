@@ -7,10 +7,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = path.join(root, 'public/dashboard-riffle');
 
 await mkdir(outdir, { recursive: true });
+await rm(path.join(outdir, 'chunks'), { recursive: true, force: true });
 await build({
   entryPoints: [path.join(root, 'src/client/dashboard-play.ts')],
   bundle: true,
-  outfile: path.join(outdir, 'dashboard-play.js'),
+  outdir,
+  // Amplify is only loaded for signed-in players, so it lives in its own chunk.
+  splitting: true,
+  entryNames: '[name]',
+  chunkNames: 'chunks/[name]-[hash]',
   format: 'esm',
   target: 'es2022',
   loader: { '.css': 'css' },

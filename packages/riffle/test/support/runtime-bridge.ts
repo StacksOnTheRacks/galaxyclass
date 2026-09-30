@@ -1,4 +1,5 @@
 import { createRuntimeHandler } from '../../src/runtime/handler.js';
+import type { ResolvePlayer } from '../../src/runtime/player-identity.js';
 import type { WebSocketEvent } from '../../src/runtime/types.js';
 import { FakePlaySocket } from './fake-play-socket.js';
 import { MemoryMatchStore } from './memory-store.js';
@@ -39,7 +40,7 @@ export class RuntimeBridge {
   readonly handler;
 
   /** `nextHandDelayMs: null` leaves finished hands on the table; `0` deals the next hand right away. */
-  constructor(rngSeed = 42, nextHandDelayMs: number | null = null) {
+  constructor(rngSeed = 42, nextHandDelayMs: number | null = null, resolvePlayer: ResolvePlayer | null = null) {
     this.handler = createRuntimeHandler({
       store: this.store,
       postToConnection: async (connectionId, message) => {
@@ -48,6 +49,7 @@ export class RuntimeBridge {
       now: () => new Date(this.nowMs).toISOString(),
       rngSeed: () => rngSeed,
       nextHandDelayMs,
+      resolvePlayer,
     });
   }
 

@@ -265,6 +265,7 @@ describe('street betting on serverless runtime', () => {
     const flop = lastSnapshot(sent.get('conn-a'));
     expect(flop?.type === 'table_snapshot' && flop.street).toBe('flop');
     expect(flop?.type === 'table_snapshot' && flop.streetActions).toEqual([]);
+    const nameOf = new Map((await store.listSeats('table-1')).map((seat) => [seat.seatId, seat.displayName]));
 
     await handler(
       wsEvent('$default', 'conn-b', JSON.stringify({ action: 'bet', amount: 10, seatToken: tokenB })),
@@ -272,7 +273,7 @@ describe('street betting on serverless runtime', () => {
     );
     const afterBet = lastSnapshot(sent.get('conn-a'));
     expect(afterBet?.type === 'table_snapshot' && afterBet.streetActions).toEqual([
-      { seatId: '4', displayName: 'Bob', type: 'bet', amount: 10 },
+      { seatId: '4', displayName: nameOf.get('4'), type: 'bet', amount: 10 },
     ]);
 
     await handler(
@@ -281,8 +282,8 @@ describe('street betting on serverless runtime', () => {
     );
     const afterFold = lastSnapshot(sent.get('conn-b'));
     expect(afterFold?.type === 'table_snapshot' && afterFold.streetActions).toEqual([
-      { seatId: '4', displayName: 'Bob', type: 'bet', amount: 10 },
-      { seatId: '1', displayName: 'Alice', type: 'fold' },
+      { seatId: '4', displayName: nameOf.get('4'), type: 'bet', amount: 10 },
+      { seatId: '1', displayName: nameOf.get('1'), type: 'fold' },
     ]);
   });
 

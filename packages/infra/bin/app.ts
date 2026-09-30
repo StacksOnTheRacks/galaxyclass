@@ -17,13 +17,16 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION ?? 'us-east-1',
 };
 
-const matchStack = new MatchRuntimeStack(app, 'MatchRuntimeStack', { env });
-
 const authStack = new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', {
   env: {
     account: env.account,
     region: 'us-east-1',
   },
+});
+
+const matchStack = new MatchRuntimeStack(app, 'MatchRuntimeStack', {
+  env,
+  playerAuth: authStack.playerAuth,
 });
 
 new GalaxyClassSiteStack(app, 'GalaxyClassSite-prod', {

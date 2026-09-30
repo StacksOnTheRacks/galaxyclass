@@ -15,7 +15,7 @@ function defaultAccountStorage(): AccountStorage | null {
   }
 }
 
-/** Display-only: Riffle must not read studio auth storage, only this hint. */
+/** Display-only (table list chip); seat identity comes from the server-verified access token. */
 export function readStudioAccount(storage: AccountStorage | null = defaultAccountStorage()): StudioAccount | null {
   try {
     const hint = parseAccountHint(storage?.getItem(ACCOUNT_HINT_KEY) ?? null);

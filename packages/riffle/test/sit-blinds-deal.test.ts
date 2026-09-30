@@ -220,7 +220,8 @@ describe('sit, leave, and start_hand', () => {
     expect(snapshot?.seats).toEqual([
       expect.objectContaining({
         seatId: '1',
-        displayName: 'Alice',
+        // Guests are named by the server; the client's "Alice" is ignored.
+        displayName: expect.stringMatching(/^\S+ \S+$/),
         stack: 2000,
         isLocal: true,
       }),
@@ -228,7 +229,7 @@ describe('sit, leave, and start_hand', () => {
     expect(snapshot).not.toHaveProperty('seatToken');
   });
 
-  it('rejects sit when seat occupied, caller seated, table full, or name empty', async () => {
+  it('rejects sit when seat occupied, caller seated, or table full', async () => {
     const { handler, store, sent } = createHarness();
     await setupTable(handler, store);
 
@@ -249,12 +250,6 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
     expect(sent.get('conn-a')?.at(-1)).toEqual({ type: 'error', code: 'already_seated' });
-
-    await handler(
-      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '2', displayName: '   ' })),
-      {},
-    );
-    expect(sent.get('conn-b')?.at(-1)).toEqual({ type: 'error', code: 'empty_display_name' });
     expect((await store.getTable('table-1'))?.version).toBe(versionAfterFirstSit);
 
     for (let seatId = 2; seatId <= 8; seatId += 1) {
@@ -288,35 +283,23 @@ describe('sit, leave, and start_hand', () => {
     expect((await store.getTable('table-1'))?.version).toBe(versionBeforeFull);
   });
 
-  it('rejects display names outside 3–24 characters after trim and accepts the bounds', async () => {
-    const { handler, store, sent } = createHarness();
+  it('ignores client-supplied names and avatars and gives each guest a distinct server-picked name', async () => {
+    const { handler, store } = createHarness();
     await setupTable(handler, store);
-    const versionBefore = (await store.getTable('table-1'))?.version;
-
-    for (const displayName of ['Al', '  Al  ', 'x'.repeat(25), `  ${'y'.repeat(25)}  `]) {
-      await handler(
-        wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '1', displayName })),
-        {},
-      );
-      expect(sent.get('conn-a')?.at(-1)).toEqual({ type: 'error', code: 'invalid_display_name' });
-    }
-    expect(await store.getSeat('table-1', '1')).toBeNull();
-    expect((await store.getTable('table-1'))?.version).toBe(versionBefore);
 
     await handler(
-      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '1', displayName: '  Ann  ' })),
+      wsEvent('$default', 'conn-a', JSON.stringify({ action: 'sit', seatId: '1', displayName: 'Ann', avatarId: 5 })),
       {},
     );
     await handler(
-      wsEvent(
-        '$default',
-        'conn-b',
-        JSON.stringify({ action: 'sit', seatId: '2', displayName: 'z'.repeat(24) }),
-      ),
+      wsEvent('$default', 'conn-b', JSON.stringify({ action: 'sit', seatId: '2', displayName: 'Ann' })),
       {},
     );
-    expect((await store.getSeat('table-1', '1'))?.displayName).toBe('Ann');
-    expect((await store.getSeat('table-1', '2'))?.displayName).toBe('z'.repeat(24));
+    const first = await store.getSeat('table-1', '1');
+    const second = await store.getSeat('table-1', '2');
+    expect(first?.displayName).not.toBe('Ann');
+    expect(second?.displayName).not.toBe('Ann');
+    expect(first?.displayName.toLowerCase()).not.toBe(second?.displayName.toLowerCase());
   });
 
   it('leave between hands frees the seat; leave mid-hand folds and frees it after the hand', async () => {
@@ -471,7 +454,8 @@ describe('sit, leave, and start_hand', () => {
       wsEvent('$default', 'conn-d', JSON.stringify({ action: 'sit', seatId: '6', displayName: 'Dave' })),
       {},
     );
-    expect((await store.getSeat('table-1', '6'))?.displayName).toBe('Dave');
+    expect((await store.getSeat('table-1', '6'))?.connectionId).toBe('conn-d');
+    const bobName = (await store.getSeat('table-1', '4'))?.displayName;
 
     // Seat 1 (the button) acts first heads-up, so Bob in seat 4 stays in the hand while away.
     expect((await store.getTable('table-1'))?.currentSeatId).toBe('1');
@@ -483,7 +467,7 @@ describe('sit, leave, and start_hand', () => {
       {},
     );
     expect(sent.get('conn-e')?.at(-1)).toEqual({ type: 'error', code: 'seat_occupied' });
-    expect((await store.getSeat('table-1', '4'))?.displayName).toBe('Bob');
+    expect((await store.getSeat('table-1', '4'))?.displayName).toBe(bobName);
   });
 
   it('returns the table to open after the hand when only one player can continue', async () => {
