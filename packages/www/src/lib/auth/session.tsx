@@ -9,22 +9,32 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { clearAccountHint, writeAccountHint } from "./account-hint";
+import { fetchProfile, type Profile } from "@/lib/profile/api";
+import { ACCOUNT_HINT_KEY, clearAccountHint, writeAccountHint } from "./account-hint";
 import { authResources, withAuth } from "./api";
 
 type Status = "loading" | "signed-out" | "signed-in";
+export type ProfileStatus = "idle" | "loading" | "ready" | "error";
 
 type SessionValue = {
   status: Status;
   email: string;
+  profile: Profile | null;
+  profileStatus: ProfileStatus;
   refresh: () => Promise<void>;
+  reloadProfile: () => Promise<void>;
+  setProfile: (profile: Profile) => void;
   signOut: () => Promise<void>;
 };
 
 const signedOutValue: SessionValue = {
   status: "signed-out",
   email: "",
+  profile: null,
+  profileStatus: "idle",
   refresh: async () => {},
+  reloadProfile: async () => {},
+  setProfile: () => {},
   signOut: async () => {},
 };
 
@@ -38,31 +48,71 @@ async function readSignedInEmail(): Promise<string> {
   });
 }
 
+function hasAccountHint(): boolean {
+  try {
+    return window.localStorage.getItem(ACCOUNT_HINT_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Public name for a signed-in player: their gamer tag, else a generic label (never email). */
+export function playerLabel(profile: Profile | null): string {
+  return profile?.gamerTag ?? "Player 1";
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(() =>
     authResources() ? "loading" : "signed-out",
   );
   const [email, setEmail] = useState("");
+  const [profile, setProfileState] = useState<Profile | null>(null);
+  const [profileStatus, setProfileStatus] = useState<ProfileStatus>("idle");
+
+  const setProfile = useCallback((next: Profile) => {
+    setProfileState(next);
+    setProfileStatus("ready");
+    writeAccountHint(next);
+  }, []);
+
+  const reloadProfile = useCallback(async () => {
+    setProfileStatus("loading");
+    try {
+      setProfile(await fetchProfile());
+    } catch {
+      setProfileStatus("error");
+      // Keep a previously written hint so games still show the last known profile.
+      if (!hasAccountHint()) {
+        writeAccountHint({ gamerTag: null, avatarId: null });
+      }
+    }
+  }, [setProfile]);
+
+  const resetSignedOut = useCallback(() => {
+    clearAccountHint();
+    setEmail("");
+    setProfileState(null);
+    setProfileStatus("idle");
+    setStatus("signed-out");
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!authResources()) {
-      clearAccountHint();
-      setStatus("signed-out");
-      setEmail("");
+      resetSignedOut();
       return;
     }
 
+    let nextEmail: string;
     try {
-      const nextEmail = await readSignedInEmail();
-      writeAccountHint(nextEmail);
-      setEmail(nextEmail);
-      setStatus("signed-in");
+      nextEmail = await readSignedInEmail();
     } catch {
-      clearAccountHint();
-      setEmail("");
-      setStatus("signed-out");
+      resetSignedOut();
+      return;
     }
-  }, []);
+    setEmail(nextEmail);
+    setStatus("signed-in");
+    await reloadProfile();
+  }, [reloadProfile, resetSignedOut]);
 
   const signOut = useCallback(async () => {
     if (authResources()) {
@@ -74,18 +124,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         // Local chrome still returns to signed-out.
       }
     }
-    clearAccountHint();
-    setEmail("");
-    setStatus("signed-out");
-  }, []);
+    resetSignedOut();
+  }, [resetSignedOut]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ status, email, refresh, signOut }),
-    [status, email, refresh, signOut],
+    () => ({
+      status,
+      email,
+      profile,
+      profileStatus,
+      refresh,
+      reloadProfile,
+      setProfile,
+      signOut,
+    }),
+    [status, email, profile, profileStatus, refresh, reloadProfile, setProfile, signOut],
   );
 
   return (

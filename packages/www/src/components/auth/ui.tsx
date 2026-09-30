@@ -51,6 +51,7 @@ const screens: Record<
       kicker: "Player card",
       headline: "One account. Every game.",
       points: [
+        "Pick a gamer tag — it’s how other players see you.",
         "Works across every Galaxy Class game, starting with Riffle.",
         "Unlocks private, invite-only tables.",
         "Free: nothing to buy, no cashier, no KYC.",
@@ -99,6 +100,7 @@ const screens: Record<
       kicker: "Your account",
       headline: "One sign-in, every game.",
       points: [
+        "Your gamer tag and avatar follow you to every table.",
         "Private, invite-only tables in supported games.",
         "Social chips only — nothing to buy.",
       ],
@@ -304,6 +306,10 @@ export function TextField({
   describedBy,
   autoComplete,
   placeholder,
+  onBlur,
+  maxLength,
+  spellCheck,
+  autoCapitalize,
 }: {
   id: string;
   label: string;
@@ -314,6 +320,10 @@ export function TextField({
   describedBy?: string;
   autoComplete?: string;
   placeholder?: string;
+  onBlur?: () => void;
+  maxLength?: number;
+  spellCheck?: boolean;
+  autoCapitalize?: "off" | "none" | "sentences" | "words" | "characters";
 }) {
   const errorId = `${id}-error`;
   const described = [describedBy, error ? errorId : undefined]
@@ -334,7 +344,11 @@ export function TextField({
         autoComplete={autoComplete}
         aria-invalid={error ? true : undefined}
         aria-describedby={described || undefined}
+        maxLength={maxLength}
+        spellCheck={spellCheck}
+        autoCapitalize={autoCapitalize}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         className={`min-h-12 w-full rounded-md border-2 bg-void px-4 text-body text-ink shadow-[inset_0_2px_8px_rgb(0_0_0/0.55)] transition duration-quick placeholder:text-ink-muted focus:shadow-glow-cyan focus-visible:rounded-md focus-visible:outline-offset-2 ${
           error
             ? "border-danger focus:border-danger"

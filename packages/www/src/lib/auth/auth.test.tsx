@@ -4,6 +4,7 @@ import { Amplify } from "aws-amplify";
 import {
   confirmResetPassword,
   confirmSignUp,
+  fetchAuthSession,
   fetchUserAttributes,
   getCurrentUser,
   resendSignUpCode,
@@ -22,6 +23,8 @@ import { Nav } from "@/components/Nav";
 import { ACCOUNT_HINT_KEY } from "@/lib/auth/account-hint";
 import { COPY } from "@/lib/auth/messages";
 import { SessionProvider } from "@/lib/auth/session";
+import { PROFILE_COPY } from "@/lib/profile/messages";
+import { GAMER_TAG_MESSAGES, GAMER_TAG_RULE } from "@galaxyclass/accounts/gamer-tag";
 
 const nav = vi.hoisted(() => ({
   push: vi.fn(),
@@ -46,10 +49,77 @@ vi.mock("aws-amplify/auth", () => ({
   confirmResetPassword: vi.fn(),
   getCurrentUser: vi.fn(),
   fetchUserAttributes: vi.fn(),
+  fetchAuthSession: vi.fn(),
 }));
 
 const EMAIL = "player@example.com";
 const PASSWORD = "Password1";
+const GAMER_TAG = "River_Rat";
+
+type ApiCall = { method: string; path: string; body: unknown; authorization: string | null };
+
+/** In-memory stand-in for the same-origin profile API behind CloudFront /api/*. */
+const api = {
+  profile: { gamerTag: null as string | null, avatarId: 7 },
+  taken: new Set<string>(),
+  fail: false,
+  calls: [] as ApiCall[],
+};
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function fakeFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const path = String(input);
+  const method = init.method ?? "GET";
+  const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+  api.calls.push({
+    method,
+    path,
+    body,
+    authorization: new Headers(init.headers).get("authorization"),
+  });
+  if (api.fail) return json(500, { error: "server_error" });
+
+  if (method === "GET" && path.startsWith("/api/gamer-tags/")) {
+    const tag = decodeURIComponent(path.slice("/api/gamer-tags/".length));
+    const available = !api.taken.has(tag.toLowerCase());
+    return json(200, available ? { gamerTag: tag, available } : { gamerTag: tag, available, reason: "taken" });
+  }
+  if (method === "GET" && path === "/api/profile") return json(200, api.profile);
+  if (method === "PUT" && path === "/api/profile/gamer-tag") {
+    const tag = (body as { gamerTag: string }).gamerTag;
+    if (api.taken.has(tag.toLowerCase())) return json(409, { error: "gamer_tag_taken" });
+    api.profile = { ...api.profile, gamerTag: tag };
+    return json(200, api.profile);
+  }
+  if (method === "PUT" && path === "/api/profile/avatar") {
+    api.profile = { ...api.profile, avatarId: (body as { avatarId: number }).avatarId };
+    return json(200, api.profile);
+  }
+  return json(400, { error: "bad_request" });
+}
+
+function signedIn() {
+  setEnv();
+  vi.mocked(getCurrentUser).mockResolvedValue({ username: EMAIL, userId: "user-1" });
+}
+
+function renderAccount() {
+  return render(
+    <SessionProvider>
+      <AccountPanel />
+    </SessionProvider>,
+  );
+}
+
+function storedHint(): unknown {
+  return JSON.parse(localStorage.getItem(ACCOUNT_HINT_KEY) ?? "null");
+}
 
 function setEnv() {
   process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID = "us-east-1_example";
@@ -84,6 +154,14 @@ beforeEach(() => {
     Object.assign(new Error("signed out"), { name: "UserUnAuthenticatedException" }),
   );
   vi.mocked(fetchUserAttributes).mockResolvedValue({ email: EMAIL });
+  vi.mocked(fetchAuthSession).mockResolvedValue({
+    tokens: { idToken: { toString: () => "id-token" } },
+  } as Awaited<ReturnType<typeof fetchAuthSession>>);
+  api.profile = { gamerTag: null, avatarId: 7 };
+  api.taken = new Set(["taken_tag"]);
+  api.fail = false;
+  api.calls = [];
+  vi.stubGlobal("fetch", vi.fn(fakeFetch));
   vi.mocked(signOut).mockResolvedValue(undefined);
   vi.mocked(signUp).mockResolvedValue({
     isSignUpComplete: false,
@@ -99,11 +177,15 @@ describe("sign-up", () => {
     expect(
       screen.getByRole("heading", { name: "Create your Galaxy Class account" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Email and password only at launch.")).toBeInTheDocument();
+    expect(screen.getByText("Email, gamer tag, and password. That’s it.")).toBeInTheDocument();
     expect(screen.getByText(COPY.passwordRule)).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("Gamer tag")).toHaveAccessibleDescription(
+      new RegExp(GAMER_TAG_RULE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
 
     fill("Email", EMAIL);
+    fill("Gamer tag", ` ${GAMER_TAG} `);
     fill("Password", PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
@@ -119,7 +201,10 @@ describe("sign-up", () => {
     expect(signUp).toHaveBeenCalledWith({
       username: EMAIL,
       password: PASSWORD,
-      options: { userAttributes: { email: EMAIL } },
+      options: {
+        userAttributes: { email: EMAIL },
+        clientMetadata: { gamerTag: GAMER_TAG },
+      },
     });
     expect(storedValues().join(" ")).not.toContain(PASSWORD);
     expect(window.location.href).not.toContain(PASSWORD);
@@ -140,6 +225,7 @@ describe("sign-up", () => {
     );
     render(<SignUpForm />);
     fill("Email", EMAIL);
+    fill("Gamer tag", GAMER_TAG);
     fill("Password", PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
@@ -166,7 +252,55 @@ describe("sign-up", () => {
       "aria-describedby",
       "sign-up-email-error",
     );
+    expect(screen.getByText(GAMER_TAG_MESSAGES.required)).toBeInTheDocument();
     expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("rejects a badly formatted gamer tag before calling Amplify", async () => {
+    setEnv();
+    render(<SignUpForm />);
+    fill("Email", EMAIL);
+    fill("Gamer tag", "no spaces");
+    fill("Password", PASSWORD);
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByText(GAMER_TAG_MESSAGES.invalid_characters)).toBeInTheDocument();
+    expect(screen.getByLabelText("Gamer tag")).toHaveAttribute("aria-invalid", "true");
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("checks availability on blur without sending credentials", async () => {
+    setEnv();
+    render(<SignUpForm />);
+    fill("Gamer tag", GAMER_TAG);
+    fireEvent.blur(screen.getByLabelText("Gamer tag"));
+    expect(await screen.findByText(`${GAMER_TAG} is available.`)).toBeInTheDocument();
+
+    fill("Gamer tag", "Taken_Tag");
+    fireEvent.blur(screen.getByLabelText("Gamer tag"));
+    expect(await screen.findByText(GAMER_TAG_MESSAGES.taken)).toBeInTheDocument();
+    expect(api.calls.map((call) => [call.path, call.authorization])).toEqual([
+      [`/api/gamer-tags/${GAMER_TAG}`, null],
+      ["/api/gamer-tags/Taken_Tag", null],
+    ]);
+  });
+
+  it("shows the taken message when the sign-up trigger rejects the gamer tag", async () => {
+    setEnv();
+    vi.mocked(signUp).mockRejectedValue(
+      Object.assign(new Error("PreSignUp failed with error GAMER_TAG_TAKEN."), {
+        name: "UserLambdaValidationException",
+      }),
+    );
+    render(<SignUpForm />);
+    fill("Email", EMAIL);
+    fill("Gamer tag", GAMER_TAG);
+    fill("Password", PASSWORD);
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByText(GAMER_TAG_MESSAGES.taken)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(COPY.fixFields);
+    expect(screen.queryByRole("heading", { name: "Check your email" })).not.toBeInTheDocument();
   });
 
   it("does not say a duplicate email is already registered", async () => {
@@ -178,6 +312,7 @@ describe("sign-up", () => {
     );
     render(<SignUpForm />);
     fill("Email", EMAIL);
+    fill("Gamer tag", GAMER_TAG);
     fill("Password", PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
@@ -191,6 +326,7 @@ describe("sign-up", () => {
   it("does not call Amplify when Cognito env is missing", async () => {
     render(<SignUpForm />);
     fill("Email", EMAIL);
+    fill("Gamer tag", GAMER_TAG);
     fill("Password", PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
@@ -402,26 +538,110 @@ describe("account", () => {
   });
 
   it("shows the signed-in account and nav", async () => {
-    setEnv();
-    vi.mocked(getCurrentUser).mockResolvedValue({
-      username: EMAIL,
-      userId: "user-1",
-    });
-    render(
-      <SessionProvider>
-        <AccountPanel />
-      </SessionProvider>,
-    );
+    signedIn();
+    api.profile = { gamerTag: GAMER_TAG, avatarId: 12 };
+    renderAccount();
 
     expect(await screen.findByText(EMAIL)).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Your Galaxy Class account" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Galaxy Class identity across games")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Gamer tag")).toHaveValue(GAMER_TAG);
+    expect(screen.queryByText(PROFILE_COPY.missingTagTitle)).not.toBeInTheDocument();
     const navBar = screen.getByRole("navigation", { name: "Main" });
     expect(navBar).toHaveTextContent("Account");
     expect(navBar).toHaveTextContent("Sign out");
+    expect(navBar).toHaveTextContent(`Signed in as ${GAMER_TAG}`);
+    expect(navBar).not.toHaveTextContent(EMAIL);
     expect(screen.getAllByRole("button", { name: "Sign out" }).length).toBeGreaterThan(0);
+    expect(api.calls[0]).toMatchObject({
+      method: "GET",
+      path: "/api/profile",
+      authorization: "Bearer id-token",
+    });
+  });
+
+  it("prompts an existing player without a gamer tag and saves one", async () => {
+    signedIn();
+    renderAccount();
+
+    expect(await screen.findByText(PROFILE_COPY.missingTagTitle)).toBeInTheDocument();
+    expect(screen.getByText("Not set yet")).toBeInTheDocument();
+    fill("Gamer tag", GAMER_TAG);
+    fireEvent.click(screen.getByRole("button", { name: "Set gamer tag" }));
+
+    expect(await screen.findByText(PROFILE_COPY.tagSaved)).toBeInTheDocument();
+    expect(api.calls.at(-1)).toMatchObject({
+      method: "PUT",
+      path: "/api/profile/gamer-tag",
+      body: { gamerTag: GAMER_TAG },
+    });
+    expect(screen.queryByText(PROFILE_COPY.missingTagTitle)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save gamer tag" })).toBeInTheDocument();
+    expect(storedHint()).toEqual({ signedIn: true, gamerTag: GAMER_TAG, avatarId: 7 });
+  });
+
+  it("validates a changed gamer tag and reports one that is taken", async () => {
+    signedIn();
+    api.profile = { gamerTag: GAMER_TAG, avatarId: 7 };
+    renderAccount();
+    await screen.findByRole("button", { name: "Save gamer tag" });
+
+    fill("Gamer tag", "a");
+    fireEvent.click(screen.getByRole("button", { name: "Save gamer tag" }));
+    expect(await screen.findByText(GAMER_TAG_MESSAGES.too_short)).toBeInTheDocument();
+    expect(api.calls.some((call) => call.method === "PUT")).toBe(false);
+
+    fill("Gamer tag", "Taken_Tag");
+    fireEvent.click(screen.getByRole("button", { name: "Save gamer tag" }));
+    expect(await screen.findByText(GAMER_TAG_MESSAGES.taken)).toBeInTheDocument();
+    expect(screen.getByLabelText("Gamer tag")).toHaveAttribute("aria-invalid", "true");
+    expect(api.profile.gamerTag).toBe(GAMER_TAG);
+    expect(storedHint()).toEqual({ signedIn: true, gamerTag: GAMER_TAG, avatarId: 7 });
+  });
+
+  it("picks an avatar from a radio group and persists it", async () => {
+    signedIn();
+    api.profile = { gamerTag: GAMER_TAG, avatarId: 7 };
+    renderAccount();
+
+    const group = await screen.findByRole("group", { name: "Choose an avatar" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(116);
+    expect(new Set(radios.map((radio) => radio.getAttribute("name")))).toEqual(new Set(["avatar"]));
+    expect(within(group).getByRole("radio", { name: "Avatar 7" })).toBeChecked();
+    const save = screen.getByRole("button", { name: "Save avatar" });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(within(group).getByRole("radio", { name: "Avatar 42" }));
+    expect(within(group).getByRole("radio", { name: "Avatar 42" })).toBeChecked();
+    expect(within(group).getByRole("radio", { name: "Avatar 7" })).not.toBeChecked();
+    expect(group).toHaveTextContent("Preview");
+    fireEvent.click(save);
+
+    expect(await screen.findByText(PROFILE_COPY.avatarSaved)).toBeInTheDocument();
+    expect(api.calls.at(-1)).toMatchObject({
+      method: "PUT",
+      path: "/api/profile/avatar",
+      body: { avatarId: 42 },
+    });
+    expect(storedHint()).toEqual({ signedIn: true, gamerTag: GAMER_TAG, avatarId: 42 });
+    expect(screen.getByRole("button", { name: "Save avatar" })).toBeDisabled();
+  });
+
+  it("offers a retry when the profile cannot load", async () => {
+    signedIn();
+    api.fail = true;
+    renderAccount();
+
+    expect(await screen.findByText(PROFILE_COPY.loadFailed)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Choose an avatar" })).not.toBeInTheDocument();
+    expect(storedHint()).toEqual({ signedIn: true, gamerTag: null, avatarId: null });
+
+    api.fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("group", { name: "Choose an avatar" })).toBeInTheDocument();
   });
 });
 
@@ -521,7 +741,10 @@ describe("nav session", () => {
       "href",
       "/account",
     );
-    expect(JSON.parse(localStorage.getItem(ACCOUNT_HINT_KEY) ?? "null")).toEqual({ email: EMAIL });
+    await waitFor(() => {
+      expect(storedHint()).toEqual({ signedIn: true, gamerTag: null, avatarId: 7 });
+    });
+    expect(localStorage.getItem(ACCOUNT_HINT_KEY)).not.toContain(EMAIL);
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => {

@@ -1,16 +1,18 @@
-/**
- * Display-only account hint for same-origin games (Riffle reads it for its "Playing as" chip).
- * Holds the email only — never tokens — so games never need to read Amplify storage.
- */
-export const ACCOUNT_HINT_KEY = "galaxyclass.account";
+import { ACCOUNT_HINT_KEY, serializeAccountHint } from "@galaxyclass/accounts/account-hint";
 
-export function writeAccountHint(email: string): void {
+/**
+ * Display-only account hint for same-origin games (Riffle reads it for its "Playing as" chip
+ * and seat name). Holds the public profile only — never email or tokens — so games never
+ * need to read Amplify storage.
+ */
+export { ACCOUNT_HINT_KEY };
+
+export function writeAccountHint(profile: {
+  gamerTag: string | null;
+  avatarId: number | null;
+}): void {
   try {
-    if (email) {
-      window.localStorage.setItem(ACCOUNT_HINT_KEY, JSON.stringify({ email }));
-    } else {
-      window.localStorage.removeItem(ACCOUNT_HINT_KEY);
-    }
+    window.localStorage.setItem(ACCOUNT_HINT_KEY, serializeAccountHint(profile));
   } catch {
     // Storage unavailable; games fall back to guest.
   }

@@ -1,3 +1,6 @@
+import type { GamerTagError } from "@galaxyclass/accounts/gamer-tag";
+import { SIGN_UP_ERROR_CODES } from "@galaxyclass/accounts/profile-api-contract";
+
 export const PASSWORD_RULE =
   "Password must be at least 8 characters with upper, lower, and number.";
 
@@ -44,6 +47,16 @@ export function cognitoName(error: unknown): string {
   if (!error || typeof error !== "object" || !("name" in error)) return "";
   const name = (error as { name: unknown }).name;
   return typeof name === "string" ? name : "";
+}
+
+/** Maps the PreSignUp trigger's error code (inside Cognito's message) to a gamer tag error. */
+export function signUpGamerTagError(error: unknown): GamerTagError | "taken" | null {
+  if (cognitoName(error) !== "UserLambdaValidationException") return null;
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown }).message ?? "");
+  if (message.includes(SIGN_UP_ERROR_CODES.taken)) return "taken";
+  if (message.includes(SIGN_UP_ERROR_CODES.required)) return "required";
+  if (message.includes(SIGN_UP_ERROR_CODES.invalid)) return "invalid_characters";
+  return null;
 }
 
 export function isDuplicateSignUp(error: unknown): boolean {

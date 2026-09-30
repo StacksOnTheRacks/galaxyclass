@@ -1,6 +1,7 @@
 "use client";
 
-import { useSession } from "@/lib/auth/session";
+import { playerLabel, useSession } from "@/lib/auth/session";
+import { Avatar } from "./profile/Avatar";
 import {
   ACCOUNT_HREF,
   ButtonLink,
@@ -69,17 +70,18 @@ export function Nav({ current }: { current?: NavSection }) {
                 <>
                   <span
                     className="hidden max-w-[18rem] items-center gap-2 text-small text-ink-muted xl:inline-flex"
-                    title={session.email || undefined}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="rounded-sm bg-cyan px-1.5 py-0.5 font-hud text-hud text-void"
-                    >
-                      P1
-                    </span>
-                    {session.email ? (
-                      <span className="truncate">Signed in as {session.email}</span>
-                    ) : null}
+                    {session.profile ? (
+                      <Avatar avatarId={session.profile.avatarId} size="sm" />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="rounded-sm bg-cyan px-1.5 py-0.5 font-hud text-hud text-void"
+                      >
+                        P1
+                      </span>
+                    )}
+                    <span className="truncate">Signed in as {playerLabel(session.profile)}</span>
                   </span>
                   <ButtonLink
                     href={ACCOUNT_HREF}

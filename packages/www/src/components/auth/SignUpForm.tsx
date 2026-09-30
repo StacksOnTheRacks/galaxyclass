@@ -1,22 +1,27 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { GAMER_TAG_MESSAGES, validateGamerTag } from "@galaxyclass/accounts/gamer-tag";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import {
   COPY,
   isDuplicateSignUp,
   isValidEmail,
   isValidPassword,
+  signUpGamerTagError,
   verificationCodeSent,
 } from "@/lib/auth/messages";
 import { rememberConfirmEmail } from "@/lib/auth/pending-email";
 import { ButtonLink, TextLink } from "@/components/primitives";
+import { GamerTagField } from "@/components/profile/GamerTagField";
 import { AuthScreen, FieldHint, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function SignUpForm() {
   const [email, setEmail] = useState("");
+  const [gamerTag, setGamerTag] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [gamerTagError, setGamerTagError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [formError, setFormError] = useState("");
   const [pending, setPending] = useState(false);
@@ -42,13 +47,16 @@ export function SignUpForm() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextEmail = email.trim();
+    const tag = validateGamerTag(gamerTag);
     const nextEmailError = isValidEmail(nextEmail) ? "" : COPY.invalidEmail;
+    const nextGamerTagError = tag.ok ? "" : GAMER_TAG_MESSAGES[tag.error];
     const nextPasswordError = isValidPassword(password) ? "" : COPY.passwordRule;
     setEmailError(nextEmailError);
+    setGamerTagError(nextGamerTagError);
     setPasswordError(nextPasswordError);
     setFormError("");
 
-    if (nextEmailError || nextPasswordError) {
+    if (!tag.ok || nextEmailError || nextPasswordError) {
       setFormError(COPY.fixFields);
       return;
     }
@@ -59,7 +67,10 @@ export function SignUpForm() {
         auth.signUp({
           username: nextEmail,
           password,
-          options: { userAttributes: { email: nextEmail } },
+          options: {
+            userAttributes: { email: nextEmail },
+            clientMetadata: { gamerTag: tag.value },
+          },
         }),
       );
       rememberConfirmEmail(nextEmail);
@@ -67,6 +78,12 @@ export function SignUpForm() {
     } catch (error) {
       if (error instanceof AuthConfigError) {
         setFormError(COPY.configError);
+        return;
+      }
+      const tagError = signUpGamerTagError(error);
+      if (tagError) {
+        setGamerTagError(GAMER_TAG_MESSAGES[tagError]);
+        setFormError(COPY.fixFields);
         return;
       }
       if (isDuplicateSignUp(error)) {
@@ -88,7 +105,7 @@ export function SignUpForm() {
         formError ? (
           <FormAlert>{formError}</FormAlert>
         ) : (
-          "Email and password only at launch."
+          "Email, gamer tag, and password. That’s it."
         )
       }
     >
@@ -102,6 +119,15 @@ export function SignUpForm() {
           error={emailError}
           autoComplete="email"
           placeholder="you@example.com"
+        />
+        <GamerTagField
+          id="sign-up-gamer-tag"
+          value={gamerTag}
+          onChange={(next) => {
+            setGamerTag(next);
+            setGamerTagError("");
+          }}
+          error={gamerTagError}
         />
         <TextField
           id="sign-up-password"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth/session";
+import { Avatar } from "./profile/Avatar";
 import {
   ACCOUNT_HREF,
   ButtonLink,
@@ -11,10 +12,12 @@ import {
 } from "./primitives";
 
 export function MemberCard({
-  email,
+  gamerTag,
+  avatarId,
   className = "",
 }: {
-  email?: string;
+  gamerTag?: string;
+  avatarId?: number;
   className?: string;
 }) {
   return (
@@ -30,11 +33,14 @@ export function MemberCard({
             P1
           </span>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="font-hud text-hud uppercase text-ink-muted">Player card</span>
-          <span className="truncate font-hud text-[13px] text-ink">
-            {email || "•••• •••• ••••"}
-          </span>
+        <div className="flex items-end gap-3">
+          {avatarId ? <Avatar avatarId={avatarId} size="sm" /> : null}
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="font-hud text-hud uppercase text-ink-muted">Player card</span>
+            <span className="truncate font-hud text-[13px] text-ink">
+              {gamerTag || "•••• •••• ••••"}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -58,8 +64,8 @@ export function PlayerCard() {
         </h2>
         {signedIn ? (
           <p className="max-w-[56ch] text-body-l text-ink-muted">
-            Signed in{session.email ? ` as ${session.email}` : ""}. Your account
-            works across every Galaxy Class game.
+            Signed in{session.profile?.gamerTag ? ` as ${session.profile.gamerTag}` : ""}. Your
+            account works across every Galaxy Class game.
           </p>
         ) : (
           <p className="max-w-[56ch] text-body-l text-ink-muted">
@@ -85,7 +91,10 @@ export function PlayerCard() {
           </div>
         )}
       </div>
-      <MemberCard email={signedIn ? session.email : undefined} />
+      <MemberCard
+        gamerTag={signedIn ? (session.profile?.gamerTag ?? undefined) : undefined}
+        avatarId={signedIn ? session.profile?.avatarId : undefined}
+      />
     </section>
   );
 }
