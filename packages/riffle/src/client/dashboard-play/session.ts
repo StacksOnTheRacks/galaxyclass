@@ -118,6 +118,10 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   let socket: PlaySocket | null = null;
   let webSocketUrl = '';
   let stopListOccupancy: (() => void) | undefined;
+  const account =
+    deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage);
+  /** Signed-in players sit under their gamer tag until the table rejects it. */
+  let preferredName = account?.gamerTag ?? null;
 
   const session = {
     tableId,
@@ -247,12 +251,23 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     sitRetries += 1;
     const others = snapshot.seats.map((seat) => seat.displayName);
     if (!autoSit.displayName || others.includes(autoSit.displayName)) {
-      autoSit.displayName = randomDisplayName(others, random);
+      const taken = new Set(others.map((name) => name.toLowerCase()));
+      autoSit.displayName =
+        preferredName && !taken.has(preferredName.toLowerCase())
+          ? preferredName
+          : randomDisplayName(others, random);
     }
     autoSit.submitting = true;
     autoSit.seatId = seatId;
     autoSit.notice = null;
-    socket.send(JSON.stringify({ action: 'sit', seatId, displayName: autoSit.displayName }));
+    socket.send(
+      JSON.stringify({
+        action: 'sit',
+        seatId,
+        displayName: autoSit.displayName,
+        ...(account?.avatarId ? { avatarId: account.avatarId } : {}),
+      }),
+    );
   };
 
   const handleError = (code: string): void => {
@@ -273,6 +288,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     if (autoSit.submitting) {
       autoSit.submitting = false;
       if (code === 'invalid_display_name' || code === 'empty_display_name') {
+        if (autoSit.displayName === preferredName) {
+          preferredName = null;
+        }
         autoSit.displayName = null;
       } else if (code === 'seat_occupied' && autoSit.seatId) {
         autoSit.rejected.add(autoSit.seatId);
@@ -449,8 +467,6 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       failClosed();
       return session;
     }
-    const account =
-      deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage);
     const occupancy: OccupancyById = {};
     const paintList = (): void => {
       if (disposed || session.phase !== 'list') {

@@ -1,4 +1,5 @@
 import { createIcon } from '../dashboard/assets.js';
+import { galaxyClassAccountUrl, galaxyClassAvatarUrl } from '../dashboard/galaxy-class.js';
 import { publicBase } from '../dashboard/public-base.js';
 import type { TableListing } from './config.js';
 import type { StudioAccount } from './studio-account.js';
@@ -159,9 +160,19 @@ function renderTopBar(openCount: number, account: StudioAccount | null): HTMLEle
   const playingAs = document.createElement('div');
   playingAs.className = 'table-list-playing-as';
   playingAs.dataset.account = account ? 'signed-in' : 'guest';
-  const avatar = document.createElement('span');
-  avatar.className = 'table-list-guest-avatar';
-  avatar.textContent = account ? account.email.charAt(0).toUpperCase() : 'G';
+  let avatar: HTMLElement;
+  if (account?.avatarId) {
+    const image = document.createElement('img');
+    image.className = 'table-list-guest-avatar table-list-account-avatar';
+    image.src = galaxyClassAvatarUrl(account.avatarId);
+    image.alt = '';
+    image.decoding = 'async';
+    avatar = image;
+  } else {
+    avatar = document.createElement('span');
+    avatar.className = 'table-list-guest-avatar';
+    avatar.textContent = account ? (account.gamerTag?.charAt(0).toUpperCase() ?? 'P') : 'G';
+  }
   avatar.setAttribute('aria-hidden', 'true');
   const label = document.createElement('div');
   label.className = 'table-list-playing-as-label';
@@ -169,7 +180,15 @@ function renderTopBar(openCount: number, account: StudioAccount | null): HTMLEle
   labelTop.textContent = 'Playing as';
   const labelName = document.createElement('p');
   labelName.className = 'table-list-playing-as-name';
-  labelName.textContent = account ? account.email : 'Guest';
+  if (account && !account.gamerTag) {
+    const setTag = document.createElement('a');
+    setTag.className = 'table-list-set-tag-link';
+    setTag.href = galaxyClassAccountUrl();
+    setTag.textContent = 'Set your gamer tag';
+    labelName.append(setTag);
+  } else {
+    labelName.textContent = account?.gamerTag ?? 'Guest';
+  }
   label.append(labelTop, labelName);
   playingAs.append(avatar, label);
   controls.append(playingAs, inertIconButton('table-list-settings-button', 'settings', 'Settings'));

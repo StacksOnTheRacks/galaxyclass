@@ -77,6 +77,23 @@
   font-weight: 600;
 }
 
+.table-list-account-avatar {
+  object-fit: cover;
+  border-color: var(--color-action-primary);
+}
+
+.table-list-set-tag-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.table-list-set-tag-link:focus-visible {
+  outline: 2px solid var(--color-action-focus, var(--focus-ring));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .table-list-playing-as-label p {
   margin: 0;
   line-height: 1.2;

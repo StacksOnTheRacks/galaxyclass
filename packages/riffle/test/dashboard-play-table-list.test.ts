@@ -29,8 +29,8 @@ function accountStorage(entries: Record<string, string> = {}): AccountStorage {
   return { getItem: (key) => entries[key] ?? null };
 }
 
-function signedInStorage(email: string): AccountStorage {
-  return accountStorage({ [ACCOUNT_HINT_KEY]: JSON.stringify({ email }) });
+function signedInStorage(hint: Record<string, unknown>): AccountStorage {
+  return accountStorage({ [ACCOUNT_HINT_KEY]: JSON.stringify(hint) });
 }
 
 const openSessions: DashboardPlaySession[] = [];
@@ -140,12 +140,38 @@ describe('dashboard play table list', () => {
     expect(root.querySelector('.table-list-subtitle')?.textContent).toContain('play as a guest');
   });
 
-  it('shows the signed-in studio account instead of Guest', async () => {
-    const { root } = await startList('/riffle', listConfigFetch(), signedInStorage('maya@example.com'));
+  it('shows the signed-in gamer tag and Galaxy Class avatar instead of Guest', async () => {
+    const { root } = await startList(
+      '/riffle',
+      listConfigFetch(),
+      signedInStorage({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }),
+    );
     expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
-    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('maya@example.com');
-    expect(root.querySelector('.table-list-guest-avatar')?.textContent).toBe('M');
+    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Maya_P');
+    const avatar = root.querySelector('.table-list-account-avatar');
+    expect(avatar?.tagName).toBe('IMG');
+    expect(avatar?.getAttribute('src')).toBe('https://galaxyclass.app/avatars/42.webp');
+    expect(avatar?.getAttribute('alt')).toBe('');
     expect(root.querySelector('.table-list-subtitle')?.textContent).not.toContain('guest');
+  });
+
+  it('links a signed-in player without a gamer tag to their Galaxy Class account', async () => {
+    const { root } = await startList(
+      '/riffle',
+      listConfigFetch(),
+      signedInStorage({ signedIn: true, gamerTag: null, avatarId: null }),
+    );
+    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
+    const link = root.querySelector<HTMLAnchorElement>('.table-list-playing-as-name a');
+    expect(link?.textContent).toBe('Set your gamer tag');
+    expect(link?.getAttribute('href')).toBe('https://galaxyclass.app/account');
+    expect(root.querySelector('.table-list-guest-avatar')?.textContent).toBe('P');
+  });
+
+  it('never shows the email from a legacy account hint', async () => {
+    const { root } = await startList('/riffle', listConfigFetch(), signedInStorage({ email: 'maya@example.com' }));
+    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
+    expect(root.textContent).not.toContain('maya@example.com');
   });
 
   it('stays Guest when the account hint is malformed', async () => {

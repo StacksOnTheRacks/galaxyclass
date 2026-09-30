@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { randomDisplayName } from '../src/client/dashboard-play/random-name.js';
 import { startDashboardPlay, type DashboardPlaySession } from '../src/client/dashboard-play/session.js';
 import { firstOpenSeat, TABLE_FULL_MESSAGE } from '../src/client/dashboard-play/sit-panel.js';
+import { ACCOUNT_HINT_KEY, type AccountStorage } from '../src/client/dashboard-play/studio-account.js';
 import type { PlayerSnapshotSeat, TableSnapshotMessage } from '../src/runtime/types.js';
 import { validateDisplayName } from '../src/shared/display-name.js';
 import { configFetch, FakePlaySocket, flush, memoryStorage, setViewport } from './support/fake-play-socket.js';
@@ -56,7 +57,14 @@ function sequence(values: number[]): () => number {
   return () => values[index++ % values.length]!;
 }
 
-async function joinWithFakeSocket(first = snapshot({ seats: [seat('1', { displayName: 'Alice' })] })) {
+function accountHint(hint: Record<string, unknown> | null): AccountStorage {
+  return { getItem: (key) => (key === ACCOUNT_HINT_KEY && hint ? JSON.stringify(hint) : null) };
+}
+
+async function joinWithFakeSocket(
+  first = snapshot({ seats: [seat('1', { displayName: 'Alice' })] }),
+  accountStorage: AccountStorage | null = null,
+) {
   const root = addRoot();
   let socket!: FakePlaySocket;
   const session = await startDashboardPlay({
@@ -64,6 +72,7 @@ async function joinWithFakeSocket(first = snapshot({ seats: [seat('1', { display
     pathname: `/${TABLE_ID}`,
     fetch: configFetch().fetchImpl,
     storage: memoryStorage(),
+    accountStorage,
     random: sequence([0, 0]),
     createSocket: (url) => {
       socket = new FakePlaySocket(url);
@@ -164,6 +173,45 @@ describe('dashboard play automatic seating', () => {
     expect(socket.sent.at(-1)).toMatchObject({ action: 'sit', seatId: '2' });
   });
 
+  it('sits a signed-in player under their gamer tag with their Galaxy Class avatar', async () => {
+    const { socket } = await joinWithFakeSocket(
+      undefined,
+      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: 42 }),
+    );
+
+    expect(socket.sent.at(-1)).toEqual({
+      action: 'sit',
+      seatId: '2',
+      displayName: 'River_Rat',
+      avatarId: 42,
+    });
+  });
+
+  it('falls back to a random name when the gamer tag is already at the table', async () => {
+    const { socket } = await joinWithFakeSocket(
+      snapshot({ seats: [seat('1', { displayName: 'river_rat' })] }),
+      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: 42 }),
+    );
+
+    expect(socket.sent.at(-1)).toEqual({
+      action: 'sit',
+      seatId: '2',
+      displayName: 'Lucky Otter',
+      avatarId: 42,
+    });
+  });
+
+  it('stops using a gamer tag the table rejects', async () => {
+    const { socket } = await joinWithFakeSocket(
+      undefined,
+      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: null }),
+    );
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'River_Rat' });
+
+    socket.receive({ type: 'error', code: 'invalid_display_name' });
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'Lucky Otter' });
+  });
+
   it('shows a table-full notice and sits once a seat opens', async () => {
     const full = ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => seat(id));
     const { root, socket } = await joinWithFakeSocket(snapshot({ seats: full, seatedPlayersLabel: '8 / 8' }));
@@ -218,13 +266,16 @@ describe('two anonymous players complete a hand through the runtime', () => {
     await bridge.store.createTable(TABLE_ID, '2026-09-25T12:00:00.000Z');
   });
 
-  async function openPlayer(): Promise<{ root: HTMLElement; session: DashboardPlaySession }> {
+  async function openPlayer(
+    accountStorage: AccountStorage | null = null,
+  ): Promise<{ root: HTMLElement; session: DashboardPlaySession }> {
     const root = addRoot();
     const session = await startDashboardPlay({
       root,
       pathname: `/${TABLE_ID}`,
       fetch: configFetch().fetchImpl,
       storage: memoryStorage(),
+      accountStorage,
       createSocket: bridge.createSocket,
     });
     for (let round = 0; round < 3; round += 1) {
@@ -264,7 +315,7 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(alice.root.querySelector('[data-region="player-row"]')?.textContent).toContain(bobName);
     expect(
       bob.root.querySelector('[data-local="true"] [data-field="avatar"]')?.getAttribute('src'),
-    ).toMatch(/^\/assets\/avatars\/\d+\.webp$/);
+    ).toMatch(/^https:\/\/galaxyclass\.app\/avatars\/\d+\.webp$/);
 
     expect(alice.session.snapshot?.status).toBe('hand_in_progress');
     expect(alice.session.snapshot?.pocketCards).toHaveLength(2);
@@ -300,6 +351,30 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(final.phase).toBe('complete');
     expect(final.completeReason).toBe('fold_to_one');
     expect(final.seats.reduce((sum, row) => sum + row.stack, 0)).toBe(4000);
+  });
+
+  it('shows a signed-in gamer tag and avatar to every player; guests get a random Galaxy Class avatar', async () => {
+    const maya = await openPlayer(accountHint({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }));
+    const guest = await openPlayer();
+
+    const mayaSeat = (await bridge.store.getSeat(TABLE_ID, '1'))!;
+    expect(mayaSeat).toMatchObject({ displayName: 'Maya_P', avatarId: 42 });
+    const guestSeat = (await bridge.store.getSeat(TABLE_ID, '2'))!;
+    expect(guestSeat.avatarId).toBeGreaterThanOrEqual(1);
+    expect(guestSeat.avatarId).toBeLessThanOrEqual(116);
+
+    expect(guest.root.querySelector('[data-region="player-row"]')?.textContent).toContain('Maya_P');
+    expect(guest.root.textContent).not.toContain('@');
+    const avatars = Array.from(
+      guest.root.querySelectorAll<HTMLImageElement>('[data-field="avatar"]'),
+    ).map((image) => image.getAttribute('src'));
+    expect(avatars).toContain('https://galaxyclass.app/avatars/42.webp');
+    expect(
+      maya.root.querySelector('[data-local="true"] [data-field="avatar"]')?.getAttribute('src'),
+    ).toBe('https://galaxyclass.app/avatars/42.webp');
+    expect(guest.session.snapshot?.seats.find((row) => row.seatId === '2')?.avatarId).toBe(
+      guestSeat.avatarId,
+    );
   });
 
   it('never sends create_table and rejects a client-supplied stack on sit', async () => {

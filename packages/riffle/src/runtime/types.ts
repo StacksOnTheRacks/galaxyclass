@@ -49,6 +49,8 @@ export interface TableRecord {
 export interface SeatRecord {
   seatId: string;
   displayName: string;
+  /** Galaxy Class avatar id: the signed-in player's pick, or random for anonymous players. */
+  avatarId?: number;
   stack: number;
   seatTokenHash: string;
   connectionId?: string;
@@ -75,6 +77,7 @@ export interface ClientMessage {
   tableIds?: unknown;
   seatId?: string;
   displayName?: string;
+  avatarId?: unknown;
   seatToken?: string;
   amount?: number;
   stack?: number;
@@ -103,6 +106,7 @@ export interface SatMessage {
 export interface PlayerSnapshotSeat {
   seatId: string;
   displayName: string;
+  avatarId?: number;
   isLocal: boolean;
   stack: number;
   inHand: boolean;

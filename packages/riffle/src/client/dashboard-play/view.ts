@@ -1,7 +1,7 @@
 import type { PlayerSnapshotSeat, TableSnapshotMessage } from '../../runtime/types.js';
-import { defaultAvatarUrl } from '../dashboard/assets.js';
 import { renderBoardAndPot, type BoardCard } from '../dashboard/board-and-pot.js';
 import { renderPlayerRow, type PlayerRowSeat } from '../dashboard/player-row.js';
+import { seatAvatarUrl } from '../dashboard/galaxy-class.js';
 import { renderDashboardTableShell } from '../dashboard/table-shell.js';
 
 export const DASHBOARD_TABLE_NAME = 'Riffle table';
@@ -15,7 +15,7 @@ function toPlayerRowSeat(seat: PlayerSnapshotSeat, snapshot: TableSnapshotMessag
     seatId: seat.seatId,
     displayName: seat.displayName,
     isLocal: seat.isLocal,
-    avatarUrl: defaultAvatarUrl(`${snapshot.tableId}:${seat.seatId}:${seat.displayName}`),
+    avatarUrl: seatAvatarUrl(seat.avatarId, `${snapshot.tableId}:${seat.seatId}:${seat.displayName}`),
     stack: seat.stack,
     inHand: seat.inHand,
     allIn: seat.allIn,

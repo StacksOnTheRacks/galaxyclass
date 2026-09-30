@@ -1,3 +1,4 @@
+import { isAvatarId, randomAvatarId } from '@galaxyclass/accounts/avatars';
 import { validateDisplayName } from '../shared/display-name.js';
 import { foldAwayActors } from './act.js';
 import { isBetweenHands, isSeatAway } from './hand-state.js';
@@ -28,6 +29,8 @@ export interface SitContext {
   seats: SeatRecord[];
   message: ClientMessage;
   now?: string;
+  /** Picks the anonymous avatar. Defaults to Math.random. */
+  random?: () => number;
 }
 
 export interface SitSuccess {
@@ -93,6 +96,8 @@ export async function handleSit(ctx: SitContext): Promise<SitResult> {
   const newSeat: SeatRecord = {
     seatId: message.seatId,
     displayName,
+    // Display-only: signed-in clients send their Galaxy Class pick; anyone else gets a random face.
+    avatarId: isAvatarId(message.avatarId) ? message.avatarId : randomAvatarId(ctx.random),
     stack: table.defaultStack,
     seatTokenHash,
     connectionId: connection.connectionId,

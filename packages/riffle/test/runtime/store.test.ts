@@ -97,6 +97,21 @@ describe('match store', () => {
     });
   });
 
+  it('reads the seat avatar id back and tolerates seats stored before avatars', async () => {
+    const { client, send } = createMockClient();
+    const store = createMatchStore(client, { tableName: 'MatchTable' });
+
+    send.mockResolvedValueOnce({
+      Item: { seatId: '1', displayName: 'Maya_P', stack: 2000, seatTokenHash: 'h', avatarId: 42 },
+    });
+    expect((await store.getSeat('table-1', '1'))?.avatarId).toBe(42);
+
+    send.mockResolvedValueOnce({
+      Item: { seatId: '2', displayName: 'Bob', stack: 2000, seatTokenHash: 'h' },
+    });
+    expect(await store.getSeat('table-1', '2')).not.toHaveProperty('avatarId');
+  });
+
   it('reads allIn and completion fields back', async () => {
     const { client, send } = createMockClient();
     const store = createMatchStore(client, { tableName: 'MatchTable' });

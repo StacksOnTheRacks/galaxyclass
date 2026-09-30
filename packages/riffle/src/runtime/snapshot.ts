@@ -114,6 +114,10 @@ export function buildSeatScopedSnapshot(
       allIn: seat.allIn ?? handSeat?.allIn ?? false,
     };
 
+    if (seat.avatarId !== undefined) {
+      snapshotSeat.avatarId = seat.avatarId;
+    }
+
     if (isSeatAway(seat)) {
       snapshotSeat.away = true;
     }

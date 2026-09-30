@@ -103,6 +103,9 @@ function parseSeatItem(item: Record<string, unknown>): SeatRecord {
     handCommitted: Number(item.handCommitted ?? 0),
     allIn: item.allIn === true,
   };
+  if (typeof item.avatarId === 'number') {
+    seat.avatarId = item.avatarId;
+  }
   if (item.awaySince) {
     seat.awaySince = String(item.awaySince);
   }

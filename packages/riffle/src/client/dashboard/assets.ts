@@ -9,8 +9,6 @@ export function dashboardAssetBase(): string {
   return `${publicBase()}/assets`;
 }
 
-export const AVATAR_COUNT = 116;
-
 const RANKS = new Set(['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']);
 const SUITS = new Set(['h', 'd', 'c', 's']);
 
@@ -57,20 +55,6 @@ export function cardBackUrl(): string {
 
 export function iconUrl(name: string): string {
   return `${dashboardAssetBase()}/icons/${name}.svg`;
-}
-
-export function avatarAssetUrl(index: number): string {
-  return `${dashboardAssetBase()}/avatars/${index}.webp`;
-}
-
-/** Stable default avatar per seat so a player keeps the same face across renders and clients. */
-export function defaultAvatarUrl(seed: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return avatarAssetUrl(((hash >>> 0) % AVATAR_COUNT) + 1);
 }
 
 export function createCardImage(card: AssetCard | 'back', className: string): HTMLImageElement {

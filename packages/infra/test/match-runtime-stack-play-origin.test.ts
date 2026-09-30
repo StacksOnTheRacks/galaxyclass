@@ -216,14 +216,20 @@ describe('MatchRuntimeStack play origin', () => {
     }
     assert.match(bundle, /\/riffle/);
 
-    // localStorage is allowed only for the studio's email-only account hint, read once.
+    // localStorage is allowed only for the studio's public-profile account hint, read once.
     const accountHintSource = path.join(repoRoot, 'src/client/dashboard-play/studio-account.ts');
     for (const file of sources.filter((file) => file !== accountHintSource)) {
       assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /localStorage/, file);
     }
     const hintReader = fs.readFileSync(accountHintSource, 'utf8');
-    assert.match(hintReader, /ACCOUNT_HINT_KEY = 'galaxyclass\.account'/);
+    assert.match(hintReader, /from '@galaxyclass\/accounts\/account-hint'/);
     assert.doesNotMatch(hintReader, /setItem|removeItem|\.key\(|\.length\b/);
+    const hintContract = fs.readFileSync(
+      path.join(repoRoot, '../accounts/src/account-hint.ts'),
+      'utf8',
+    );
+    assert.match(hintContract, /ACCOUNT_HINT_KEY = 'galaxyclass\.account'/);
+    assert.doesNotMatch(hintContract, /email:/);
     assert.equal(bundle.match(/localStorage/g)?.length ?? 0, 1);
     assert.match(bundle, /galaxyclass\.account/);
 
