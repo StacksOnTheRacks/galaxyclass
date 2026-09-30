@@ -13,7 +13,8 @@
     "vitest": "^5.0.2"
   },
   "overrides": {
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "@aws-amplify/core": "6.19.2"
   },
   "scripts": {
     "build": "npm run build:riffle && npm run build:www",
