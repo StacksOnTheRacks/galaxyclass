@@ -1,9 +1,11 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
 
 export const PLAY_RIFFLE_HREF = "/riffle";
 export const SIGN_IN_HREF = "/sign-in";
 export const SIGN_UP_HREF = "/sign-up";
+export const ACCOUNT_HREF = "/account";
+export const LIBRARY_HREF = "/#library";
+export const STUDIO_HREF = "/#studio";
 
 export function Frame({
   children,
@@ -13,7 +15,7 @@ export function Frame({
   className?: string;
 }) {
   return (
-    <div className={`mx-auto w-full max-w-frame px-6 lg:px-20 ${className}`}>
+    <div className={`mx-auto w-full max-w-frame px-gutter ${className}`}>
       {children}
     </div>
   );
@@ -21,90 +23,120 @@ export function Frame({
 
 export function Logo({ href = "/" }: { href?: string }) {
   return (
-    <a href={href} className="flex items-center gap-3">
+    <a href={href} className="group flex shrink-0 items-center gap-2 sm:gap-3">
       <span
-        className="flex size-9 items-center justify-center rounded-full border-[1.5px] border-gold bg-deep text-label font-semibold text-gold"
+        className="flex size-9 items-center justify-center rounded-md border-2 border-pink bg-void font-display text-[14px] text-pink shadow-glow-pink transition duration-quick group-hover:text-ink sm:size-10 sm:text-[15px]"
         aria-hidden="true"
       >
         GC
       </span>
-      <span className="text-eyebrow font-semibold uppercase text-fg">
-        Galaxy Class
+      <span className="flex flex-col gap-0.5 whitespace-nowrap leading-none max-[389px]:sr-only">
+        <span className="font-display text-[13px] tracking-wide text-ink sm:text-[17px]">
+          Galaxy Class
+        </span>
+        <span className="font-hud text-[9px] uppercase tracking-[0.3em] text-ink-muted sm:text-[10px]">
+          Gaming
+        </span>
       </span>
     </a>
   );
 }
 
-type EyebrowTone = "stellar" | "gold" | "muted";
+type HudTone = "cyan" | "pink" | "amber" | "muted";
 
-const eyebrowTone: Record<EyebrowTone, string> = {
-  stellar: "text-stellar",
-  gold: "text-gold",
-  muted: "text-fg-muted",
+const hudTone: Record<HudTone, string> = {
+  cyan: "text-cyan",
+  pink: "text-pink",
+  amber: "text-amber",
+  muted: "text-ink-muted",
 };
 
-export function Eyebrow({
+export function HudLabel({
   children,
-  tone = "stellar",
+  tone = "cyan",
+  as: Tag = "p",
+  className = "",
 }: {
   children: ReactNode;
-  tone?: EyebrowTone;
+  tone?: HudTone;
+  as?: "p" | "span";
+  className?: string;
 }) {
   return (
-    <p className={`text-eyebrow font-semibold uppercase ${eyebrowTone[tone]}`}>
+    <Tag className={`font-hud text-hud uppercase ${hudTone[tone]} ${className}`}>
       {children}
-    </p>
+    </Tag>
   );
 }
 
-export function Tag({ status }: { status: "live" | "lab" }) {
+export type GameStatus = "live" | "soon";
+
+export function StatusTag({ status }: { status: GameStatus }) {
   const live = status === "live";
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border bg-surface px-3 py-1 ${
-        live ? "border-riffle text-riffle" : "border-line text-fg-muted"
+      className={`inline-flex items-center gap-2 rounded-sm border px-2 py-1 font-hud text-hud uppercase ${
+        live
+          ? "border-success/70 bg-success/10 text-success"
+          : "border-dashed border-bezel-hi bg-void/60 text-ink-muted"
       }`}
     >
-      <Image
-        src={live ? "/figma/tag-live-dot.svg" : "/figma/tag-lab-dot.svg"}
-        alt=""
-        width={8}
-        height={8}
-        unoptimized
-      />
-      <span className="text-eyebrow font-semibold uppercase">
-        {live ? "Live" : "In the lab"}
-      </span>
+      <span aria-hidden="true">{live ? "▶" : "◌"}</span>
+      {live ? "Playable now" : "Coming soon"}
     </span>
   );
 }
 
+export type ButtonVariant = "primary" | "secondary" | "ghost";
+export type ButtonSize = "md" | "lg";
+
+const variantClass: Record<ButtonVariant, string> = {
+  primary:
+    "bg-pink text-void shadow-press hover:brightness-110 active:translate-y-[3px] active:shadow-press-down disabled:translate-y-[3px] disabled:shadow-press-down",
+  secondary:
+    "border-2 border-cyan text-cyan hover:bg-cyan/10 hover:shadow-glow-cyan",
+  ghost: "text-ink underline-offset-[6px] hover:text-cyan hover:underline",
+};
+
+const sizeClass: Record<ButtonSize, string> = {
+  md: "min-h-11 px-5 text-label",
+  lg: "min-h-12 px-7 text-body",
+};
+
+export function buttonClass(
+  variant: ButtonVariant = "primary",
+  size: ButtonSize = "md",
+  className = "",
+) {
+  return `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-display uppercase tracking-wide transition duration-quick ease-snap disabled:cursor-wait ${variantClass[variant]} ${sizeClass[size]} ${className}`;
+}
+
 function Arrow() {
-  return <span aria-hidden="true">{"\u00a0\u00a0→"}</span>;
+  return (
+    <span aria-hidden="true" className="font-body text-[1.1em] leading-none">
+      →
+    </span>
+  );
 }
 
 export function ButtonLink({
   href,
   children,
   variant = "primary",
+  size = "md",
   arrow = false,
+  className = "",
 }: {
   href: string;
   children: ReactNode;
-  variant?: "primary" | "secondary";
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   arrow?: boolean;
+  className?: string;
 }) {
-  const tone =
-    variant === "primary"
-      ? "bg-gold text-void hover:bg-gold/90"
-      : "border border-line text-fg hover:border-fg-muted";
-
   return (
-    <a
-      href={href}
-      className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-6 py-3 text-label font-semibold transition ${tone}`}
-    >
+    <a href={href} className={buttonClass(variant, size, className)}>
       {children}
       {arrow && <Arrow />}
     </a>
@@ -115,15 +147,17 @@ export function TextLink({
   href,
   children,
   arrow = false,
+  className = "",
 }: {
   href: string;
   children: ReactNode;
   arrow?: boolean;
+  className?: string;
 }) {
   return (
     <a
       href={href}
-      className="inline-flex whitespace-nowrap p-2 text-label font-semibold text-fg underline-offset-4 transition hover:underline"
+      className={`inline-flex items-center gap-2 font-semibold text-ink underline decoration-bezel-hi decoration-2 underline-offset-[6px] transition duration-quick hover:text-cyan hover:decoration-cyan ${className}`}
     >
       {children}
       {arrow && <Arrow />}

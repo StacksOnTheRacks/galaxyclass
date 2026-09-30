@@ -11,7 +11,8 @@ import {
 } from "@/lib/auth/messages";
 import { readNextFromLocation } from "@/lib/auth/safe-next";
 import { useSession } from "@/lib/auth/session";
-import { AuthScreen, SubmitButton, TextField } from "./ui";
+import { TextLink } from "@/components/primitives";
+import { AuthScreen, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function SignInForm() {
   const router = useRouter();
@@ -76,15 +77,10 @@ export function SignInForm() {
 
   return (
     <AuthScreen
+      kind="sign-in"
       title="Sign in"
       subtitle={
-        formError ? (
-          <p role="alert" className="text-sm text-[#ff6b6b]">
-            {formError}
-          </p>
-        ) : (
-          "Welcome back to Galaxy Class."
-        )
+        formError ? <FormAlert>{formError}</FormAlert> : "Welcome back to Galaxy Class."
       }
     >
       <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
@@ -111,19 +107,11 @@ export function SignInForm() {
           {pending ? COPY.signingIn : "Sign in"}
         </SubmitButton>
       </form>
-      <div className="flex flex-col items-center gap-2">
-        <a
-          href="/forgot-password"
-          className="text-label font-semibold text-fg underline-offset-4 hover:underline"
-        >
-          Forgot password
-        </a>
-        <a
-          href="/sign-up"
-          className="text-label font-semibold text-fg underline-offset-4 hover:underline"
-        >
-          Sign up
-        </a>
+      <div className="flex flex-col gap-3 border-t border-bezel pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <TextLink href="/forgot-password">Forgot password</TextLink>
+        <p className="text-ink-muted">
+          New here? <TextLink href="/sign-up">Sign up</TextLink>
+        </p>
       </div>
     </AuthScreen>
   );

@@ -31,6 +31,17 @@ npm run build
 
 Output lands in `out/`.
 
+## Design system
+
+"Arcade floor, launcher navigation": a late-night game room you browse like a game library.
+
+- **Tokens** live once as CSS custom properties in `src/app/globals.css` (color, spacing, radius, elevation, motion) and are mapped into Tailwind in `tailwind.config.ts` (`bg-panel`, `text-ink-muted`, `rounded-screen`, `shadow-cabinet`, …). Use the tokens; don't add raw hex values.
+- **Type**: Bungee (display/marquee), Chakra Petch (UI and body), Silkscreen (small HUD labels only), via `next/font` so the static export self-hosts them.
+- **Materials**: `.arcade-floor` (carpet backdrop), `.cabinet` + `.t-molding` (panels with a lit edge; set `--molding` per game), `.crt` (screen glass with scanlines), `.marquee-strip` + `Bulbs`.
+- **Primitives** in `src/components/primitives.tsx` (`buttonClass`, `ButtonLink`, `TextLink`, `HudLabel`, `StatusTag`) and `src/components/auth/ui.tsx` (`AuthScreen`, `TextField`, `FormAlert`, `SubmitButton`). Pages compose these inside `SiteShell`.
+- **Brands**: Riffle keeps its own wordmark and felt green (`riffle-*` tokens) inside its cabinet; studio chrome stays pink/cyan/amber.
+- **Motion**: marquee bulb chase, CRT power-on, card deal, and "press play" blink. Every animated node carries `data-motion` and renders static under `prefers-reduced-motion`.
+
 ## Stack
 
 - Next.js 15 (App Router, static export)

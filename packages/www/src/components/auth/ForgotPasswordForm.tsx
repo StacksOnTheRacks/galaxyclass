@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import { COPY, isValidEmail } from "@/lib/auth/messages";
 import { rememberResetEmail } from "@/lib/auth/pending-email";
-import { AuthScreen, SubmitButton, TextField } from "./ui";
+import { ButtonLink, TextLink } from "@/components/primitives";
+import { AuthScreen, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -15,13 +16,15 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <AuthScreen title="Reset your password" subtitle={<p role="status">{COPY.forgotSent}</p>}>
-        <a
-          href="/reset-password"
-          className="self-center text-label font-semibold text-fg underline-offset-4 hover:underline"
-        >
+      <AuthScreen
+        kind="forgot"
+        success="Request received"
+        title="Reset your password"
+        subtitle={<p role="status">{COPY.forgotSent}</p>}
+      >
+        <ButtonLink href="/reset-password" size="lg" arrow className="w-full">
           Enter reset code
-        </a>
+        </ButtonLink>
       </AuthScreen>
     );
   }
@@ -55,15 +58,10 @@ export function ForgotPasswordForm() {
 
   return (
     <AuthScreen
+      kind="forgot"
       title="Reset your password"
       subtitle={
-        formError ? (
-          <p role="alert" className="text-sm text-[#ff6b6b]">
-            {formError}
-          </p>
-        ) : (
-          "We will email a reset code."
-        )
+        formError ? <FormAlert>{formError}</FormAlert> : "We will email a reset code."
       }
     >
       <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
@@ -81,6 +79,9 @@ export function ForgotPasswordForm() {
           {pending ? "Sending code…" : "Send reset code"}
         </SubmitButton>
       </form>
+      <p className="border-t border-bezel pt-5 text-ink-muted">
+        Remembered it? <TextLink href="/sign-in">Back to sign in</TextLink>
+      </p>
     </AuthScreen>
   );
 }

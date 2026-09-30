@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import { COPY, isValidEmail } from "@/lib/auth/messages";
 import { readConfirmEmail } from "@/lib/auth/pending-email";
-import { AuthScreen, SubmitButton, TextAction, TextField } from "./ui";
+import {
+  AuthScreen,
+  FormAlert,
+  FormNotice,
+  SubmitButton,
+  TextAction,
+  TextField,
+} from "./ui";
 
 export function ConfirmForm() {
   const router = useRouter();
@@ -83,12 +90,11 @@ export function ConfirmForm() {
 
   return (
     <AuthScreen
+      kind="confirm"
       title="Confirm your email"
       subtitle={
         formError ? (
-          <p role="alert" className="text-sm text-[#ff6b6b]">
-            {formError}
-          </p>
+          <FormAlert>{formError}</FormAlert>
         ) : (
           "Enter the verification code we sent."
         )
@@ -118,14 +124,15 @@ export function ConfirmForm() {
         />
         <SubmitButton pending={pending}>Confirm</SubmitButton>
       </form>
-      <TextAction onClick={() => void onResend()} pending={pending}>
-        Resend code
-      </TextAction>
-      {notice ? (
-        <p role="status" className="text-center text-sm text-fg-muted">
-          {notice}
-        </p>
-      ) : null}
+      <div className="flex flex-col gap-3 border-t border-bezel pt-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="text-ink-muted">No code yet?</p>
+          <TextAction onClick={() => void onResend()} pending={pending}>
+            Resend code
+          </TextAction>
+        </div>
+        {notice ? <FormNotice>{notice}</FormNotice> : null}
+      </div>
     </AuthScreen>
   );
 }

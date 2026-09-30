@@ -2,67 +2,120 @@
 
 import { useSession } from "@/lib/auth/session";
 import {
+  ACCOUNT_HREF,
   ButtonLink,
+  buttonClass,
   Frame,
+  LIBRARY_HREF,
   Logo,
   SIGN_IN_HREF,
   SIGN_UP_HREF,
-  TextLink,
+  STUDIO_HREF,
 } from "./primitives";
 
-const links = [
-  { href: "#studio", label: "Studio" },
-  { href: "#games", label: "Games" },
-  { href: "#riffle", label: "Riffle" },
+export type NavSection = "library" | "studio" | "account";
+
+const tabs: { href: string; label: string; section: NavSection }[] = [
+  { href: LIBRARY_HREF, label: "Library", section: "library" },
+  { href: STUDIO_HREF, label: "Studio", section: "studio" },
 ];
 
-export function Nav() {
+function Tabs({ current, className }: { current?: NavSection; className: string }) {
+  return (
+    <ul className={className}>
+      {tabs.map((tab) => {
+        const active = tab.section === current;
+        return (
+          <li key={tab.href}>
+            <a
+              href={tab.href}
+              aria-current={active ? "page" : undefined}
+              className={`relative inline-flex min-h-11 items-center px-3 font-display text-[14px] uppercase tracking-wider transition duration-quick hover:text-ink ${
+                active
+                  ? "text-ink after:absolute after:inset-x-3 after:bottom-1 after:h-[3px] after:rounded-full after:bg-cyan after:shadow-glow-cyan"
+                  : "text-ink-muted"
+              }`}
+            >
+              {tab.label}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function Nav({ current }: { current?: NavSection }) {
   const session = useSession();
   const signedIn = session.status === "signed-in";
 
   return (
-    <header className="border-b border-line bg-void">
+    <header className="sticky top-0 z-40 border-b border-bezel bg-void/95">
       <Frame>
-        <nav
-          className="flex h-20 items-center justify-between gap-6 lg:h-[100px]"
-          aria-label="Main"
-        >
-          <Logo />
+        <nav aria-label="Main" className="flex flex-col">
+          <div className="flex h-16 items-center justify-between gap-4 lg:h-[76px]">
+            <div className="flex items-center gap-8">
+              <Logo />
+              <Tabs current={current} className="hidden items-center gap-1 md:flex" />
+            </div>
 
-          <ul className="hidden items-center gap-8 md:flex">
-            {links.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  className="text-label font-semibold text-fg-muted transition hover:text-fg"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center gap-2">
-            {session.status === "loading" ? (
-              <div className="h-11 w-40" aria-hidden="true" />
-            ) : signedIn ? (
-              <>
-                <TextLink href="/account">Account</TextLink>
-                <button
-                  type="button"
-                  onClick={() => void session.signOut()}
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-line px-6 py-3 text-label font-semibold text-fg transition hover:border-fg-muted"
-                >
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <TextLink href={SIGN_IN_HREF}>Sign in</TextLink>
-                <ButtonLink href={SIGN_UP_HREF}>Sign up</ButtonLink>
-              </>
-            )}
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {session.status === "loading" ? (
+                <div
+                  className="h-11 w-36 rounded-md border border-dashed border-bezel"
+                  aria-hidden="true"
+                />
+              ) : signedIn ? (
+                <>
+                  <span
+                    className="hidden max-w-[18rem] items-center gap-2 text-small text-ink-muted xl:inline-flex"
+                    title={session.email || undefined}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="rounded-sm bg-cyan px-1.5 py-0.5 font-hud text-hud text-void"
+                    >
+                      P1
+                    </span>
+                    {session.email ? (
+                      <span className="truncate">Signed in as {session.email}</span>
+                    ) : null}
+                  </span>
+                  <ButtonLink
+                    href={ACCOUNT_HREF}
+                    variant="secondary"
+                    className="max-sm:px-2.5 max-sm:text-[13px]"
+                  >
+                    Account
+                  </ButtonLink>
+                  <button
+                    type="button"
+                    onClick={() => void session.signOut()}
+                    className={buttonClass("ghost", "md", "px-1 max-sm:text-[13px] sm:px-3")}
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <a
+                    href={SIGN_IN_HREF}
+                    className={buttonClass("ghost", "md", "px-1 max-sm:text-[13px] sm:px-3")}
+                  >
+                    Sign in
+                  </a>
+                  <ButtonLink href={SIGN_UP_HREF} className="max-sm:px-2.5 max-sm:text-[13px]">
+                    Sign up
+                  </ButtonLink>
+                </>
+              )}
+            </div>
           </div>
+
+          <Tabs
+            current={current}
+            className="-mx-3 flex items-center gap-1 border-t border-bezel/60 md:hidden"
+          />
         </nav>
       </Frame>
     </header>

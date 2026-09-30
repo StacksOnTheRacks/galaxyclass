@@ -149,7 +149,7 @@ describe("sign-up", () => {
     resolveSignUp({
       isSignUpComplete: false,
       nextStep: { signUpStep: "CONFIRM_SIGN_UP" },
-    });
+    } as Awaited<ReturnType<typeof signUp>>);
     expect(
       await screen.findByRole("heading", { name: "Check your email" }),
     ).toBeInTheDocument();

@@ -1,50 +1,96 @@
 import type { Config } from "tailwindcss";
 
+// Every value maps to a CSS custom property in globals.css so the tokens live
+// in one place and stay usable from plain CSS (backdrops, keyframes).
+const channel = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
       colors: {
-        void: "#030308",
-        deep: "#0a0618",
-        surface: "#120a24",
-        elevated: "#1a1035",
-        line: "#2c2552",
-        fg: {
-          DEFAULT: "#f5f7ff",
-          muted: "#a09bc0",
+        void: channel("void"),
+        floor: channel("floor"),
+        panel: channel("panel"),
+        raised: channel("raised"),
+        bezel: {
+          DEFAULT: channel("bezel"),
+          hi: channel("bezel-hi"),
         },
-        gold: {
-          DEFAULT: "#e8c547",
-          dim: "#b8942e",
+        ink: {
+          DEFAULT: channel("ink"),
+          muted: channel("ink-muted"),
         },
-        stellar: "#64d2ff",
-        riffle: "#3ee8a5",
+        cyan: channel("cyan"),
+        pink: {
+          DEFAULT: channel("pink"),
+          deep: channel("pink-deep"),
+        },
+        amber: channel("amber"),
+        danger: channel("danger"),
+        success: channel("success"),
+        riffle: {
+          DEFAULT: channel("riffle"),
+          felt: channel("riffle-felt"),
+          rail: channel("riffle-rail"),
+        },
         suit: {
-          red: "#de3340",
-          black: "#0d0d1a",
+          red: channel("suit-red"),
+          black: channel("suit-black"),
         },
       },
       fontFamily: {
-        display: ["var(--font-syne)", "system-ui", "sans-serif"],
-        body: ["var(--font-dm-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-bungee)", "Impact", "system-ui", "sans-serif"],
+        body: ["var(--font-chakra)", "system-ui", "sans-serif"],
+        hud: ["var(--font-silkscreen)", "ui-monospace", "monospace"],
       },
       fontSize: {
-        "display-xl": ["80px", { lineHeight: "84px", letterSpacing: "-1.6px" }],
-        "display-l": ["56px", { lineHeight: "60px", letterSpacing: "-1.12px" }],
-        "heading-m": ["32px", { lineHeight: "38px", letterSpacing: "-0.32px" }],
-        "heading-s": ["22px", { lineHeight: "28px", letterSpacing: "-0.11px" }],
-        "body-l": ["20px", { lineHeight: "32px" }],
-        "body-m": ["16px", { lineHeight: "26px" }],
-        label: ["15px", { lineHeight: "20px" }],
-        eyebrow: ["13px", { lineHeight: "16px", letterSpacing: "2.86px" }],
+        marquee: [
+          "clamp(2.25rem, 1.3rem + 3.6vw, 4.25rem)",
+          { lineHeight: "0.95", letterSpacing: "0.01em" },
+        ],
+        "display-l": [
+          "clamp(2rem, 1.3rem + 2.6vw, 3.25rem)",
+          { lineHeight: "1", letterSpacing: "0.01em" },
+        ],
+        title: ["clamp(1.5rem, 1.2rem + 1vw, 2rem)", { lineHeight: "1.1" }],
+        heading: ["1.25rem", { lineHeight: "1.3" }],
+        "body-l": ["1.125rem", { lineHeight: "1.65" }],
+        body: ["1rem", { lineHeight: "1.6" }],
+        label: ["0.9375rem", { lineHeight: "1.3" }],
+        small: ["0.875rem", { lineHeight: "1.45" }],
+        hud: ["0.75rem", { lineHeight: "1.2", letterSpacing: "0.08em" }],
+      },
+      spacing: {
+        gutter: "var(--space-gutter)",
+        section: "var(--space-section)",
+        rail: "var(--size-rail)",
       },
       borderRadius: {
-        md: "10px",
-        xl: "24px",
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        screen: "var(--radius-screen)",
+      },
+      boxShadow: {
+        cabinet: "var(--shadow-cabinet)",
+        raised: "var(--shadow-raised)",
+        press: "var(--shadow-press)",
+        "press-down": "var(--shadow-press-down)",
+        screen: "var(--shadow-screen)",
+        "glow-cyan": "var(--glow-cyan)",
+        "glow-pink": "var(--glow-pink)",
+        "glow-riffle": "var(--glow-riffle)",
       },
       maxWidth: {
-        frame: "1440px",
+        frame: "var(--size-frame)",
+      },
+      transitionDuration: {
+        quick: "var(--motion-quick)",
+        base: "var(--motion-base)",
+      },
+      transitionTimingFunction: {
+        snap: "var(--ease-snap)",
       },
     },
   },

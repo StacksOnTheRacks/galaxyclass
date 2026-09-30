@@ -4,7 +4,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import { COPY, isValidEmail, isValidPassword } from "@/lib/auth/messages";
 import { readResetEmail } from "@/lib/auth/pending-email";
-import { AuthScreen, SubmitButton, TextField } from "./ui";
+import { ButtonLink } from "@/components/primitives";
+import { AuthScreen, FieldHint, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function ResetPasswordForm() {
   const [email, setEmail] = useState("");
@@ -29,15 +30,14 @@ export function ResetPasswordForm() {
   if (done) {
     return (
       <AuthScreen
+        kind="reset"
+        success="Password saved"
         title={COPY.resetSuccessTitle}
         subtitle={<p role="status">{COPY.resetSuccessBody}</p>}
       >
-        <a
-          href="/sign-in"
-          className="self-center text-label font-semibold text-fg underline-offset-4 hover:underline"
-        >
+        <ButtonLink href="/sign-in" size="lg" arrow className="w-full">
           Sign in
-        </a>
+        </ButtonLink>
       </AuthScreen>
     );
   }
@@ -79,14 +79,9 @@ export function ResetPasswordForm() {
 
   return (
     <AuthScreen
+      kind="reset"
       title="Choose a new password"
-      subtitle={
-        formError ? (
-          <p role="alert" className="text-sm text-[#ff6b6b]">
-            {formError}
-          </p>
-        ) : undefined
-      }
+      subtitle={formError ? <FormAlert>{formError}</FormAlert> : undefined}
     >
       <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
         {remembered ? null : (
@@ -121,9 +116,7 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
         />
         {passwordError ? null : (
-          <p id="reset-password-rule" className="text-left text-body-m text-fg-muted">
-            {COPY.passwordRule}
-          </p>
+          <FieldHint id="reset-password-rule">{COPY.passwordRule}</FieldHint>
         )}
         <SubmitButton pending={pending}>
           {pending ? "Updating password…" : "Update password"}

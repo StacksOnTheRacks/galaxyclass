@@ -1,8 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Starfield } from "@/components/Starfield";
+import { FeaturedMarquee } from "@/components/FeaturedMarquee";
+import { GameLibrary } from "@/components/GameLibrary";
 import Home from "./page";
 
 const motion = vi.hoisted(() => ({ reduced: false }));
@@ -83,22 +84,57 @@ describe("studio home", () => {
   });
 });
 
-describe("Starfield", () => {
-  it("twinkles and drifts by default", () => {
-    const { container } = render(<Starfield />);
+describe("featured marquee", () => {
+  it("chases marquee bulbs and deals the attract screen by default", () => {
+    const { container } = render(<FeaturedMarquee />);
 
-    expect(container.querySelector('[data-motion="twinkle"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-motion="drift"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-motion="chase"]').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-motion="power-on"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-motion="deal"]')).toHaveLength(5);
   });
 
-  it("renders a static starfield with no motion when reduced motion is preferred", () => {
+  it("renders a still attract screen when reduced motion is preferred", () => {
     motion.reduced = true;
-    const { container } = render(<Starfield />);
+    const { container } = render(<FeaturedMarquee />);
 
     expect(container.querySelectorAll("[data-motion]")).toHaveLength(0);
-    const images = container.querySelectorAll("img");
-    expect(images).toHaveLength(1);
-    expect(images[0].getAttribute("src")).toContain("starfield-static.svg");
+    expect(
+      screen.getByRole("img", { name: /riffle attract screen/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Play Riffle" })).toHaveAttribute(
+      "href",
+      "/riffle",
+    );
+  });
+});
+
+describe("game library", () => {
+  it("marks placeholder cabinets as coming soon with nothing to play", () => {
+    render(<GameLibrary />);
+
+    const placeholders = screen.getAllByRole("heading", { level: 3, name: /^slot \d+$/i });
+    expect(placeholders).toHaveLength(3);
+    for (const heading of placeholders) {
+      const cabinet = within(heading.closest("article") as HTMLElement);
+      expect(cabinet.getByText("Coming soon")).toBeInTheDocument();
+      expect(cabinet.queryByRole("link")).toBeNull();
+    }
+  });
+
+  it("filters the shelf by status", () => {
+    render(<GameLibrary />);
+
+    fireEvent.click(screen.getByRole("button", { name: /playable now/i }));
+    expect(screen.getByRole("button", { name: /playable now/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 3, name: "Riffle" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /coming soon/i }));
+    expect(screen.queryByRole("heading", { level: 3, name: "Riffle" })).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(3);
   });
 });
 

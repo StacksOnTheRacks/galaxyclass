@@ -10,7 +10,8 @@ import {
   verificationCodeSent,
 } from "@/lib/auth/messages";
 import { rememberConfirmEmail } from "@/lib/auth/pending-email";
-import { AuthScreen, SubmitButton, TextField } from "./ui";
+import { ButtonLink, TextLink } from "@/components/primitives";
+import { AuthScreen, FieldHint, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function SignUpForm() {
   const [email, setEmail] = useState("");
@@ -24,17 +25,16 @@ export function SignUpForm() {
   if (sent) {
     return (
       <AuthScreen
+        kind="sign-up"
+        success="Code sent"
         title={COPY.checkEmailTitle}
         subtitle={
           <p role="status">{verificationCodeSent(email.trim())}</p>
         }
       >
-        <a
-          href="/confirm"
-          className="self-center text-label font-semibold text-fg underline-offset-4 hover:underline"
-        >
+        <ButtonLink href="/confirm" size="lg" arrow className="w-full">
           Enter verification code
-        </a>
+        </ButtonLink>
       </AuthScreen>
     );
   }
@@ -82,12 +82,11 @@ export function SignUpForm() {
 
   return (
     <AuthScreen
+      kind="sign-up"
       title="Create your Galaxy Class account"
       subtitle={
         formError ? (
-          <p role="alert" className="text-sm text-[#ff6b6b]">
-            {formError}
-          </p>
+          <FormAlert>{formError}</FormAlert>
         ) : (
           "Email and password only at launch."
         )
@@ -115,14 +114,15 @@ export function SignUpForm() {
           autoComplete="new-password"
         />
         {passwordError ? null : (
-          <p id="sign-up-password-rule" className="text-left text-body-m text-fg-muted">
-            {COPY.passwordRule}
-          </p>
+          <FieldHint id="sign-up-password-rule">{COPY.passwordRule}</FieldHint>
         )}
         <SubmitButton pending={pending}>
           {pending ? COPY.creating : "Create account"}
         </SubmitButton>
       </form>
+      <p className="border-t border-bezel pt-5 text-ink-muted">
+        Already have an account? <TextLink href="/sign-in">Sign in</TextLink>
+      </p>
     </AuthScreen>
   );
 }
