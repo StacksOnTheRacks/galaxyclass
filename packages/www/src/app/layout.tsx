@@ -27,11 +27,11 @@ const silkscreen = Silkscreen({
 export const metadata: Metadata = {
   title: "Galaxy Class Gaming — Games worth sitting down for",
   description:
-    "Galaxy Class Gaming makes online games for strangers, friends, and family. Play in the browser with social chips — nothing to buy. Featured game: Riffle.",
+    "Galaxy Class Gaming makes online games for strangers, friends, and family. Play in the browser with social chips — nothing to buy. Featured game: Riffle Poker.",
   openGraph: {
     title: "Galaxy Class Gaming",
     description:
-      "An arcade of online games for strangers, friends, and family. Featured: Riffle. Social chips only — nothing to buy.",
+      "An arcade of online games for strangers, friends, and family. Featured: Riffle Poker. Social chips only — nothing to buy.",
     type: "website",
   },
 };

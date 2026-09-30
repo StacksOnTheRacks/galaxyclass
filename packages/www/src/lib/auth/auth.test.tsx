@@ -169,6 +169,30 @@ beforeEach(() => {
   } as Awaited<ReturnType<typeof signUp>>);
 });
 
+describe("auth screens", () => {
+  it.each([
+    ["sign-in", () => <SignInForm />],
+    ["sign-up", () => <SignUpForm />],
+    ["forgot password", () => <ForgotPasswordForm />],
+  ])("%s sends players to the library instead of straight to Riffle Poker", (_, form) => {
+    const { container } = render(form());
+
+    expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
+    expect(screen.getByRole("link", { name: "Browse the library" })).toHaveAttribute(
+      "href",
+      "/#library",
+    );
+  });
+
+  it("names the game Riffle Poker in sign-up copy", () => {
+    render(<SignUpForm />);
+
+    expect(
+      screen.getByText("Works across every Galaxy Class game, starting with Riffle Poker."),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("sign-up", () => {
   it("calls signUp and shows a verification code, not a verification link", async () => {
     setEnv();
@@ -560,6 +584,20 @@ describe("account", () => {
       path: "/api/profile",
       authorization: "Bearer id-token",
     });
+  });
+
+  it("does not link to Riffle Poker from the account page", async () => {
+    signedIn();
+    api.profile = { gamerTag: GAMER_TAG, avatarId: 12 };
+    const { container } = renderAccount();
+
+    expect(await screen.findByLabelText("Gamer tag")).toHaveValue(GAMER_TAG);
+    expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
+    expect(screen.queryByRole("link", { name: /riffle/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Browse the library" })).toHaveAttribute(
+      "href",
+      "/#library",
+    );
   });
 
   it("prompts an existing player without a gamer tag and saves one", async () => {

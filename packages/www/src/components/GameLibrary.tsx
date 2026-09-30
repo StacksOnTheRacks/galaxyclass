@@ -47,15 +47,15 @@ function RiffleCabinet() {
         <div className="flex flex-col items-start gap-3">
           <StatusTag status="live" />
           <h3 id="library-riffle" className="leading-none">
-            <span className="sr-only">Riffle</span>
-            <RiffleWordmark className="text-[28px]" />
+            <span className="sr-only">Riffle Poker</span>
+            <RiffleWordmark className="text-[24px]" />
           </h3>
         </div>
         <p className="text-small text-ink-muted">
           Card game · No-limit Hold&rsquo;em · Browser
         </p>
         <ButtonLink href={PLAY_RIFFLE_HREF} className="mt-auto w-full" arrow>
-          Play Riffle
+          Play Riffle Poker
         </ButtonLink>
       </div>
     </article>

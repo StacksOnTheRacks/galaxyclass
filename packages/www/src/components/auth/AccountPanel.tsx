@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MemberCard } from "@/components/PlayerCard";
-import { ButtonLink, HudLabel, PLAY_RIFFLE_HREF } from "@/components/primitives";
+import { HudLabel } from "@/components/primitives";
 import { Avatar } from "@/components/profile/Avatar";
 import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { GamerTagForm } from "@/components/profile/GamerTagForm";
@@ -141,10 +141,7 @@ export function AccountPanel() {
         </>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-bezel pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <ButtonLink href={PLAY_RIFFLE_HREF} size="lg" arrow>
-          Play Riffle
-        </ButtonLink>
+      <div className="flex flex-col gap-3 border-t border-bezel pt-5 sm:flex-row sm:items-center sm:justify-end">
         <TextAction variant="secondary" onClick={() => void session.signOut()}>
           Sign out
         </TextAction>

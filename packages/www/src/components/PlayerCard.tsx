@@ -6,7 +6,6 @@ import {
   ACCOUNT_HREF,
   ButtonLink,
   HudLabel,
-  PLAY_RIFFLE_HREF,
   SIGN_IN_HREF,
   SIGN_UP_HREF,
 } from "./primitives";
@@ -75,12 +74,7 @@ export function PlayerCard() {
         )}
         {session.status === "loading" ? null : signedIn ? (
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href={PLAY_RIFFLE_HREF} arrow>
-              Play Riffle
-            </ButtonLink>
-            <ButtonLink href={ACCOUNT_HREF} variant="secondary">
-              Open account
-            </ButtonLink>
+            <ButtonLink href={ACCOUNT_HREF}>Open account</ButtonLink>
           </div>
         ) : (
           <div className="flex flex-wrap gap-3">

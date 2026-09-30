@@ -30,8 +30,8 @@ export function FeaturedMarquee() {
           <div className="flex flex-col items-start gap-5 px-1 pb-2 lg:py-2">
             <StatusTag status="live" />
             <h2 id="featured-heading" className="leading-none">
-              <span className="sr-only">Riffle</span>
-              <RiffleWordmark className="text-[56px] sm:text-[72px]" />
+              <span className="sr-only">Riffle Poker</span>
+              <RiffleWordmark className="text-[40px] sm:text-[56px]" />
             </h2>
             <p className="text-body-l text-ink-muted">
               No-limit Texas Hold&rsquo;em in your browser. Sit down with
@@ -53,7 +53,7 @@ export function FeaturedMarquee() {
 
             <div className="mt-auto flex w-full flex-col gap-3 sm:flex-row sm:items-center">
               <ButtonLink href={PLAY_RIFFLE_HREF} size="lg" arrow>
-                Play Riffle
+                Play Riffle Poker
               </ButtonLink>
               <p className="text-small text-ink-muted">
                 Opens galaxyclass.app/riffle. No account needed.
