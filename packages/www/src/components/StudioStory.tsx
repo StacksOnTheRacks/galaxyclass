@@ -5,7 +5,7 @@ const sheet = [
   { term: "Makes", detail: "Online multiplayer games" },
   { term: "Plays in", detail: "Your browser" },
   { term: "Chips", detail: "Social only — nothing to buy" },
-  { term: "First title", detail: "Riffle" },
+  { term: "First title", detail: "Riffle Poker" },
 ];
 
 export function StudioStory() {
@@ -27,8 +27,8 @@ export function StudioStory() {
           </p>
           <p>
             We build for the table, not the wallet: games run in the browser,
-            play uses social chips, and there is nothing to buy. Riffle is our
-            first game and keeps its own name and look. More titles are on the
+            play uses social chips, and there is nothing to buy. Riffle Poker is
+            our first game and keeps its own name and look. More titles are on the
             way.
           </p>
           <p>

@@ -26,9 +26,9 @@ export function RiffleWordmark({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`font-body font-bold lowercase tracking-tight text-riffle [text-shadow:0_0_14px_rgb(var(--c-riffle)/0.55)] ${className}`}
+      className={`font-body font-bold tracking-tight text-riffle [text-shadow:0_0_14px_rgb(var(--c-riffle)/0.55)] ${className}`}
     >
-      riffle
+      Riffle Poker
     </span>
   );
 }
@@ -68,7 +68,7 @@ function Table({ animate }: { animate: boolean }) {
   return (
     <div className="relative flex h-full w-full flex-col p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
-        <RiffleWordmark className="text-[22px] sm:text-[28px]" />
+        <RiffleWordmark className="text-[18px] sm:text-[24px]" />
         <span className="font-hud text-[10px] uppercase tracking-[0.12em] text-ink/80 sm:text-hud">
           NL Hold&rsquo;em · Social chips
         </span>
@@ -122,7 +122,7 @@ export function RiffleScreen({ className = "" }: { className?: string }) {
   return (
     <div
       role="img"
-      aria-label="Riffle attract screen: a Hold'em table with five community cards and a pot of social chips"
+      aria-label="Riffle Poker attract screen: a Hold'em table with five community cards and a pot of social chips"
       className={`crt bg-[radial-gradient(ellipse_at_50%_30%,rgb(var(--c-riffle)/0.12),transparent_70%)] ${className}`}
     >
       {animate ? (
@@ -145,7 +145,7 @@ export function RiffleScreen({ className = "" }: { className?: string }) {
 export function RiffleTileScreen({ className = "" }: { className?: string }) {
   return (
     <div aria-hidden="true" className={`crt flex flex-col p-3 ${className}`}>
-      <RiffleWordmark className="text-[18px]" />
+      <RiffleWordmark className="text-[16px]" />
       <div className="felt mx-auto mt-2 flex w-[82%] flex-1 items-center justify-center gap-1 rounded-[999px] border-[7px] border-riffle-rail">
         <PlayingCard rank="A" suit="spade" size="xs" />
         <PlayingCard rank="K" suit="heart" size="xs" />

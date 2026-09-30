@@ -7,7 +7,7 @@ import {
   buttonClass,
   Frame,
   HudLabel,
-  PLAY_RIFFLE_HREF,
+  LIBRARY_HREF,
 } from "@/components/primitives";
 import { SiteShell } from "@/components/SiteShell";
 
@@ -52,7 +52,7 @@ const screens: Record<
       headline: "One account. Every game.",
       points: [
         "Pick a gamer tag — it’s how other players see you.",
-        "Works across every Galaxy Class game, starting with Riffle.",
+        "Works across every Galaxy Class game, starting with Riffle Poker.",
         "Unlocks private, invite-only tables.",
         "Free: nothing to buy, no cashier, no KYC.",
       ],
@@ -179,8 +179,8 @@ function AttractScreen({ kind }: { kind: AuthScreenKind }) {
             Just here to play? No account needed.
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <ButtonLink href={PLAY_RIFFLE_HREF} variant="secondary" arrow>
-              Play Riffle
+            <ButtonLink href={LIBRARY_HREF} variant="secondary" arrow>
+              Browse the library
             </ButtonLink>
             <HudLabel tone="amber" as="span">
               Free play

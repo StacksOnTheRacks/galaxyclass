@@ -13,6 +13,11 @@ vi.mock("framer-motion", async (importOriginal) => ({
   useReducedMotion: () => motion.reduced,
 }));
 
+vi.mock("next/font/google", () => {
+  const font = () => ({ variable: "" });
+  return { Bungee: font, Chakra_Petch: font, Silkscreen: font };
+});
+
 const root = path.resolve(__dirname, "../..");
 
 function sourceFiles(dir: string): string[] {
@@ -30,14 +35,55 @@ beforeEach(() => {
 });
 
 describe("studio home", () => {
-  it("links every Play Riffle control to same-origin /riffle", () => {
+  it("links every Play Riffle Poker control to same-origin /riffle", () => {
     render(<Home />);
 
-    const play = screen.getAllByRole("link", { name: "Play Riffle" });
+    const play = screen.getAllByRole("link", { name: "Play Riffle Poker" });
     expect(play.length).toBeGreaterThan(0);
     for (const link of play) {
       expect(link).toHaveAttribute("href", "/riffle");
     }
+  });
+
+  it("only links to Riffle Poker from the featured marquee and game library", () => {
+    const { container } = render(<Home />);
+
+    const riffleLinks = Array.from(container.querySelectorAll('a[href^="/riffle"]'));
+    expect(riffleLinks).toHaveLength(2);
+    for (const link of riffleLinks) {
+      expect(link.closest("#featured, #library")).not.toBeNull();
+    }
+    expect(
+      within(container.querySelector("#player-card") as HTMLElement).queryByRole("link", {
+        name: /riffle/i,
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByRole("navigation", { name: "Footer" })).queryByRole("link", {
+        name: /riffle/i,
+      }),
+    ).toBeNull();
+  });
+
+  it("calls the game Riffle Poker everywhere users can see or hear it", () => {
+    const { container } = render(<Home />);
+
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/(?<!\/)\briffle\b/);
+    expect(text).not.toMatch(/\bRiffle\b(?! Poker)/);
+    for (const node of container.querySelectorAll("[aria-label]")) {
+      expect(node.getAttribute("aria-label")).not.toMatch(/\b[Rr]iffle\b(?! Poker)/);
+    }
+    expect(text).toContain("Riffle Poker");
+  });
+
+  it("names Riffle Poker in page metadata", async () => {
+    const { metadata } = await import("./layout");
+
+    expect(metadata.description).toContain("Riffle Poker");
+    expect(metadata.description).not.toMatch(/\bRiffle\b(?! Poker)/);
+    expect(metadata.openGraph?.description).toContain("Riffle Poker");
+    expect(metadata.openGraph?.description).not.toMatch(/\bRiffle\b(?! Poker)/);
   });
 
   it("renders no iframe and no host embed section", () => {
@@ -77,7 +123,7 @@ describe("studio home", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: /welcome to\s+the arcade/i }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Play Riffle" })[0]).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "Play Riffle Poker" })[0]).toHaveAttribute(
       "href",
       "/riffle",
     );
@@ -99,9 +145,10 @@ describe("featured marquee", () => {
 
     expect(container.querySelectorAll("[data-motion]")).toHaveLength(0);
     expect(
-      screen.getByRole("img", { name: /riffle attract screen/i }),
+      screen.getByRole("img", { name: /^Riffle Poker attract screen/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Play Riffle" })).toHaveAttribute(
+    expect(screen.getByRole("heading", { level: 2, name: "Riffle Poker" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Play Riffle Poker" })).toHaveAttribute(
       "href",
       "/riffle",
     );
@@ -109,6 +156,18 @@ describe("featured marquee", () => {
 });
 
 describe("game library", () => {
+  it("lists a playable Riffle Poker cabinet that opens /riffle", () => {
+    render(<GameLibrary />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Riffle Poker" });
+    const cabinet = within(heading.closest("article") as HTMLElement);
+    expect(cabinet.getByText("Playable now")).toBeInTheDocument();
+    expect(cabinet.getByRole("link", { name: "Play Riffle Poker" })).toHaveAttribute(
+      "href",
+      "/riffle",
+    );
+  });
+
   it("marks placeholder cabinets as coming soon with nothing to play", () => {
     render(<GameLibrary />);
 
@@ -130,10 +189,10 @@ describe("game library", () => {
       "true",
     );
     expect(screen.queryAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(0);
-    expect(screen.getByRole("heading", { level: 3, name: "Riffle" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Riffle Poker" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /coming soon/i }));
-    expect(screen.queryByRole("heading", { level: 3, name: "Riffle" })).toBeNull();
+    expect(screen.queryByRole("heading", { level: 3, name: "Riffle Poker" })).toBeNull();
     expect(screen.getAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(3);
   });
 });

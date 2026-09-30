@@ -3,7 +3,6 @@ import {
   HudLabel,
   LIBRARY_HREF,
   Logo,
-  PLAY_RIFFLE_HREF,
   SIGN_IN_HREF,
   SIGN_UP_HREF,
   STUDIO_HREF,
@@ -11,7 +10,6 @@ import {
 
 const links = [
   { href: LIBRARY_HREF, label: "Library" },
-  { href: PLAY_RIFFLE_HREF, label: "Riffle" },
   { href: STUDIO_HREF, label: "Studio" },
   { href: SIGN_IN_HREF, label: "Sign in" },
   { href: SIGN_UP_HREF, label: "Sign up" },
