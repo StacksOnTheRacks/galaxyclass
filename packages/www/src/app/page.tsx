@@ -18,9 +18,9 @@ export default function Home() {
             <header className="flex flex-col gap-3">
               <HudLabel tone="cyan">Galaxy Class Gaming · Arcade</HudLabel>
               <h1 className="text-balance font-display text-marquee uppercase">
-                Games worth{" "}
-                <span className="text-pink [text-shadow:0_0_24px_rgb(var(--c-pink)/0.45)]">
-                  sitting down for.
+                Welcome to{" "}
+                <span className="block text-pink [text-shadow:0_0_24px_rgb(var(--c-pink)/0.45)]">
+                  the arcade
                 </span>
               </h1>
               <p className="max-w-[60ch] text-body-l text-ink-muted">

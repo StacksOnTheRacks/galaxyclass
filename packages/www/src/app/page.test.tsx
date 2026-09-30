@@ -75,7 +75,7 @@ describe("studio home", () => {
 
     expect(container.querySelectorAll("[data-motion]")).toHaveLength(0);
     expect(
-      screen.getByRole("heading", { level: 1, name: /games worth sitting down for/i }),
+      screen.getByRole("heading", { level: 1, name: /welcome to\s+the arcade/i }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Play Riffle" })[0]).toHaveAttribute(
       "href",
