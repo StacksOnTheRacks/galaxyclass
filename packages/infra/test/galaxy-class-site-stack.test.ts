@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { App } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { canonicalRedirectFunctionCode } from '../lib/cloudfront-canonical-redirect.js';
+import { GalaxyClassAuthStack } from '../lib/galaxy-class-auth-stack.js';
 import {
   GalaxyClassSiteStack,
+  PROFILE_API_PATH,
   RIFFLE_CSP,
   STUDIO_CSP,
   STUDIO_DEPLOY_LAYER_NAME,
@@ -19,7 +21,7 @@ const EXPECTED_STUDIO_CSP =
 const EXPECTED_RIFFLE_CSP =
   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
-function synthSite(options?: { withRiffle?: boolean }) {
+function synthSite(options?: { withRiffle?: boolean; withProfileApi?: boolean }) {
   const app = new App({
     context: { 'aws:cdk:bundling-stacks': [] },
   });
@@ -30,10 +32,18 @@ function synthSite(options?: { withRiffle?: boolean }) {
     });
     rifflePlayOriginBucketName = match.playOriginBucket.bucketName;
   }
+  let profileApiDomainName: string | undefined;
+  if (options?.withProfileApi !== false) {
+    const auth = new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', {
+      env: { account: TEST_ACCOUNT, region: TEST_REGION },
+    });
+    profileApiDomainName = auth.profileApiDomainName;
+  }
   const stack = new GalaxyClassSiteStack(app, 'GalaxyClassSite-prod', {
     env: { account: TEST_ACCOUNT, region: TEST_REGION },
     studioAssetPath: path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/site-out'),
     rifflePlayOriginBucketName,
+    profileApiDomainName,
   });
   return { stack, template: Template.fromStack(stack) };
 }
@@ -153,7 +163,8 @@ test('HSTS and separate studio and riffle CSPs', () => {
   assert.equal(refId(distribution.DefaultCacheBehavior.ResponseHeadersPolicyId), studioCspId);
   const behaviors = distribution.CacheBehaviors as Array<{ PathPattern: string; ResponseHeadersPolicyId: unknown }>;
   for (const behavior of behaviors) {
-    assert.equal(refId(behavior.ResponseHeadersPolicyId), riffleCspId);
+    const expected = behavior.PathPattern.startsWith('/riffle') ? riffleCspId : studioCspId;
+    assert.equal(refId(behavior.ResponseHeadersPolicyId), expected, behavior.PathPattern);
   }
 });
 
@@ -163,7 +174,7 @@ test('riffle behaviors use the cross-stack play origin without stripping the pre
   const behaviors = distribution.CacheBehaviors as Array<{ PathPattern: string }>;
   assert.deepEqual(
     behaviors.map((behavior) => behavior.PathPattern).sort(),
-    ['/riffle', '/riffle/*'],
+    [PROFILE_API_PATH, '/riffle', '/riffle/*'],
   );
   const origins = distribution.Origins as Array<{
     DomainName: unknown;
@@ -171,8 +182,10 @@ test('riffle behaviors use the cross-stack play origin without stripping the pre
     OriginAccessControlId?: unknown;
     S3OriginConfig?: { OriginAccessIdentity?: string };
   }>;
-  assert.equal(origins.length, 2);
-  for (const origin of origins) {
+  const s3Origins = origins.filter((origin) => origin.S3OriginConfig);
+  assert.equal(origins.length, 3);
+  assert.equal(s3Origins.length, 2);
+  for (const origin of s3Origins) {
     assert.ok(origin.OriginAccessControlId);
     assert.equal(origin.OriginPath, undefined);
     assert.equal(origin.S3OriginConfig?.OriginAccessIdentity, '');
@@ -221,8 +234,32 @@ test('viewer-request function is associated before origin on every behavior', ()
   const distribution = distributionConfig(template);
   assertFunction(distribution.DefaultCacheBehavior);
   for (const behavior of distribution.CacheBehaviors as Array<Record<string, unknown>>) {
-    assertFunction(behavior);
+    if (behavior.PathPattern !== PROFILE_API_PATH) {
+      assertFunction(behavior);
+    }
   }
+});
+
+test('profile API is proxied same-origin at /api/* without caching or URI rewrites', () => {
+  const { template } = synthSite();
+  const distribution = distributionConfig(template);
+  const api = (distribution.CacheBehaviors as Array<Record<string, any>>).find(
+    (behavior) => behavior.PathPattern === PROFILE_API_PATH,
+  );
+  assert.ok(api, 'expected an /api/* behavior');
+  assert.equal(api.FunctionAssociations, undefined);
+  assert.deepEqual([...api.AllowedMethods].sort(), ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']);
+  // Managed CachingDisabled and AllViewerExceptHostHeader (forwards Authorization to API Gateway).
+  assert.equal(api.CachePolicyId, '4135ea2d-6df8-44a3-9df3-4b5a84be39ad');
+  assert.equal(api.OriginRequestPolicyId, 'b689b0a8-53d0-40ab-baf2-68738e2966ac');
+
+  const origin = (distribution.Origins as Array<Record<string, any>>).find(
+    (entry) => entry.Id === api.TargetOriginId,
+  );
+  assert.ok(origin);
+  assert.equal(origin.CustomOriginConfig.OriginProtocolPolicy, 'https-only');
+  assert.match(JSON.stringify(origin.DomainName), /ImportValue/);
+  assert.equal(origin.S3OriginConfig, undefined);
 });
 
 test('outputs are exactly the public site identifiers', () => {
@@ -246,7 +283,7 @@ test('studio asset deploy layer name matches the cfn exec role prefix', () => {
 });
 
 test('without riffle bucket does not block studio synthesis', () => {
-  const { template } = synthSite({ withRiffle: false });
+  const { template } = synthSite({ withRiffle: false, withProfileApi: false });
   const distribution = distributionConfig(template);
   assert.equal(distribution.CacheBehaviors, undefined);
   assert.equal((distribution.Origins as unknown[]).length, 1);

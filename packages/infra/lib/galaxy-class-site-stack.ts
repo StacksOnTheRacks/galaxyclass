@@ -1,17 +1,21 @@
 import { Aws, CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import {
   AllowedMethods,
+  type BehaviorOptions,
+  CachePolicy,
   Distribution,
   Function,
   FunctionCode,
   FunctionEventType,
   FunctionRuntime,
+  OriginProtocolPolicy,
+  OriginRequestPolicy,
   PriceClass,
   ResponseHeadersPolicy,
   S3OriginAccessControl,
   ViewerProtocolPolicy,
 } from 'aws-cdk-lib/aws-cloudfront';
-import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import {
   AnyPrincipal,
   Effect,
@@ -47,7 +51,11 @@ export interface GalaxyClassSiteStackProps extends StackProps {
   studioAssetPath: string;
   /** Play-origin bucket name from MatchRuntimeStack (cross-stack token). Omit for studio-only synth. */
   rifflePlayOriginBucketName?: string;
+  /** Profile HTTP API host from GalaxyClassAuth-prod (cross-stack token), served at /api/*. */
+  profileApiDomainName?: string;
 }
+
+export const PROFILE_API_PATH = '/api/*';
 
 /**
  * Prod static site: private studio origin, Riffle origin from SSM, apex canonical host.
@@ -122,6 +130,34 @@ export class GalaxyClassSiteStack extends Stack {
       ],
     };
 
+    const additionalBehaviors: Record<string, BehaviorOptions> = {};
+    if (props.profileApiDomainName) {
+      // No viewer-request function: the static-site URI rewrite would append .html to API paths.
+      additionalBehaviors[PROFILE_API_PATH] = {
+        origin: new HttpOrigin(props.profileApiDomainName, {
+          protocolPolicy: OriginProtocolPolicy.HTTPS_ONLY,
+        }),
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: AllowedMethods.ALLOW_ALL,
+        cachePolicy: CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: studioHeaders,
+        compress: true,
+      };
+    }
+    if (riffleOrigin && riffleHeaders) {
+      additionalBehaviors['/riffle'] = {
+        origin: riffleOrigin,
+        responseHeadersPolicy: riffleHeaders,
+        ...behavior,
+      };
+      additionalBehaviors['/riffle/*'] = {
+        origin: riffleOrigin,
+        responseHeadersPolicy: riffleHeaders,
+        ...behavior,
+      };
+    }
+
     const distribution = new Distribution(this, 'Site', {
       certificate,
       domainNames: [APEX_HOST, WWW_HOST],
@@ -132,21 +168,7 @@ export class GalaxyClassSiteStack extends Stack {
         responseHeadersPolicy: studioHeaders,
         ...behavior,
       },
-      additionalBehaviors:
-        riffleOrigin && riffleHeaders
-          ? {
-              '/riffle': {
-                origin: riffleOrigin,
-                responseHeadersPolicy: riffleHeaders,
-                ...behavior,
-              },
-              '/riffle/*': {
-                origin: riffleOrigin,
-                responseHeadersPolicy: riffleHeaders,
-                ...behavior,
-              },
-            }
-          : undefined,
+      additionalBehaviors: Object.keys(additionalBehaviors).length > 0 ? additionalBehaviors : undefined,
       errorResponses: [
         {
           httpStatus: 403,

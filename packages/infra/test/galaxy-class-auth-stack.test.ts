@@ -6,8 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEST_ACCOUNT, TEST_REGION, synthAuthStack } from './support.js';
 
+/** Always-on compute; on-demand Lambda for profiles is counted separately. */
 const COMPUTE_TYPES = [
-  'AWS::Lambda::Function',
   'AWS::EC2::Instance',
   'AWS::ECS::Service',
   'AWS::ECS::TaskDefinition',
@@ -94,7 +94,6 @@ test('user pool is email sign-up with verification, password policy, and retain'
   const pool = Object.values(
     template.findResources('AWS::Cognito::UserPool'),
   )[0] as { Properties: Record<string, unknown> };
-  assert.equal(pool.Properties.LambdaConfig, undefined);
   assert.equal(pool.Properties.SmsConfiguration, undefined);
   const email = pool.Properties.EmailConfiguration as { EmailSendingAccount?: string };
   assert.equal(email.EmailSendingAccount, 'DEVELOPER');
@@ -159,14 +158,92 @@ test('template has no social IdP, Hosted UI, phone MFA, or always-on compute', (
   for (const type of COMPUTE_TYPES) {
     template.resourceCountIs(type, 0);
   }
+  template.resourceCountIs('AWS::Lambda::Function', 2);
 
   const resources = template.toJSON().Resources as Record<string, { Type: string }>;
   const types = new Set(Object.values(resources).map((resource) => resource.Type));
+  const allowed = ['AWS::Cognito::', 'AWS::DynamoDB::Table', 'AWS::Lambda::', 'AWS::IAM::', 'AWS::ApiGatewayV2::'];
   for (const type of types) {
     assert.equal(
-      type.startsWith('AWS::Cognito::') || type === 'AWS::CDK::Metadata',
+      allowed.some((prefix) => type.startsWith(prefix)) || type === 'AWS::CDK::Metadata',
       true,
       `unexpected resource type ${type}`,
     );
   }
+});
+
+test('profile table keeps player data and expires abandoned sign-up reservations', () => {
+  const { template } = synthAuthStack();
+  template.resourceCountIs('AWS::DynamoDB::Table', 1);
+  template.hasResourceProperties('AWS::DynamoDB::Table', {
+    TableName: 'galaxyclass-profiles-prod',
+    KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }],
+    BillingMode: 'PAY_PER_REQUEST',
+    TimeToLiveSpecification: { AttributeName: 'expiresAt', Enabled: true },
+    PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true },
+    DeletionProtectionEnabled: true,
+  });
+  template.hasResource('AWS::DynamoDB::Table', {
+    DeletionPolicy: 'Retain',
+    UpdateReplacePolicy: 'Retain',
+  });
+});
+
+test('sign-up and confirmation triggers reserve and claim gamer tags', () => {
+  const { template } = synthAuthStack();
+  const pool = Object.values(template.findResources('AWS::Cognito::UserPool'))[0] as {
+    Properties: { LambdaConfig?: Record<string, unknown> };
+  };
+  const config = pool.Properties.LambdaConfig ?? {};
+  assert.deepEqual(Object.keys(config).sort(), ['PostConfirmation', 'PreSignUp']);
+  assert.deepEqual(config.PreSignUp, config.PostConfirmation);
+
+  const permissions = Object.values(template.findResources('AWS::Lambda::Permission')) as Array<{
+    Properties: Record<string, unknown>;
+  }>;
+  assert.ok(permissions.some((permission) => permission.Properties.Principal === 'cognito-idp.amazonaws.com'));
+});
+
+test('profile lambdas run node22 against the profile table with table-scoped access', () => {
+  const { template } = synthAuthStack();
+  const functions = Object.values(template.findResources('AWS::Lambda::Function')) as Array<{
+    Properties: { Runtime: string; Environment: { Variables: Record<string, unknown> } };
+  }>;
+  for (const fn of functions) {
+    assert.equal(fn.Properties.Runtime, 'nodejs22.x');
+    assert.ok(fn.Properties.Environment.Variables.PROFILE_TABLE_NAME);
+  }
+  const policies = Object.values(template.findResources('AWS::IAM::Policy'));
+  const rendered = JSON.stringify(policies);
+  assert.match(rendered, /dynamodb:PutItem/);
+  assert.doesNotMatch(rendered, /"Resource":"\*"/);
+  assert.doesNotMatch(rendered, /cognito-idp:Admin/);
+});
+
+test('profile API requires a Cognito JWT except for the public availability check', () => {
+  const { template } = synthAuthStack();
+  template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
+  template.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'HTTP' });
+  template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+    StageName: '$default',
+    AutoDeploy: true,
+    DefaultRouteSettings: { ThrottlingRateLimit: 20, ThrottlingBurstLimit: 40 },
+  });
+  template.hasResourceProperties('AWS::ApiGatewayV2::Authorizer', {
+    AuthorizerType: 'JWT',
+    IdentitySource: ['$request.header.Authorization'],
+  });
+
+  const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')) as Array<{
+    Properties: { RouteKey: string; AuthorizationType?: string };
+  }>;
+  const byKey = Object.fromEntries(
+    routes.map((route) => [route.Properties.RouteKey, route.Properties.AuthorizationType ?? 'NONE']),
+  );
+  assert.deepEqual(byKey, {
+    'GET /api/profile': 'JWT',
+    'PUT /api/profile/gamer-tag': 'JWT',
+    'PUT /api/profile/avatar': 'JWT',
+    'GET /api/gamer-tags/{tag}': 'NONE',
+  });
 });

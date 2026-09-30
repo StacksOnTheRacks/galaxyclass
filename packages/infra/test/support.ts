@@ -9,7 +9,9 @@ export const TEST_ACCOUNT = '111111111111';
 export const TEST_REGION = 'us-east-1';
 
 export function synthAuthStack(): { stack: GalaxyClassAuthStack; template: Template } {
-  const app = new App();
+  const app = new App({
+    context: { 'aws:cdk:bundling-stacks': [] },
+  });
   const stack = new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', {
     env: { account: TEST_ACCOUNT, region: TEST_REGION },
   });

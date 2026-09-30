@@ -19,7 +19,7 @@ const env = {
 
 const matchStack = new MatchRuntimeStack(app, 'MatchRuntimeStack', { env });
 
-new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', {
+const authStack = new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', {
   env: {
     account: env.account,
     region: 'us-east-1',
@@ -33,4 +33,5 @@ new GalaxyClassSiteStack(app, 'GalaxyClassSite-prod', {
   },
   studioAssetPath: existsSync(studioOut) ? studioOut : studioFixture,
   rifflePlayOriginBucketName: matchStack.playOriginBucket.bucketName,
+  profileApiDomainName: authStack.profileApiDomainName,
 });
