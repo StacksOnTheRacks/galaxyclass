@@ -44,7 +44,7 @@ export const STUDIO_CSP =
   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
 export const RIFFLE_CSP =
-  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
+  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
 export interface GalaxyClassSiteStackProps extends StackProps {
   /** Studio static export directory. Tests pass a fixture; production may pass repo out/. */

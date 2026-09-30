@@ -200,7 +200,7 @@ describe('MatchRuntimeStack play origin', () => {
     }
   });
 
-  it('ships a /riffle bundle and sources with no Amplify import or credential material', () => {
+  it('ships a /riffle bundle and sources with no credential material and Amplify only behind player-token', () => {
     const bundle = fs.readFileSync(path.join(PLAY_ORIGIN_ARTIFACT_DIR, 'dashboard-play.js'), 'utf8');
     const css = fs.readFileSync(path.join(PLAY_ORIGIN_ARTIFACT_DIR, 'dashboard-play.css'), 'utf8');
     const sources = [
@@ -208,13 +208,35 @@ describe('MatchRuntimeStack play origin', () => {
       ...walkSource(path.join(repoRoot, 'src/client/dashboard')),
       ...walkSource(path.join(repoRoot, 'src/client/dashboard-play')),
     ];
-    const scanned = [bundle, css, ...sources.map((file) => fs.readFileSync(file, 'utf8'))];
+    const playerTokenSource = path.join(repoRoot, 'src/client/dashboard-play/player-token.ts');
+    assert.ok(sources.includes(playerTokenSource));
+    const scanned = [
+      bundle,
+      css,
+      ...sources
+        .filter((file) => file !== playerTokenSource)
+        .map((file) => fs.readFileSync(file, 'utf8')),
+    ];
     for (const body of scanned) {
       for (const pattern of FORBIDDEN_CLIENT_PATTERNS) {
         assert.doesNotMatch(body, pattern);
       }
     }
     assert.match(bundle, /\/riffle/);
+
+    // Signed-in players get a Cognito access token from the studio's Amplify session, and nothing else:
+    // no ID token, no raw storage access, no client-side decoding, no other Cognito APIs.
+    const playerToken = fs.readFileSync(playerTokenSource, 'utf8');
+    const imports = [...playerToken.matchAll(/import\(\s*'([^']+)'\s*\)|from '([^']+)'/g)].map(
+      (match) => match[1] ?? match[2],
+    );
+    assert.deepEqual(new Set(imports.filter((spec) => spec?.includes('amplify'))), new Set(['aws-amplify', 'aws-amplify/auth']));
+    assert.doesNotMatch(playerToken, /^import .*amplify/m, 'Amplify must be lazily imported');
+    assert.match(playerToken, /fetchAuthSession\(\)/);
+    assert.match(playerToken, /accessToken/);
+    assert.doesNotMatch(playerToken, /idToken|localStorage|sessionStorage|atob|decodeJWT|signIn|signOut|CognitoIdentityServiceProvider/);
+    assert.match(bundle, /import\("\.\/chunks\/[^"]+\.js"\)/);
+    assert.doesNotMatch(bundle, /^import .* from "\.\/chunks\//m, 'Amplify chunks must not load for guests');
 
     // localStorage is allowed only for the studio's public-profile account hint, read once.
     const accountHintSource = path.join(repoRoot, 'src/client/dashboard-play/studio-account.ts');

@@ -12,8 +12,10 @@ import { handleLeave, handleResumeSeat, handleSit } from './sit.js';
 import { reapDepartedSeats } from './reap.js';
 import { handleStartHand } from './start-hand.js';
 import { continueAfterHand, dealIfReady, isHandComplete, NEXT_HAND_DELAY_MS } from './auto-deal.js';
+import { playerResolverFromEnv, type ResolvePlayer, type VerifiedPlayer } from './player-identity.js';
 import { createMatchStore, type MatchStore } from './store.js';
 import type {
+  ClientMessage,
   ErrorMessage,
   LambdaContext,
   OutboundMessage,
@@ -33,10 +35,35 @@ export interface RuntimeDeps {
   rngSeed?: () => number;
   /** Pause before the next hand is dealt. `null` leaves finished hands for the caller to advance. */
   nextHandDelayMs?: number | null;
+  /** Verifies Cognito access tokens on sit. Without it every sit is a guest sit. */
+  resolvePlayer?: ResolvePlayer | null;
+  /** Picks guest names and avatars. Defaults to Math.random. */
+  random?: () => number;
 }
 
 function errorMessage(code: string): ErrorMessage {
   return { type: 'error', code };
+}
+
+type SitIdentity = { ok: true; player: VerifiedPlayer | null } | { ok: false; code: string };
+
+/** A supplied token must verify; it never silently becomes a guest sit. */
+async function resolveSitIdentity(
+  message: ClientMessage,
+  resolvePlayer: ResolvePlayer | null | undefined,
+): Promise<SitIdentity> {
+  if (message.accessToken === undefined) {
+    return { ok: true, player: null };
+  }
+  if (typeof message.accessToken !== 'string' || !message.accessToken || !resolvePlayer) {
+    return { ok: false, code: 'invalid_access_token' };
+  }
+  try {
+    const player = await resolvePlayer(message.accessToken);
+    return player ? { ok: true, player } : { ok: false, code: 'invalid_access_token' };
+  } catch {
+    return { ok: false, code: 'identity_unavailable' };
+  }
 }
 
 const MAX_LIST_TABLE_IDS = 32;
@@ -215,12 +242,20 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         return { statusCode: 200 };
       }
 
+      const identity = await resolveSitIdentity(message, deps.resolvePlayer);
+      if (!identity.ok) {
+        await deps.postToConnection(connectionId, errorMessage(identity.code));
+        return { statusCode: 200 };
+      }
+
       const result = await handleSit({
         store: deps.store,
         connection,
         table,
         seats,
         message,
+        player: identity.player,
+        random: deps.random,
       });
 
       if (!result.ok) {
@@ -348,11 +383,15 @@ function readEnv(): RuntimeEnv {
   return {
     tableName,
     awsRegion: process.env.AWS_REGION,
+    cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID,
+    cognitoClientId: process.env.COGNITO_CLIENT_ID,
+    profileTableName: process.env.PROFILE_TABLE_NAME,
   };
 }
 
 let cachedStore: MatchStore | undefined;
 let cachedEnv: RuntimeEnv | undefined;
+let cachedResolvePlayer: ResolvePlayer | null = null;
 
 export async function handler(
   event: WebSocketEvent,
@@ -364,12 +403,24 @@ export async function handler(
       marshallOptions: { removeUndefinedValues: true },
     });
     cachedStore = createMatchStore(client, cachedEnv);
+    cachedResolvePlayer = playerResolverFromEnv(
+      {
+        userPoolId: cachedEnv.cognitoUserPoolId,
+        clientId: cachedEnv.cognitoClientId,
+        profileTableName: cachedEnv.profileTableName,
+      },
+      client,
+    );
+    if (!cachedResolvePlayer) {
+      console.warn('Cognito is not configured; every player sits as a guest.');
+    }
   }
 
   const runtimeHandler = createRuntimeHandler({
     store: cachedStore,
     postToConnection: createPostToConnection(event, cachedEnv.awsRegion),
     now: () => new Date().toISOString(),
+    resolvePlayer: cachedResolvePlayer,
   });
 
   return runtimeHandler(event, context);

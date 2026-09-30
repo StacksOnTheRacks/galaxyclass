@@ -5,8 +5,8 @@ import { renderLoading } from '../surfaces/loading.js';
 import { loadPlayConfig } from './config.js';
 import { buildMyHandViewModel } from './my-hand-view.js';
 import { isTableListPath, parseTableIdFromPath } from './route.js';
+import { createAmplifyAccessToken, guestAccessToken, type GetAccessToken } from './player-token.js';
 import { renderSeatedControls, type SeatAction, type SeatedControlsState } from './seated-controls.js';
-import { randomDisplayName } from './random-name.js';
 import {
   createAutoSitState,
   firstOpenSeat,
@@ -38,10 +38,10 @@ export interface DashboardPlayDeps {
   storage?: SeatTokenStorage | null;
   reconnectDelayMs?: number;
   keepAliveMs?: number;
-  /** Source of randomness for the table name. Defaults to Math.random. */
-  random?: () => number;
   /** Where the studio's account hint lives for the table list chip. Defaults to the browser store. */
   accountStorage?: AccountStorage | null;
+  /** Cognito access token for sitting as the signed-in player. Defaults to the studio's Amplify session. */
+  getAccessToken?: GetAccessToken;
   /** Full-page navigation. Defaults to window.location.assign. */
   assignLocation?: (url: string) => void;
 }
@@ -68,6 +68,7 @@ const ACTION_ERROR_NOTICES: Record<string, string> = {
   insufficient_players: 'Waiting for another player to sit.',
   hand_in_progress: 'A hand is already in progress.',
   off_turn: "It isn't your turn.",
+  account_already_seated: "You're already seated at this table in another window.",
   illegal_action: "That action isn't allowed right now.",
   version_conflict: 'The table changed. Try again.',
 };
@@ -111,7 +112,6 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   let reconnectAttempts = 0;
   let disposed = false;
   let sitRetries = 0;
-  const random = deps.random ?? Math.random;
   const assignLocation = deps.assignLocation ?? ((url: string) => window.location.assign(url));
   const autoSit: AutoSitState = createAutoSitState();
   const seated: SeatedControlsState = { pending: false, notice: null };
@@ -120,8 +120,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   let stopListOccupancy: (() => void) | undefined;
   const account =
     deps.accountStorage === undefined ? readStudioAccount() : readStudioAccount(deps.accountStorage);
-  /** Signed-in players sit under their gamer tag until the table rejects it. */
-  let preferredName = account?.gamerTag ?? null;
+  /** The server names the seat from the verified account; without a token it seats a guest. */
+  let getAccessToken: GetAccessToken = deps.getAccessToken ?? guestAccessToken;
+  let sitAsAccount = account !== null;
 
   const session = {
     tableId,
@@ -249,25 +250,27 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       return;
     }
     sitRetries += 1;
-    const others = snapshot.seats.map((seat) => seat.displayName);
-    if (!autoSit.displayName || others.includes(autoSit.displayName)) {
-      const taken = new Set(others.map((name) => name.toLowerCase()));
-      autoSit.displayName =
-        preferredName && !taken.has(preferredName.toLowerCase())
-          ? preferredName
-          : randomDisplayName(others, random);
-    }
     autoSit.submitting = true;
     autoSit.seatId = seatId;
     autoSit.notice = null;
-    socket.send(
-      JSON.stringify({
-        action: 'sit',
-        seatId,
-        displayName: autoSit.displayName,
-        ...(account?.avatarId ? { avatarId: account.avatarId } : {}),
-      }),
-    );
+    const active = socket;
+    const sendSit = (accessToken: string | null): void => {
+      active.send(JSON.stringify({ action: 'sit', seatId, ...(accessToken ? { accessToken } : {}) }));
+    };
+    if (!sitAsAccount) {
+      sendSit(null);
+      return;
+    }
+    void getAccessToken().then((accessToken) => {
+      if (disposed || !autoSit.submitting || autoSit.seatId !== seatId) {
+        return;
+      }
+      if (socket !== active) {
+        autoSit.submitting = false;
+        return;
+      }
+      sendSit(accessToken);
+    });
   };
 
   const handleError = (code: string): void => {
@@ -287,11 +290,14 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
 
     if (autoSit.submitting) {
       autoSit.submitting = false;
-      if (code === 'invalid_display_name' || code === 'empty_display_name') {
-        if (autoSit.displayName === preferredName) {
-          preferredName = null;
-        }
-        autoSit.displayName = null;
+      if (code === 'invalid_access_token' || code === 'identity_unavailable') {
+        // The session could not be verified (expired, signed out elsewhere); play on as a guest.
+        sitAsAccount = false;
+      } else if (code === 'account_already_seated') {
+        autoSit.wantsSeat = false;
+        autoSit.notice = ACTION_ERROR_NOTICES[code]!;
+        render();
+        return;
       } else if (code === 'seat_occupied' && autoSit.seatId) {
         autoSit.rejected.add(autoSit.seatId);
       } else if (code === 'table_full') {
@@ -499,6 +505,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     return session;
   }
   webSocketUrl = config.webSocketUrl;
+  if (!deps.getAccessToken && config.auth) {
+    getAccessToken = createAmplifyAccessToken(config.auth);
+  }
   connect();
 
   return session;

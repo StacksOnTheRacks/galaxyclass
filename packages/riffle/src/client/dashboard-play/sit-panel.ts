@@ -9,7 +9,6 @@ export interface AutoSitState {
   wantsSeat: boolean;
   submitting: boolean;
   seatId: string | null;
-  displayName: string | null;
   /** Seats the server just refused; cleared on the next snapshot. */
   rejected: Set<string>;
   notice: string | null;
@@ -20,7 +19,6 @@ export function createAutoSitState(): AutoSitState {
     wantsSeat: true,
     submitting: false,
     seatId: null,
-    displayName: null,
     rejected: new Set(),
     notice: null,
   };

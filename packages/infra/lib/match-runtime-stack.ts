@@ -20,6 +20,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3Deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
+import type { PlayerAuthRefs } from './galaxy-class-auth-stack.js';
 import { buildSeededTableListing, SEEDED_TABLES } from './seeded-table-listing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,12 +32,18 @@ export const PLAY_ORIGIN_ARTIFACT_DIR = path.join(rifflePackageRoot, 'public/das
 /** Matches RifflePokerMatchRuntimeCfnExec layer:MatchRuntimeStack*. */
 export const PLAY_ORIGIN_DEPLOY_LAYER_NAME = 'MatchRuntimeStackPlayOriginCli';
 
+export interface MatchRuntimeStackProps extends StackProps {
+  /** Galaxy Class player pool; without it every player sits as a guest. */
+  playerAuth?: PlayerAuthRefs;
+}
+
 export class MatchRuntimeStack extends Stack {
   readonly webSocketUrl: string;
   readonly playOriginBucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props?: StackProps) {
+  constructor(scope: Construct, id: string, props?: MatchRuntimeStackProps) {
     super(scope, id, props);
+    const playerAuth = props?.playerAuth;
 
     const table = new dynamodb.Table(this, 'MatchTable', {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -60,6 +67,13 @@ export class MatchRuntimeStack extends Stack {
       timeout: Duration.seconds(30),
       environment: {
         TABLE_NAME: table.tableName,
+        ...(playerAuth
+          ? {
+              COGNITO_USER_POOL_ID: playerAuth.userPoolId,
+              COGNITO_CLIENT_ID: playerAuth.userPoolClientId,
+              PROFILE_TABLE_NAME: playerAuth.profileTableName,
+            }
+          : {}),
       },
       bundling: {
         target: 'node22',
@@ -71,6 +85,19 @@ export class MatchRuntimeStack extends Stack {
     });
 
     table.grantReadWriteData(handler);
+    if (playerAuth) {
+      // Read-only: the studio's profile API is the only writer of gamer tags and avatars.
+      handler.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['dynamodb:GetItem'],
+          resources: [playerAuth.profileTableArn],
+        }),
+      );
+    }
+    // Only the galaxyclass.app/riffle origin shares the studio's Amplify session.
+    const clientAuthConfig = playerAuth
+      ? { auth: { userPoolId: playerAuth.userPoolId, userPoolClientId: playerAuth.userPoolClientId } }
+      : {};
 
     const webSocketApi = new apigwv2.WebSocketApi(this, 'MatchWebSocketApi', {
       connectRouteOptions: {
@@ -223,6 +250,7 @@ export class MatchRuntimeStack extends Stack {
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
           tables: seededTableListings,
+          ...clientAuthConfig,
         }),
       ],
     });

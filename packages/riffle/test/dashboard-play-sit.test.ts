@@ -1,12 +1,16 @@
 // @vitest-environment happy-dom
 
+import { validateGamerTag } from '@galaxyclass/accounts/gamer-tag';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { randomDisplayName } from '../src/client/dashboard-play/random-name.js';
+import type { GetAccessToken } from '../src/client/dashboard-play/player-token.js';
 import { startDashboardPlay, type DashboardPlaySession } from '../src/client/dashboard-play/session.js';
 import { firstOpenSeat, TABLE_FULL_MESSAGE } from '../src/client/dashboard-play/sit-panel.js';
 import { ACCOUNT_HINT_KEY, type AccountStorage } from '../src/client/dashboard-play/studio-account.js';
+import { createPlayerResolver } from '../src/runtime/player-identity.js';
 import type { PlayerSnapshotSeat, TableSnapshotMessage } from '../src/runtime/types.js';
 import { validateDisplayName } from '../src/shared/display-name.js';
+import { randomDisplayName } from '../src/shared/random-name.js';
+import { accessClaims, attackerKey, signJwt, testAccessTokenVerifier } from './helpers/cognito-tokens.js';
 import { configFetch, FakePlaySocket, flush, memoryStorage, setViewport } from './support/fake-play-socket.js';
 import { RuntimeBridge } from './support/runtime-bridge.js';
 
@@ -61,9 +65,12 @@ function accountHint(hint: Record<string, unknown> | null): AccountStorage {
   return { getItem: (key) => (key === ACCOUNT_HINT_KEY && hint ? JSON.stringify(hint) : null) };
 }
 
+const SIGNED_IN = { signedIn: true, gamerTag: 'River_Rat', avatarId: 42 };
+
 async function joinWithFakeSocket(
   first = snapshot({ seats: [seat('1', { displayName: 'Alice' })] }),
   accountStorage: AccountStorage | null = null,
+  getAccessToken?: GetAccessToken,
 ) {
   const root = addRoot();
   let socket!: FakePlaySocket;
@@ -73,7 +80,7 @@ async function joinWithFakeSocket(
     fetch: configFetch().fetchImpl,
     storage: memoryStorage(),
     accountStorage,
-    random: sequence([0, 0]),
+    getAccessToken,
     createSocket: (url) => {
       socket = new FakePlaySocket(url);
       return socket;
@@ -132,6 +139,15 @@ describe('randomDisplayName', () => {
     expect(name).toBe('Otter 100');
     expect(validateDisplayName(name).ok).toBe(true);
   });
+
+  it('never produces a valid gamer tag, so guests cannot look like accounts', () => {
+    let seed = 1;
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let index = 0; index < 500; index += 1) {
+      expect(validateGamerTag(randomDisplayName([], random)).ok).toBe(false);
+    }
+    expect(validateGamerTag(randomDisplayName(['Lucky Otter'], () => 0)).ok).toBe(false);
+  });
 });
 
 describe('dashboard play automatic seating', () => {
@@ -140,11 +156,11 @@ describe('dashboard play automatic seating', () => {
     setViewport(1440);
   });
 
-  it('sends sit for the first open seat with a random name right after joining', async () => {
+  it('sends a guest sit for the first open seat right after joining, with no name or avatar', async () => {
     const { root, socket } = await joinWithFakeSocket();
 
     expect(socket.actions()).toEqual(['join_table', 'sit']);
-    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'Lucky Otter' });
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2' });
     expect(Object.keys(socket.sent.at(-1)!)).not.toContain('stack');
     expect(panelStatus(root)).toBe('Taking your seat…');
     expect(root.querySelector('[data-field="take-seat"]')).toBeNull();
@@ -162,54 +178,41 @@ describe('dashboard play automatic seating', () => {
     const { socket } = await joinWithFakeSocket();
     socket.receive({ type: 'error', code: 'seat_occupied' });
 
-    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '3', displayName: 'Lucky Otter' });
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '3' });
   });
 
-  it('picks a fresh name when the server rejects the name', async () => {
-    const { socket } = await joinWithFakeSocket();
-    socket.receive({ type: 'error', code: 'invalid_display_name' });
+  it('sits a signed-in player with their access token and never sends the hint gamer tag or avatar', async () => {
+    const { socket } = await joinWithFakeSocket(undefined, accountHint(SIGNED_IN), async () => 'access-token');
+    await flush();
 
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', accessToken: 'access-token' });
+    expect(JSON.stringify(socket.sent)).not.toMatch(/River_Rat|avatarId|displayName/);
+  });
+
+  it('sits as a guest when the studio session has no token', async () => {
+    const { socket } = await joinWithFakeSocket(undefined, accountHint(SIGNED_IN), async () => null);
+    await flush();
+
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2' });
+  });
+
+  it('retries as a guest when the server cannot verify the token', async () => {
+    const { socket } = await joinWithFakeSocket(undefined, accountHint(SIGNED_IN), async () => 'stale-token');
+    await flush();
+    socket.receive({ type: 'error', code: 'invalid_access_token' });
+
+    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2' });
     expect(socket.actions().filter((action) => action === 'sit')).toHaveLength(2);
-    expect(socket.sent.at(-1)).toMatchObject({ action: 'sit', seatId: '2' });
   });
 
-  it('sits a signed-in player under their gamer tag with their Galaxy Class avatar', async () => {
-    const { socket } = await joinWithFakeSocket(
-      undefined,
-      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: 42 }),
-    );
+  it('stops and explains when the account is already seated at the table', async () => {
+    const { root, socket } = await joinWithFakeSocket(undefined, accountHint(SIGNED_IN), async () => 'token');
+    await flush();
+    socket.receive({ type: 'error', code: 'account_already_seated' });
+    socket.receive(snapshot({ seats: [seat('1', { displayName: 'River_Rat' })] }));
 
-    expect(socket.sent.at(-1)).toEqual({
-      action: 'sit',
-      seatId: '2',
-      displayName: 'River_Rat',
-      avatarId: 42,
-    });
-  });
-
-  it('falls back to a random name when the gamer tag is already at the table', async () => {
-    const { socket } = await joinWithFakeSocket(
-      snapshot({ seats: [seat('1', { displayName: 'river_rat' })] }),
-      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: 42 }),
-    );
-
-    expect(socket.sent.at(-1)).toEqual({
-      action: 'sit',
-      seatId: '2',
-      displayName: 'Lucky Otter',
-      avatarId: 42,
-    });
-  });
-
-  it('stops using a gamer tag the table rejects', async () => {
-    const { socket } = await joinWithFakeSocket(
-      undefined,
-      accountHint({ signedIn: true, gamerTag: 'River_Rat', avatarId: null }),
-    );
-    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'River_Rat' });
-
-    socket.receive({ type: 'error', code: 'invalid_display_name' });
-    expect(socket.sent.at(-1)).toEqual({ action: 'sit', seatId: '2', displayName: 'Lucky Otter' });
+    expect(socket.actions().filter((action) => action === 'sit')).toHaveLength(1);
+    expect(root.querySelector('[data-field="take-seat"]')).not.toBeNull();
   });
 
   it('shows a table-full notice and sits once a seat opens', async () => {
@@ -262,12 +265,20 @@ describe('two anonymous players complete a hand through the runtime', () => {
   beforeEach(async () => {
     document.body.replaceChildren();
     setViewport(1440);
-    bridge = new RuntimeBridge();
+    const profiles: Record<string, { gamerTag: string; avatarId: number }> = {
+      'sub-maya': { gamerTag: 'Maya_P', avatarId: 42 },
+    };
+    bridge = new RuntimeBridge(
+      42,
+      null,
+      createPlayerResolver(testAccessTokenVerifier(), async (sub) => profiles[sub] ?? { gamerTag: null, avatarId: null }),
+    );
     await bridge.store.createTable(TABLE_ID, '2026-09-25T12:00:00.000Z');
   });
 
   async function openPlayer(
     accountStorage: AccountStorage | null = null,
+    getAccessToken?: GetAccessToken,
   ): Promise<{ root: HTMLElement; session: DashboardPlaySession }> {
     const root = addRoot();
     const session = await startDashboardPlay({
@@ -276,6 +287,7 @@ describe('two anonymous players complete a hand through the runtime', () => {
       fetch: configFetch().fetchImpl,
       storage: memoryStorage(),
       accountStorage,
+      getAccessToken,
       createSocket: bridge.createSocket,
     });
     for (let round = 0; round < 3; round += 1) {
@@ -353,8 +365,12 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(final.seats.reduce((sum, row) => sum + row.stack, 0)).toBe(4000);
   });
 
-  it('shows a signed-in gamer tag and avatar to every player; guests get a random Galaxy Class avatar', async () => {
-    const maya = await openPlayer(accountHint({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }));
+  it('shows the verified gamer tag and avatar to every player; guests get a random Galaxy Class avatar', async () => {
+    // The hint is display-only: Maya's seat comes from her verified token's profile, not these values.
+    const maya = await openPlayer(
+      accountHint({ signedIn: true, gamerTag: 'Spoofed_Tag', avatarId: 7 }),
+      async () => signJwt(accessClaims({ sub: 'sub-maya' })),
+    );
     const guest = await openPlayer();
 
     const mayaSeat = (await bridge.store.getSeat(TABLE_ID, '1'))!;
@@ -375,6 +391,25 @@ describe('two anonymous players complete a hand through the runtime', () => {
     expect(guest.session.snapshot?.seats.find((row) => row.seatId === '2')?.avatarId).toBe(
       guestSeat.avatarId,
     );
+    expect(guest.root.textContent).not.toContain('Spoofed_Tag');
+  });
+
+  it('seats a player whose hint claims a gamer tag, but who has no verified token, as a guest', async () => {
+    await openPlayer(accountHint({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }), async () => null);
+    const seat1 = (await bridge.store.getSeat(TABLE_ID, '1'))!;
+    expect(seat1.displayName).not.toBe('Maya_P');
+    expect(validateGamerTag(seat1.displayName).ok).toBe(false);
+  });
+
+  it('refuses a forged token end to end and seats the player as a guest', async () => {
+    const forged = await openPlayer(
+      accountHint({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }),
+      async () => signJwt(accessClaims({ sub: 'sub-maya' }), attackerKey),
+    );
+    const seat1 = (await bridge.store.getSeat(TABLE_ID, '1'))!;
+    expect(seat1.displayName).not.toBe('Maya_P');
+    expect(seat1.playerSub).toBeUndefined();
+    expect(forged.session.hasSeatToken()).toBe(true);
   });
 
   it('never sends create_table and rejects a client-supplied stack on sit', async () => {

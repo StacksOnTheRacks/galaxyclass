@@ -25,13 +25,15 @@ export interface SynthResult {
   outdir: string;
 }
 
-export function synthMatchRuntimeStack(): SynthResult {
+export function synthMatchRuntimeStack(options?: { withPlayerAuth?: boolean }): SynthResult {
   const app = new App({
     context: { 'aws:cdk:bundling-stacks': [] },
   });
-  const stack = new MatchRuntimeStack(app, 'MatchRuntimeStack', {
-    env: { account: TEST_ACCOUNT, region: TEST_REGION },
-  });
+  const env = { account: TEST_ACCOUNT, region: TEST_REGION };
+  const playerAuth = options?.withPlayerAuth
+    ? new GalaxyClassAuthStack(app, 'GalaxyClassAuth-prod', { env }).playerAuth
+    : undefined;
+  const stack = new MatchRuntimeStack(app, 'MatchRuntimeStack', { env, playerAuth });
   const template = Template.fromStack(stack);
   return { app, stack, template, outdir: app.outdir };
 }

@@ -19,7 +19,7 @@ import { TEST_ACCOUNT, TEST_REGION } from './support.js';
 const EXPECTED_STUDIO_CSP =
   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 const EXPECTED_RIFFLE_CSP =
-  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
+  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
 function synthSite(options?: { withRiffle?: boolean; withProfileApi?: boolean }) {
   const app = new App({
@@ -149,7 +149,8 @@ test('HSTS and separate studio and riffle CSPs', () => {
   assert.ok(csps.includes(EXPECTED_RIFFLE_CSP));
   const riffle = csps.find((csp) => csp.includes('wss://*.execute-api.us-east-1.amazonaws.com'));
   assert.ok(riffle);
-  assert.doesNotMatch(riffle, /cognito/i);
+  // Riffle may refresh the studio's user-pool session, but never exchange it for AWS credentials.
+  assert.deepEqual(riffle.match(/[\w.*-]*cognito[\w.*-]*/gi), ['cognito-idp.us-east-1.amazonaws.com']);
   for (const policy of policyList) {
     const hsts = headerConfig(policy).StrictTransportSecurity;
     assert.equal(hsts.AccessControlMaxAgeSec, 31536000);

@@ -23,6 +23,13 @@ const accountsLambdaDir = path.join(monorepoRoot, 'packages/accounts/src/lambda'
 
 export const PROFILE_API_THROTTLE = { rateLimit: 20, burstLimit: 40 } as const;
 
+export interface PlayerAuthRefs {
+  userPoolId: string;
+  userPoolClientId: string;
+  profileTableName: string;
+  profileTableArn: string;
+}
+
 /**
  * Prod Cognito pool and public SRP client for Galaxy Class email/password
  * accounts, plus the player profile (gamer tag + avatar) service:
@@ -34,6 +41,8 @@ export const PROFILE_API_THROTTLE = { rateLimit: 20, burstLimit: 40 } as const;
 export class GalaxyClassAuthStack extends Stack {
   /** execute-api host for the site distribution's /api/* origin. */
   readonly profileApiDomainName: string;
+  /** What games need to verify player access tokens and read public profiles. */
+  readonly playerAuth: PlayerAuthRefs;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -164,6 +173,12 @@ export class GalaxyClassAuthStack extends Stack {
     });
 
     this.profileApiDomainName = `${profileApi.apiId}.execute-api.${this.region}.${this.urlSuffix}`;
+    this.playerAuth = {
+      userPoolId: userPool.userPoolId,
+      userPoolClientId: client.userPoolClientId,
+      profileTableName: profiles.tableName,
+      profileTableArn: profiles.tableArn,
+    };
 
     new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new CfnOutput(this, 'UserPoolClientId', { value: client.userPoolClientId });

@@ -1,4 +1,4 @@
-import { validateDisplayName } from '../../shared/display-name.js';
+import { validateDisplayName } from './display-name.js';
 
 const ADJECTIVES = [
   'Lucky', 'Brave', 'Clever', 'Swift', 'Quiet', 'Bold', 'Cosmic', 'Sly', 'Jolly', 'Wild',
@@ -14,7 +14,11 @@ function pick<T>(items: readonly T[], random: () => number): T {
   return items[Math.floor(random() * items.length) % items.length]!;
 }
 
-/** A friendly table name like "Lucky Otter" that no one else at the table is using. */
+/**
+ * A friendly guest name like "Lucky Otter" that no one else at the table is using.
+ * Every name contains a space, which gamer tags never do, so a guest can never
+ * appear under a Galaxy Class account's tag.
+ */
 export function randomDisplayName(
   taken: Iterable<string> = [],
   random: () => number = Math.random,
