@@ -53,17 +53,38 @@ async function resolveSitIdentity(
   resolvePlayer: ResolvePlayer | null | undefined,
 ): Promise<SitIdentity> {
   if (message.accessToken === undefined) {
+    console.info('[riffle] sit identity', { outcome: 'guest_no_token' });
     return { ok: true, player: null };
   }
   if (typeof message.accessToken !== 'string' || !message.accessToken || !resolvePlayer) {
+    console.warn('[riffle] sit identity', {
+      outcome: 'rejected',
+      reason: resolvePlayer ? 'malformed_token' : 'resolver_not_configured',
+    });
     return { ok: false, code: 'invalid_access_token' };
   }
   try {
     const player = await resolvePlayer(message.accessToken);
-    return player ? { ok: true, player } : { ok: false, code: 'invalid_access_token' };
-  } catch {
+    if (!player) {
+      console.warn('[riffle] sit identity', { outcome: 'rejected', reason: 'token_did_not_verify' });
+      return { ok: false, code: 'invalid_access_token' };
+    }
+    console.info('[riffle] sit identity', {
+      outcome: 'verified',
+      hasGamerTag: player.gamerTag !== null,
+      hasAvatar: player.avatarId !== null,
+    });
+    return { ok: true, player };
+  } catch (error) {
+    console.error('[riffle] sit identity', { outcome: 'unavailable', ...describeError(error) });
     return { ok: false, code: 'identity_unavailable' };
   }
+}
+
+function describeError(error: unknown): { error: string; detail: string } {
+  return error instanceof Error
+    ? { error: error.name, detail: error.message }
+    : { error: 'unknown', detail: String(error) };
 }
 
 const MAX_LIST_TABLE_IDS = 32;

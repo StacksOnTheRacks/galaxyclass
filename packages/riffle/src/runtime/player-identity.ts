@@ -66,7 +66,12 @@ export function createPlayerResolver(
     let sub: unknown;
     try {
       ({ sub } = await verifier.verify(accessToken));
-    } catch {
+    } catch (error) {
+      // aws-jwt-verify messages name the failed check (expiry, client_id, token_use); they never echo the token.
+      console.warn('[riffle] access token rejected', {
+        error: error instanceof Error ? error.name : 'unknown',
+        detail: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
     if (typeof sub !== 'string' || sub === '') {
