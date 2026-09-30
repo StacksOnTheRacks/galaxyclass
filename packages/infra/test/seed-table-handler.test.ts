@@ -9,6 +9,8 @@ import {
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+const DEFAULT_STAKES = { SmallBlind: 1, BigBlind: 2, DefaultStack: 2000 };
+
 class ConditionalCheckFailedException extends Error {
   override name = 'ConditionalCheckFailedException';
 }
@@ -41,11 +43,12 @@ function createFakeDynamo() {
 function event(
   RequestType: SeedTableEvent['RequestType'],
   PhysicalResourceId?: string,
+  stakes: Record<string, unknown> = DEFAULT_STAKES,
 ): SeedTableEvent {
   return {
     RequestType,
     PhysicalResourceId,
-    ResourceProperties: { TableName: 'MatchTable' },
+    ResourceProperties: { TableName: 'MatchTable', ...stakes },
   };
 }
 
@@ -84,6 +87,37 @@ describe('seed table custom resource handler', () => {
       street: { NULL: true },
       currentSeatId: { NULL: true },
     });
+  });
+
+  it('writes the stakes from the custom resource properties', async () => {
+    const dynamo = createFakeDynamo();
+    const handler = createSeedTableHandler({
+      putItem: dynamo.putItem,
+      randomTableId: () => 'table-stakes',
+      now: () => '2026-09-25T12:00:00.000Z',
+    });
+
+    await handler(event('Create', undefined, { SmallBlind: '25', BigBlind: '50', DefaultStack: '50000' }));
+
+    assert.deepEqual(dynamo.puts[0]!.Item.blinds, {
+      M: { smallBlind: { N: '25' }, bigBlind: { N: '50' } },
+    });
+    assert.deepEqual(dynamo.puts[0]!.Item.defaultStack, { N: '50000' });
+  });
+
+  it('rejects a big blind that does not exceed the small blind', async () => {
+    const handler = createSeedTableHandler({
+      putItem: async () => {
+        throw new Error('should not write');
+      },
+      randomTableId: () => 'table-invalid',
+      now: () => '2026-09-25T12:00:00.000Z',
+    });
+
+    await assert.rejects(
+      () => handler(event('Create', undefined, { SmallBlind: 5, BigBlind: 5, DefaultStack: 5000 })),
+      /BigBlind must be greater than SmallBlind/,
+    );
   });
 
   it('uses the CSPRNG default id generator in production', async () => {

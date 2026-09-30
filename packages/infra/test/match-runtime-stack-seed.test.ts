@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { before, describe, it } from 'node:test';
 import { DASHBOARD_ARTIFACT_DIR, PLAY_ORIGIN_ARTIFACT_DIR } from '../lib/match-runtime-stack.js';
+import { SEEDED_TABLES } from '../lib/seeded-table-listing.js';
 import {
   listTextArtifacts,
   resourcesOfType,
@@ -21,16 +22,35 @@ describe('MatchRuntimeStack seeded table', () => {
   before(() => {
     synth = synthMatchRuntimeStack();
     const seeds = resourcesOfType(synth.template, 'Custom::SeededPokerTable');
-    assert.equal(seeds.length, 1);
-    seedLogicalId = seeds[0]![0];
+    assert.equal(seeds.length, SEEDED_TABLES.length);
+    const limp = seeds.find(([, seed]) => seed.Properties?.SmallBlind === SEEDED_TABLES[0]!.smallBlind);
+    assert.ok(limp, 'low-stakes seed exists');
+    seedLogicalId = limp[0];
     matchTableId = Object.keys(synth.template.findResources('AWS::DynamoDB::Table'))[0]!;
   });
 
-  it('adds exactly one seed custom resource bound to the match table', () => {
-    const [, seed] = resourcesOfType(synth.template, 'Custom::SeededPokerTable')[0]!;
-    assert.deepEqual(seed.Properties?.TableName, { Ref: matchTableId });
-    assert.ok(seed.Properties?.ServiceToken, 'backed by a provider');
-    assert.deepEqual(Object.keys(seed.Properties ?? {}).sort(), ['ServiceToken', 'TableName']);
+  it('seeds one custom resource per stakes level, bound to the match table', () => {
+    const seeds = resourcesOfType(synth.template, 'Custom::SeededPokerTable');
+    for (const spec of SEEDED_TABLES) {
+      const match = seeds.find(
+        ([, seed]) =>
+          seed.Properties?.SmallBlind === spec.smallBlind &&
+          seed.Properties?.BigBlind === spec.bigBlind &&
+          seed.Properties?.DefaultStack === spec.defaultStack,
+      );
+      assert.ok(match, `seed for ${spec.name}`);
+    }
+    for (const [, seed] of seeds) {
+      assert.deepEqual(seed.Properties?.TableName, { Ref: matchTableId });
+      assert.ok(seed.Properties?.ServiceToken, 'backed by a provider');
+      assert.deepEqual(Object.keys(seed.Properties ?? {}).sort(), [
+        'BigBlind',
+        'DefaultStack',
+        'ServiceToken',
+        'SmallBlind',
+        'TableName',
+      ]);
+    }
   });
 
   it('exports SeededTableId from the custom resource, not a hardcoded id', () => {
@@ -88,7 +108,11 @@ describe('MatchRuntimeStack seeded table', () => {
     for (const [, deployment] of deployments) {
       const props = deployment.Properties ?? {};
       const { raw } = stagedConfigForDeployment(synth.outdir, props);
-      assert.match(raw, /Galaxy Class Table/);
+      assert.match(
+        raw,
+        /"name":"The Limp".*"name":"The Button".*"name":"Big Slick".*"name":"Pocket Rockets"/,
+      );
+      assert.match(raw, /"blindsLabel":"\$1 \/ \$2".*"blindsLabel":"\$25 \/ \$50"/);
       assert.match(raw, /"maxSeats":8/);
       assert.match(JSON.stringify(props.SourceMarkers), new RegExp(seedLogicalId));
     }

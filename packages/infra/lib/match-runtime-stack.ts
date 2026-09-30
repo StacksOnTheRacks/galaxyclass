@@ -20,7 +20,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3Deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
-import { buildSeededTableListing } from './seeded-table-listing.js';
+import { buildSeededTableListing, SEEDED_TABLES } from './seeded-table-listing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.join(__dirname, '../../..');
@@ -145,13 +145,20 @@ export class MatchRuntimeStack extends Stack {
       onEventHandler: seedHandler,
     });
 
-    const seededTable = new CustomResource(this, 'SeededTable', {
-      serviceToken: seedProvider.serviceToken,
-      resourceType: 'Custom::SeededPokerTable',
-      properties: { TableName: table.tableName },
+    const seededTableListings = SEEDED_TABLES.map((spec) => {
+      const seededTable = new CustomResource(this, spec.constructId, {
+        serviceToken: seedProvider.serviceToken,
+        resourceType: 'Custom::SeededPokerTable',
+        properties: {
+          TableName: table.tableName,
+          SmallBlind: spec.smallBlind,
+          BigBlind: spec.bigBlind,
+          DefaultStack: spec.defaultStack,
+        },
+      });
+      return buildSeededTableListing(seededTable.getAttString('TableId'), spec);
     });
-    const seededTableId = seededTable.getAttString('TableId');
-    const seededTableListing = buildSeededTableListing(seededTableId);
+    const seededTableId = seededTableListings[0]!.id;
 
     new CfnOutput(this, 'SeededTableId', {
       value: seededTableId,
@@ -189,7 +196,7 @@ export class MatchRuntimeStack extends Stack {
         s3Deployment.Source.asset(DASHBOARD_ARTIFACT_DIR),
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
-          tables: [seededTableListing],
+          tables: seededTableListings,
         }),
       ],
       distribution,
@@ -215,7 +222,7 @@ export class MatchRuntimeStack extends Stack {
         s3Deployment.Source.asset(PLAY_ORIGIN_ARTIFACT_DIR),
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
-          tables: [seededTableListing],
+          tables: seededTableListings,
         }),
       ],
     });

@@ -136,7 +136,7 @@ describe('MatchRuntimeStack play origin', () => {
     const { raw, marker } = stagedConfigForDeployment(synth.outdir, playDeploymentProps);
     assert.match(
       raw,
-      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"Galaxy Class Table"/,
+      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"The Limp"/,
       `riffle config.json includes webSocketUrl and seeded table listing: ${raw}`,
     );
     assert.match(raw, /"maxSeats":8\}\]\}$/);
