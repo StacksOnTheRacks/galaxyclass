@@ -2,6 +2,7 @@ import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { assertSingleAmplifyCore } from './assert-single-amplify.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,7 +29,7 @@ for (const bundle of bundles) {
   if (bundle.split) {
     await rm(path.join(path.dirname(outfile), 'chunks'), { recursive: true, force: true });
   }
-  await build({
+  const result = await build({
     entryPoints: [path.join(root, bundle.entry)],
     bundle: true,
     ...output,
@@ -37,7 +38,9 @@ for (const bundle of bundles) {
     loader: { '.css': 'css' },
     external: bundle.external,
     define: bundle.define,
+    metafile: true,
   });
+  assertSingleAmplifyCore(result.metafile, bundle.outfile);
 }
 
 await cp(path.join(root, 'src/client/identity.css'), path.join(root, 'public/identity.css'));

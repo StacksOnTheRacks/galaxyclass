@@ -2,13 +2,14 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { assertSingleAmplifyCore } from './assert-single-amplify.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = path.join(root, 'public/dashboard-riffle');
 
 await mkdir(outdir, { recursive: true });
 await rm(path.join(outdir, 'chunks'), { recursive: true, force: true });
-await build({
+const result = await build({
   entryPoints: [path.join(root, 'src/client/dashboard-play.ts')],
   bundle: true,
   outdir,
@@ -21,7 +22,9 @@ await build({
   loader: { '.css': 'css' },
   external: ['/assets/*'],
   define: { RIFFLE_PUBLIC_BASE: '"/riffle"' },
+  metafile: true,
 });
+assertSingleAmplifyCore(result.metafile, 'public/dashboard-riffle/dashboard-play.js');
 
 const cssPath = path.join(outdir, 'dashboard-play.css');
 const css = (await readFile(cssPath, 'utf8'))
