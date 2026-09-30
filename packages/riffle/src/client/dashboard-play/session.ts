@@ -258,10 +258,12 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       active.send(JSON.stringify({ action: 'sit', seatId, ...(accessToken ? { accessToken } : {}) }));
     };
     if (!sitAsAccount) {
+      console.info('[riffle] sitting as a guest', { accountHint: account !== null });
       sendSit(null);
       return;
     }
     void getAccessToken().then((accessToken) => {
+      console.info('[riffle] sitting as account', { hasAccessToken: accessToken !== null });
       if (disposed || !autoSit.submitting || autoSit.seatId !== seatId) {
         return;
       }
@@ -292,6 +294,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       autoSit.submitting = false;
       if (code === 'invalid_access_token' || code === 'identity_unavailable') {
         // The session could not be verified (expired, signed out elsewhere); play on as a guest.
+        console.warn('[riffle] server rejected the account sit; retrying as a guest', { code });
         sitAsAccount = false;
       } else if (code === 'account_already_seated') {
         autoSit.wantsSeat = false;
@@ -507,6 +510,8 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   webSocketUrl = config.webSocketUrl;
   if (!deps.getAccessToken && config.auth) {
     getAccessToken = createAmplifyAccessToken(config.auth);
+  } else if (!deps.getAccessToken) {
+    console.warn('[riffle] config.json has no auth block; account sits will carry no token');
   }
   connect();
 

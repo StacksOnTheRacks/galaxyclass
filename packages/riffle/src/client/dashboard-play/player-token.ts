@@ -24,8 +24,16 @@ export function createAmplifyAccessToken(auth: PlayAuthConfig): GetAccessToken {
         configured = true;
       }
       const session = await fetchAuthSession();
-      return session.tokens?.accessToken?.toString() ?? null;
-    } catch {
+      const token = session.tokens?.accessToken?.toString() ?? null;
+      if (!token) {
+        console.warn('[riffle] no studio session tokens; sitting as a guest');
+      }
+      return token;
+    } catch (error) {
+      console.warn('[riffle] could not read the studio session; sitting as a guest', {
+        error: error instanceof Error ? error.name : 'unknown',
+        detail: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   };
