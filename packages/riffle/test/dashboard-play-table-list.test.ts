@@ -227,6 +227,54 @@ describe('dashboard play table list', () => {
     expect(root.dataset.surface).toBe('table-not-found');
   });
 
+  it('links back to the Galaxy Class library and shows the Riffle Poker logo', async () => {
+    const { root } = await startList('/riffle');
+    const back = root.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a');
+    expect(back?.textContent).toContain('Galaxy Class Library');
+    expect(back?.getAttribute('href')).toBe('https://galaxyclass.app/#library');
+    const logo = root.querySelector<HTMLImageElement>('.table-list-lockup');
+    expect(logo?.getAttribute('alt')).toBe('Riffle Poker');
+    expect(logo?.getAttribute('src')).toBe('/assets/brand/riffle-lockup-reverse.svg');
+    expect(root.textContent).not.toMatch(/\briffle\b/);
+  });
+
+  it('shows an empty state with a way back to the library when no tables are open', () => {
+    const root = mountRoot();
+    renderTableList(root, []);
+    const empty = root.querySelector('.table-list-empty');
+    expect(empty?.querySelector('h2')?.textContent).toBe('No tables are dealing right now');
+    expect(empty?.querySelector('a')?.getAttribute('href')).toBe('https://galaxyclass.app/#library');
+    expect(root.querySelector('.table-list-panel-desktop')).toBeNull();
+  });
+
+  it('labels each table with its seat status', () => {
+    const root = mountRoot();
+    const full = { ...SAMPLE_TABLE, id: 'a47ac10b-58cc-4372-a567-0e02b2c3d479', maxSeats: 2 };
+    renderTableList(root, [SAMPLE_TABLE, full], null, { [TABLE_ID]: 3, [full.id]: 2 });
+    const badges = Array.from(
+      root.querySelectorAll('.table-list-row .table-list-status-badge'),
+      (badge) => badge.textContent,
+    );
+    expect(badges).toEqual(['Seats open', 'Table full']);
+  });
+
+  it('shows a busy skeleton while the table config loads', async () => {
+    const root = mountRoot();
+    let release: (value: Response) => void = () => {};
+    const session = startDashboardPlay({
+      root,
+      pathname: '/riffle',
+      fetch: () => new Promise<Response>((resolve) => (release = resolve)),
+      accountStorage: accountStorage(),
+      createSocket: (url) => new FakePlaySocket(url),
+    });
+    await flush();
+    expect(root.dataset.surface).toBe('table-list');
+    expect(root.querySelector('[role="status"][aria-busy="true"]')?.textContent).toContain('Shuffling');
+    release(new Response('{}', { status: 500 }));
+    openSessions.push(await session);
+  });
+
   it('shows responsive card layout at tablet width', async () => {
     setViewport(834);
     const { root } = await startList('/riffle');

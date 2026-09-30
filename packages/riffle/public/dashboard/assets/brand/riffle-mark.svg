@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-8 -8 1040 486" role="img" aria-labelledby="t">
+<title id="t">Riffle Poker</title>
+<path fill="#262626" d="M0 460L638 13Q655 1 667 18L812 222L0 460Z"/><g fill="#FFFFFF"><g transform="translate(618 116) rotate(58)"><circle cx="0" cy="-29" r="25"/><circle cx="-27" cy="11" r="25"/><circle cx="27" cy="11" r="25"/><path d="M0 2L-14 52H14Z"/></g></g><path fill="#FFFFFF" d="M0 460L722 177Q743 169 752 190L790 282L155 462Z"/><path fill="#EC1C24" d="M155 462L884 178Q905 170 914 191L1024 462Z"/><g fill="#FFFFFF"><path transform="translate(833 300) rotate(-14)" d="M0 -76C12 -30 30 -12 76 0C30 12 12 30 0 76C-12 30 -30 12 -76 0C-30 -12 -12 -30 0 -76Z"/></g>
+</svg>

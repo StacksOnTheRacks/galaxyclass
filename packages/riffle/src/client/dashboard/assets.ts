@@ -50,11 +50,34 @@ export function cardAssetUrl(card: AssetCard): string | null {
 }
 
 export function cardBackUrl(): string {
-  return `${dashboardAssetBase()}/cards/back-blue.webp`;
+  return `${dashboardAssetBase()}/cards/back-red.webp`;
 }
 
 export function iconUrl(name: string): string {
   return `${dashboardAssetBase()}/icons/${name}.svg`;
+}
+
+export function brandAssetUrl(name: string): string {
+  return `${dashboardAssetBase()}/brand/${name}`;
+}
+
+/** The logo lockup; the reverse variant keeps "RIFFLE" legible on felt. */
+export function createBrandLockup(className: string, variant: 'reverse' | 'default' = 'reverse'): HTMLImageElement {
+  const logo = document.createElement('img');
+  logo.className = className;
+  logo.src = brandAssetUrl(variant === 'reverse' ? 'riffle-lockup-reverse.svg' : 'riffle-lockup.svg');
+  logo.alt = 'Riffle Poker';
+  logo.decoding = 'async';
+  return logo;
+}
+
+export function createBrandMark(className: string): HTMLImageElement {
+  const mark = document.createElement('img');
+  mark.className = className;
+  mark.src = brandAssetUrl('riffle-mark-reverse.svg');
+  mark.alt = 'Riffle Poker';
+  mark.decoding = 'async';
+  return mark;
 }
 
 export function createCardImage(card: AssetCard | 'back', className: string): HTMLImageElement {

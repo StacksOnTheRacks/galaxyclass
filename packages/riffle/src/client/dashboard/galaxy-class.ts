@@ -21,3 +21,10 @@ export function seatAvatarUrl(avatarId: number | undefined, seed: string): strin
 export function galaxyClassAccountUrl(): string {
   return `${galaxyClassOrigin()}/account`;
 }
+
+/** Mirrors the studio site's LIBRARY_HREF (packages/www primitives). */
+export const GALAXY_CLASS_LIBRARY_PATH = '/#library';
+
+export function galaxyClassLibraryUrl(): string {
+  return `${galaxyClassOrigin()}${GALAXY_CLASS_LIBRARY_PATH}`;
+}

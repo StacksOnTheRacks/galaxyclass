@@ -4,7 +4,7 @@ import { renderPlayerRow, type PlayerRowSeat } from '../dashboard/player-row.js'
 import { seatAvatarUrl } from '../dashboard/galaxy-class.js';
 import { renderDashboardTableShell } from '../dashboard/table-shell.js';
 
-export const DASHBOARD_TABLE_NAME = 'Riffle table';
+export const DASHBOARD_TABLE_NAME = 'Riffle Poker table';
 
 export function parseCard(card: string): BoardCard {
   return { rank: card.slice(0, -1), suit: card.slice(-1) as BoardCard['suit'] };

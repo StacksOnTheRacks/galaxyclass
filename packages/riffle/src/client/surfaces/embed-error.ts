@@ -15,7 +15,7 @@ const REASON_COPY: Record<EmbedErrorReason, string> = {
   invalid_session: 'Your session is no longer valid. Ask your host for a new link.',
   attach_failed: 'We could not attach you to the table.',
   match_not_found:
-    'This play link is invalid, expired, or unavailable. Return to the host room and reopen the table from there. This is not a Riffle login.',
+    'This play link is invalid, expired, or unavailable. Return to the host room and reopen the table from there. This is not a Riffle Poker login.',
 };
 
 export function renderEmbedError(root: HTMLElement, reason: EmbedErrorReason): void {

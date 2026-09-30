@@ -104,7 +104,7 @@ describe('shared play URL client attach', () => {
     expect(root.dataset.surface).toBe('embed-error');
     expect(root.textContent).toContain("Couldn't open this table");
     expect(root.textContent).toContain('This play link is invalid, expired, or unavailable');
-    expect(root.textContent).toContain('This is not a Riffle login');
+    expect(root.textContent).toContain('This is not a Riffle Poker login');
   });
 
   it('sets embed dataset when embed=1', async () => {

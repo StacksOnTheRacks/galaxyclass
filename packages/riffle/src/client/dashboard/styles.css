@@ -6,31 +6,88 @@
   src: url('/assets/fonts/inter-latin-wght.woff2') format('woff2');
 }
 
-/* Tokens mirror the Riffle Poker Design Figma variables (file NgpCBblDdJ7cw4TLrH9kUE). */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/assets/fonts/poppins-latin-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/assets/fonts/poppins-latin-800.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/assets/fonts/poppins-latin-900.woff2') format('woff2');
+}
+
+/*
+ * Riffle Poker theme. Brand colors come from the logo (charcoal, red, white);
+ * the surfaces are casino felt, walnut rail, and brass. Text/background pairs
+ * are chosen for WCAG AA: white on --riffle-red-strong is 5.2:1, where the
+ * pure logo red (4.4:1) is kept for artwork and large display type only.
+ */
 :root {
-  --color-background-primary: #09090b;
-  --color-background-card: #18181b;
-  --color-background-accent: #27272a;
-  --color-background-inverse: #fafafa;
-  --color-border-subtle: #27272a;
-  --color-border-strong: #52525b;
-  --color-text-default: #fafafa;
-  --color-text-muted: #a1a1aa;
-  --color-text-inverse: #18181b;
-  --color-action-primary: #fafafa;
-  --color-action-primary-fg: #18181b;
-  --color-action-secondary: #27272a;
-  --color-action-focus: #2563eb;
-  --color-status-success: #22c55e;
-  --color-status-warning: #f59e0b;
-  --color-status-danger: #ef4444;
-  --color-status-info: #2563eb;
-  --color-status-bg: #27272a;
-  --card-shadow-color: rgba(157, 179, 206, 0.45);
+  --riffle-charcoal: #262626;
+  --riffle-red: #ec1c24;
+  --riffle-red-strong: #d4141c;
+  --riffle-red-deep: #a80f16;
+  --riffle-white: #ffffff;
+
+  --felt-950: #04150e;
+  --felt-900: #072319;
+  --felt-800: #0b3424;
+  --felt-700: #0f4a33;
+  --felt-600: #146142;
+  --rail-wood: #3a2116;
+  --rail-wood-light: #5c3524;
+  --brass: #c9a24a;
+  --brass-bright: #f5c542;
+
+  --chip-red: #ec1c24;
+  --chip-black: #262626;
+  --chip-white: #f4f1ea;
+  --chip-blue: #1d5fbf;
+  --chip-green: #1e8a4c;
+  --chip-gold: #d9a935;
+
+  --color-background-primary: var(--felt-900);
+  --color-background-card: #161c19;
+  --color-background-accent: #242c28;
+  --color-background-hover: #313b36;
+  --color-background-inverse: #faf8f3;
+  --color-border-subtle: #2b3631;
+  --color-border-strong: #56645d;
+  --color-text-default: #faf8f3;
+  --color-text-muted: #b7c2bb;
+  --color-text-inverse: var(--riffle-charcoal);
+  --color-action-primary: var(--riffle-red-strong);
+  --color-action-primary-hover: var(--riffle-red-deep);
+  --color-action-primary-fg: var(--riffle-white);
+  --color-action-secondary: #242c28;
+  --color-action-focus: var(--brass-bright);
+  --color-status-success: #3ccf82;
+  --color-status-warning: #f5b93a;
+  --color-status-danger: #ff6166;
+  --color-status-info: var(--brass-bright);
+  --color-status-bg: #242c28;
+  --card-shadow-color: rgba(0, 0, 0, 0.45);
+
+  --felt-surface: radial-gradient(ellipse 120% 90% at 50% 0%, rgba(38, 150, 96, 0.35), transparent 65%),
+    url('/assets/brand/felt-noise.svg'), linear-gradient(180deg, var(--felt-800), var(--felt-950));
 
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 14px;
   --radius-full: 999px;
 
   --spacing-xs: 4px;
@@ -40,6 +97,7 @@
   --spacing-xl: 32px;
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
 .visually-hidden {
@@ -62,7 +120,7 @@
   min-height: 100vh;
   min-height: 100dvh;
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
-  background: var(--color-background-primary);
+  background: transparent;
   color: var(--color-text-default);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -170,7 +228,45 @@
   padding: var(--spacing-lg);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--color-background-card);
+  background: color-mix(in srgb, var(--color-background-card) 92%, transparent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+
+/* The board is the table itself: felt inside a walnut rail with a brass pinstripe. */
+.dashboard-region-board {
+  --color-text-muted: #d5ded8;
+  position: relative;
+  border: 10px solid var(--rail-wood);
+  border-radius: 48px;
+  background:
+    url('/assets/brand/felt-noise.svg'),
+    radial-gradient(ellipse 80% 90% at 50% 30%, var(--felt-600), var(--felt-800) 70%, var(--felt-900));
+  box-shadow:
+    inset 0 0 0 2px rgba(201, 162, 74, 0.55),
+    inset 0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 1px var(--rail-wood-light),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.dashboard-region-board::after {
+  content: '';
+  position: absolute;
+  right: 28px;
+  bottom: 18px;
+  width: 84px;
+  height: 40px;
+  background: url('/assets/brand/riffle-mark-reverse.svg') center / contain no-repeat;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+[data-breakpoint='phone'] .dashboard-region-board {
+  border-width: 6px;
+  border-radius: 28px;
+}
+
+[data-breakpoint='phone'] .dashboard-region-board::after {
+  display: none;
 }
 
 .dashboard-region:empty {
@@ -229,10 +325,28 @@
 }
 
 .dashboard-wordmark {
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-brand-lockup {
+  display: block;
+  width: auto;
+  height: 56px;
+}
+
+.dashboard-brand-mark {
+  display: block;
+  width: auto;
+  height: 22px;
+}
+
+.dashboard-brand-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .dashboard-brand-divider {
@@ -248,16 +362,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 800;
 }
 
 .dashboard-game-badge {
   flex: none;
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: var(--spacing-xs) 10px;
+  border: 1px solid rgba(201, 162, 74, 0.55);
   border-radius: var(--radius-full);
-  background: var(--color-background-accent);
+  background: rgba(4, 21, 14, 0.7);
+  color: var(--brass-bright);
+  font-weight: 600;
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
@@ -316,7 +434,7 @@
 }
 
 .dashboard-icon-button:hover {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 .dashboard-icon {
@@ -338,7 +456,7 @@
 }
 
 .dashboard-control-leave:hover {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 [data-breakpoint='phone'] .dashboard-brand {
@@ -385,9 +503,10 @@
 
 /* ---------- Player row ---------- */
 
+/* Every seat gets the same panel size; hero and acting state only change color. */
 .player-row-tiles {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: var(--spacing-md);
 }
 
@@ -410,7 +529,8 @@
   overflow: hidden;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--color-background-card);
+  background: color-mix(in srgb, var(--color-background-card) 94%, transparent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 [data-breakpoint='phone'] .player-row-tile {
@@ -419,34 +539,7 @@
 }
 
 .player-row-tile[data-local='true'] {
-  flex-grow: 1.35;
-  border-color: var(--color-border-strong);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-}
-
-.player-row-tile[data-local='true'] .player-row-video {
-  height: 148px;
-}
-
-[data-breakpoint='tablet'] .player-row-tile[data-local='true'] .player-row-video {
-  height: 170px;
-}
-
-.player-row-tile[data-local='true'] .player-row-video[data-compact='true'] {
-  height: 76px;
-}
-
-.player-row-tile[data-local='true'] .player-row-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.player-row-tile[data-local='true'] .player-row-stack-amount {
-  font-size: 18px;
-}
-
-[data-breakpoint='phone'] .player-row-tile[data-local='true'] {
-  min-width: 68px;
+  border-color: var(--riffle-red-strong);
 }
 
 .player-row-tile[data-acting='true'] {
@@ -474,19 +567,19 @@
 }
 
 .player-row-video[data-tone='violet'] {
-  background: #1e1b2e;
+  background: #2a0f14;
 }
 
 .player-row-video[data-tone='green'] {
-  background: #0b1f14;
+  background: #0b3424;
 }
 
 .player-row-video[data-tone='ember'] {
-  background: #2a1208;
+  background: #33200f;
 }
 
 .player-row-video[data-tone='navy'] {
-  background: #0c1727;
+  background: #0d1b2e;
 }
 
 .player-row-video[data-tone='local'] {
@@ -825,7 +918,7 @@
 }
 
 .player-row-badge[data-tone='info'] {
-  color: #3b82f6;
+  color: var(--color-status-info);
 }
 
 .player-row-badge[data-tone='neutral'] {
@@ -962,9 +1055,10 @@
 }
 
 .board-pot .board-pot-amount {
+  font-family: var(--font-display);
   font-size: 32px;
   line-height: 40px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.01em;
 }
 
@@ -986,7 +1080,7 @@
 }
 
 .board-action-on-you {
-  color: #3b82f6;
+  color: var(--color-status-info);
   font-size: 12px;
   line-height: 16px;
   font-weight: 500;
@@ -1534,7 +1628,7 @@
 }
 
 .action-controls-action-button:hover:not(:disabled) {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 .action-controls-action-button[data-variant='primary'] {
@@ -1544,7 +1638,7 @@
 }
 
 .action-controls-action-button[data-variant='primary']:hover:not(:disabled) {
-  background: #e4e4e7;
+  background: var(--color-action-primary-hover);
 }
 
 .action-controls-action-button:disabled {
@@ -1705,7 +1799,7 @@
 }
 
 .action-controls-preset-button:hover:not([data-selected='true']) {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 .action-controls-preset-label {
@@ -1759,7 +1853,7 @@
 }
 
 .action-controls-step-button:hover {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 .action-controls-range {
@@ -1899,7 +1993,7 @@
 }
 
 .pre-action-toggle:hover:not([aria-pressed='true']) {
-  background: #3f3f46;
+  background: var(--color-background-hover);
 }
 
 .pre-action-box {

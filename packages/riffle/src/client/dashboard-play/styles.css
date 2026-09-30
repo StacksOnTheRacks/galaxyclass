@@ -1,20 +1,25 @@
 :root {
   color-scheme: dark;
-  --text-primary: var(--color-text-default, #fafafa);
-  --text-muted: var(--color-text-muted, #a1a1aa);
-  --danger: var(--color-status-danger, #ef4444);
-  --accent: #d4af37;
-  --surface-bg: var(--color-background-primary, #09090b);
-  --focus-ring: var(--color-action-focus, #2563eb);
-  font-family: var(--font-sans, 'Inter', system-ui, sans-serif);
+  --text-primary: var(--color-text-default);
+  --text-muted: var(--color-text-muted);
+  --danger: var(--color-status-danger);
+  --accent: var(--brass-bright);
+  --surface-bg: var(--color-background-primary);
+  --focus-ring: var(--color-action-focus);
+  font-family: var(--font-sans);
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--surface-bg);
+  background-color: var(--surface-bg);
   color: var(--text-primary);
+}
+
+body {
+  background-image: url('/assets/brand/suit-pattern.svg'), var(--felt-surface);
+  background-attachment: fixed;
 }
 
 #app {
@@ -31,11 +36,12 @@ body {
 }
 
 .surface {
-  width: min(960px, 100%);
-  min-height: min(640px, calc(100vh - 2rem));
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid var(--color-border-subtle, #27272a);
-  background: var(--color-background-card, #18181b);
+  width: min(560px, 100%);
+  min-height: min(420px, calc(100vh - 2rem));
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: color-mix(in srgb, var(--color-background-card) 88%, transparent);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   padding: 2rem;
   box-sizing: border-box;
   display: flex;
@@ -48,8 +54,10 @@ body {
 
 .surface-title {
   margin: 0;
-  font-size: clamp(1.25rem, 2vw, 1.5rem);
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .surface-message {
@@ -59,18 +67,53 @@ body {
   color: var(--text-muted);
 }
 
+/* Two cards riffling over each other stand in for a spinner. */
 .surface-loading .loading-spinner {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  border: 3px solid var(--color-background-accent, #27272a);
-  border-top-color: var(--accent);
-  animation: dashboard-play-spin 0.9s linear infinite;
+  position: relative;
+  width: 64px;
+  height: 84px;
+  margin-bottom: 0.5rem;
 }
 
-@keyframes dashboard-play-spin {
-  to {
-    transform: rotate(360deg);
+.surface-loading .loading-spinner::before,
+.surface-loading .loading-spinner::after {
+  content: '';
+  position: absolute;
+  inset: 0 12px;
+  border-radius: 6px;
+  border: 3px solid var(--riffle-white);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.surface-loading .loading-spinner::before {
+  background: var(--riffle-charcoal);
+  transform: rotate(-14deg) translateX(-8px);
+  animation: riffle-shuffle-left 1.1s ease-in-out infinite;
+}
+
+.surface-loading .loading-spinner::after {
+  background: var(--riffle-red);
+  transform: rotate(14deg) translateX(8px);
+  animation: riffle-shuffle-right 1.1s ease-in-out infinite;
+}
+
+@keyframes riffle-shuffle-left {
+  50% {
+    transform: rotate(-4deg) translateX(10px);
+    z-index: 1;
+  }
+}
+
+@keyframes riffle-shuffle-right {
+  50% {
+    transform: rotate(4deg) translateX(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface-loading .loading-spinner::before,
+  .surface-loading .loading-spinner::after {
+    animation: none;
   }
 }
 
@@ -79,7 +122,8 @@ body {
 }
 
 #app button:focus-visible,
-#app input:focus-visible {
+#app input:focus-visible,
+#app a:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -94,23 +138,28 @@ body {
 .sit-panel-submit {
   align-self: flex-start;
   padding: 8px 24px;
-  border: 1px solid var(--color-action-primary, #fafafa);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-action-primary, #fafafa);
-  color: var(--color-action-primary-fg, #18181b);
+  border: 1px solid var(--color-action-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-action-primary);
+  color: var(--color-action-primary-fg);
   font: inherit;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 24px;
-  font-weight: 500;
+  font-weight: 800;
   cursor: pointer;
+}
+
+.sit-panel-submit:hover {
+  background: var(--color-action-primary-hover);
 }
 
 .seated-leave-button {
   align-self: flex-start;
   padding: 8px 24px;
-  border: 1px solid var(--color-border-subtle, #27272a);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-action-secondary, #27272a);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-action-secondary);
   color: inherit;
   font: inherit;
   font-size: 16px;
