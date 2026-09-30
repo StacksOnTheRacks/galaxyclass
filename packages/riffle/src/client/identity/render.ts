@@ -30,7 +30,7 @@ export function renderEntryPage(): string {
   return shell(
     `${headerChrome(false)}
     <main class="identity-main">
-      <h1 class="surface-title">Play poker on Riffle</h1>
+      <h1 class="surface-title">Play Riffle Poker</h1>
       <p class="surface-copy">Choose how you want to start.</p>
       <div class="identity-actions">
         <a class="identity-button identity-button-primary" href="/sign-in">Sign in</a>

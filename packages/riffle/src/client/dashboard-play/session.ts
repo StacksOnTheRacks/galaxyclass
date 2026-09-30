@@ -16,7 +16,7 @@ import {
 } from './sit-panel.js';
 import { startListOccupancy, type OccupancyById } from './list-occupancy.js';
 import { readStudioAccount, type AccountStorage } from './studio-account.js';
-import { renderTableList } from './table-list.js';
+import { renderTableList, renderTableListLoading } from './table-list.js';
 import { renderTableNotFound } from './table-not-found.js';
 import { renderSnapshotShell } from './view.js';
 
@@ -461,7 +461,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       return session;
     }
 
-    renderLoading(root, { copy: 'shared' });
+    renderTableListLoading(root, account);
     const listConfig = await loadPlayConfig(deps.fetch);
     if (!listConfig) {
       failClosed();

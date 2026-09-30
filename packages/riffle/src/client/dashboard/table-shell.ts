@@ -1,4 +1,5 @@
-import { createIcon, createVisuallyHidden } from './assets.js';
+import { createBrandLockup, createBrandMark, createIcon, createVisuallyHidden } from './assets.js';
+import { publicBase } from './public-base.js';
 
 export const DASHBOARD_TABLE_SHELL_STYLE_ID = 'dashboard-table-shell-styles';
 
@@ -106,11 +107,17 @@ function renderTopBar(
   tableName.dataset.field = 'table-name';
   tableName.textContent = props.tableName;
 
-  if (breakpoint !== 'phone') {
-    const wordmark = document.createElement('span');
-    wordmark.className = 'dashboard-wordmark';
-    wordmark.textContent = 'riffle';
+  const home = document.createElement('a');
+  home.className = 'dashboard-wordmark';
+  home.href = `${publicBase()}/`;
+  home.title = 'All Riffle Poker tables';
+  home.append(
+    breakpoint === 'phone'
+      ? createBrandMark('dashboard-brand-mark')
+      : createBrandLockup('dashboard-brand-lockup'),
+  );
 
+  if (breakpoint !== 'phone') {
     const divider = document.createElement('span');
     divider.className = 'dashboard-brand-divider';
     divider.setAttribute('aria-hidden', 'true');
@@ -119,9 +126,12 @@ function renderTopBar(
     badge.className = 'dashboard-game-badge';
     badge.textContent = "No-Limit Hold'em";
 
-    brand.append(wordmark, divider, tableName, badge);
+    brand.append(home, divider, tableName, badge);
   } else {
-    brand.append(tableName);
+    const titleRow = document.createElement('div');
+    titleRow.className = 'dashboard-brand-phone-row';
+    titleRow.append(home, tableName);
+    brand.append(titleRow);
   }
 
   const controls = document.createElement('div');

@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   deriveInitials,
@@ -367,5 +369,30 @@ describe('player row tiles', () => {
     const loser = root.querySelector<HTMLElement>('[data-seat="s1"]')!;
     expect(loser.querySelector('[data-field="win"]')).toBeNull();
     expect(loser.querySelector('.player-row-stack-row [data-cards="faces"]')).not.toBeNull();
+  });
+});
+
+describe('player row seat sizing', () => {
+  const css = readFileSync(join(import.meta.dirname, '../src/client/dashboard/styles.css'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const sizing = /\b(flex(-grow|-basis)?|width|min-width|max-width|height|min-height|font-size)\s*:/;
+
+  function rulesFor(selectorPattern: RegExp): string[] {
+    return Array.from(css.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+      .filter(([, selector]) => selectorPattern.test(selector ?? ''))
+      .map(([, , body]) => body ?? '');
+  }
+
+  it('gives the hero and acting seats the same panel size as everyone else', () => {
+    const stateRules = rulesFor(/\.player-row-tile\[data-(local|acting)='true'\]/);
+    expect(stateRules.length).toBeGreaterThan(0);
+    for (const body of stateRules) {
+      expect(body).not.toMatch(sizing);
+    }
+  });
+
+  it('stretches every tile in the row to one height', () => {
+    const [tiles] = rulesFor(/^\s*\.player-row-tiles\s*$/);
+    expect(tiles).toMatch(/align-items:\s*stretch/);
   });
 });
