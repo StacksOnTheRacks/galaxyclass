@@ -24,14 +24,46 @@ export interface SeedTableDeps {
   now: () => string;
 }
 
-export const SEEDED_TABLE_DEFAULTS = {
-  defaultStack: 2000,
-  maxSeats: 8,
-  smallBlind: 1,
-  bigBlind: 2,
-} as const;
+export const SEEDED_TABLE_MAX_SEATS = 8;
 
-export function buildSeedTableItem(tableId: string, createdAt: string): Record<string, AttributeValue> {
+export interface SeedTableStakes {
+  smallBlind: number;
+  bigBlind: number;
+  defaultStack: number;
+}
+
+function requiredPositiveInt(properties: Record<string, unknown>, key: string): number {
+  const value = properties[key];
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${key} must be a positive integer`);
+  }
+  return parsed;
+}
+
+export function readSeedTableStakes(properties: Record<string, unknown>): SeedTableStakes {
+  const smallBlind = requiredPositiveInt(properties, 'SmallBlind');
+  const bigBlind = requiredPositiveInt(properties, 'BigBlind');
+  const defaultStack = requiredPositiveInt(properties, 'DefaultStack');
+  if (bigBlind <= smallBlind) {
+    throw new Error('BigBlind must be greater than SmallBlind');
+  }
+  if (defaultStack < bigBlind) {
+    throw new Error('DefaultStack must cover the big blind');
+  }
+  return { smallBlind, bigBlind, defaultStack };
+}
+
+export function buildSeedTableItem(
+  tableId: string,
+  createdAt: string,
+  stakes: SeedTableStakes,
+): Record<string, AttributeValue> {
   return {
     PK: { S: `TABLE#${tableId}` },
     SK: { S: 'META' },
@@ -39,12 +71,12 @@ export function buildSeedTableItem(tableId: string, createdAt: string): Record<s
     version: { N: '1' },
     status: { S: 'open' },
     createdAt: { S: createdAt },
-    defaultStack: { N: String(SEEDED_TABLE_DEFAULTS.defaultStack) },
-    maxSeats: { N: String(SEEDED_TABLE_DEFAULTS.maxSeats) },
+    defaultStack: { N: String(stakes.defaultStack) },
+    maxSeats: { N: String(SEEDED_TABLE_MAX_SEATS) },
     blinds: {
       M: {
-        smallBlind: { N: String(SEEDED_TABLE_DEFAULTS.smallBlind) },
-        bigBlind: { N: String(SEEDED_TABLE_DEFAULTS.bigBlind) },
+        smallBlind: { N: String(stakes.smallBlind) },
+        bigBlind: { N: String(stakes.bigBlind) },
       },
     },
     handNumber: { N: '0' },
@@ -61,7 +93,7 @@ export function createSeedTableHandler(deps: SeedTableDeps) {
       const tableId = deps.randomTableId();
       await deps.putItem({
         TableName: event.ResourceProperties.TableName,
-        Item: buildSeedTableItem(tableId, deps.now()),
+        Item: buildSeedTableItem(tableId, deps.now(), readSeedTableStakes(event.ResourceProperties)),
         ConditionExpression: 'attribute_not_exists(PK)',
       });
       return { PhysicalResourceId: tableId, Data: { TableId: tableId } };
