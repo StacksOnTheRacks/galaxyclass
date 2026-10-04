@@ -39,6 +39,14 @@ jobs:
       - name: Scribble two-browser e2e
         run: npm run test:e2e --workspace=@galaxyclass/scribble
 
+      - name: Upload Scribble e2e traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scribble-e2e-results
+          path: packages/scribble/test-results/
+          retention-days: 7
+
       - name: Test infrastructure
         run: npm run test --workspace=@galaxyclass/infra
         env:
