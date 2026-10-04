@@ -5,11 +5,9 @@ import { scorePlay } from './score.js';
 import { RACK_SIZE, rackValue } from './tiles.js';
 import type { BoardTile, Placement, PlacementError, ScoreBeat, Tile } from './types.js';
 
-export const MIN_PLAYERS = 2;
-export const MAX_PLAYERS = 4;
-export const SCORELESS_TURN_LIMIT = 6;
-/** Exchange needs at least this many tiles left in the bag. */
-export const EXCHANGE_MIN_BAG = 7;
+import { EXCHANGE_MIN_BAG, MAX_PLAYERS, MIN_PLAYERS, SCORELESS_TURN_LIMIT } from './limits.js';
+
+export { EXCHANGE_MIN_BAG, MAX_PLAYERS, MIN_PLAYERS, SCORELESS_TURN_LIMIT };
 
 export type GameStatus = 'waiting' | 'playing' | 'ended';
 export type EndReason = 'played_out' | 'scoreless_turns' | 'abandoned';
@@ -75,12 +73,22 @@ export function emptyGame(): GameState {
   };
 }
 
+/** Only the local dev harness sets these, so its scripted table deals a known game. */
+export interface StartOptions {
+  bag?: Tile[];
+  firstSeatId?: string;
+}
+
 /** Deals a fresh game to the seated players. The first player is drawn at random. */
-export function startGame(seatIds: ReadonlyArray<string>, random: Random): GameState | null {
+export function startGame(
+  seatIds: ReadonlyArray<string>,
+  random: Random,
+  options: StartOptions = {},
+): GameState | null {
   if (seatIds.length < MIN_PLAYERS || seatIds.length > MAX_PLAYERS) {
     return null;
   }
-  let bag = createBag(random);
+  let bag = options.bag ? [...options.bag] : createBag(random);
   const players: Record<string, PlayerState> = {};
   for (const seatId of seatIds) {
     const result = draw(bag, RACK_SIZE);
@@ -94,7 +102,10 @@ export function startGame(seatIds: ReadonlyArray<string>, random: Random): GameS
     bag,
     players,
     turnOrder,
-    currentSeatId: turnOrder[random.int(turnOrder.length)]!,
+    currentSeatId:
+      options.firstSeatId && turnOrder.includes(options.firstSeatId)
+        ? options.firstSeatId
+        : turnOrder[random.int(turnOrder.length)]!,
   };
 }
 

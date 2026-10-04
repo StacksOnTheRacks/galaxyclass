@@ -11,6 +11,7 @@ import {
   removePlayer,
   startGame,
   type GameState,
+  type StartOptions,
   type TurnResult,
 } from '../rules/game.js';
 import type { Placement } from '../rules/types.js';
@@ -32,6 +33,7 @@ export interface ActionContext {
   seats: SeatRecord[];
   connection: ConnectionRecord;
   random: Random;
+  startOptions?: (tableId: string) => StartOptions | undefined;
 }
 
 function fail(code: string, extra: Omit<ErrorMessage, 'type' | 'code'> = {}): ActionResult {
@@ -185,6 +187,7 @@ export function start(ctx: ActionContext, seatToken: unknown): ActionResult {
   const state = startGame(
     ctx.seats.map((seat) => seat.seatId),
     ctx.random,
+    ctx.startOptions?.(ctx.table.tableId),
   )!;
   return commitGame(ctx, state);
 }
