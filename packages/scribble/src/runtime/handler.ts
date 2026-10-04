@@ -34,6 +34,7 @@ export interface RuntimeDeps {
   /** Verifies Cognito access tokens on sit. Without it every sit is a guest sit. */
   resolvePlayer?: ResolvePlayer | null;
   random?: Random;
+  startOptions?: ActionContext['startOptions'];
 }
 
 const LOG = { logTag: 'scribble' };
@@ -86,7 +87,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       }
       const seats = await deps.store.listSeats(tableId);
       const connection = connectionId ? await deps.store.getConnection(connectionId) : null;
-      const result = build({ table, seats, connection, random });
+      const result = build({ table, seats, connection, random, startOptions: deps.startOptions });
       if (!result) {
         return;
       }

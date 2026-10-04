@@ -12,7 +12,7 @@ import {
   type TurnResult,
 } from '../../src/rules/game.js';
 import type { ScoreBeat } from '../../src/rules/types.js';
-import { across, game, place, word } from '../support/game-fixtures.js';
+import { across, game, place, tiles, word } from '../support/game-fixtures.js';
 
 const dictionary = loadDictionary();
 
@@ -193,6 +193,15 @@ describe('turns', () => {
     expect(['1', '2', '3']).toContain(state.currentSeatId);
     expect(startGame(['1'], seededRandom(9))).toBeNull();
     expect(startGame(['1', '2', '3', '4', '5'], seededRandom(9))).toBeNull();
+  });
+
+  it('deals a supplied bag in order and honours a supplied first seat', () => {
+    const bag = tiles('CATDOGSHEARTSEXY', 'rig');
+    const state = startGame(['1', '2'], seededRandom(9), { bag, firstSeatId: '2' })!;
+    expect(state.players['1']!.rack.map((t) => t.letter).join('')).toBe('CATDOGS');
+    expect(state.players['2']!.rack.map((t) => t.letter).join('')).toBe('HEARTSE');
+    expect(state.bag.map((t) => t.letter).join('')).toBe('XY');
+    expect(state.currentSeatId).toBe('2');
   });
 });
 
