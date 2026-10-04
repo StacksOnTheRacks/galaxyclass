@@ -46,11 +46,17 @@ export const STUDIO_CSP =
 export const RIFFLE_CSP =
   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
+/** Scribble is a Phaser canvas: same shape as Riffle (runtime WebSocket, studio session refresh). */
+export const SCRIBBLE_CSP =
+  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
+
 export interface GalaxyClassSiteStackProps extends StackProps {
   /** Studio static export directory. Tests pass a fixture; production may pass repo out/. */
   studioAssetPath: string;
   /** Play-origin bucket name from MatchRuntimeStack (cross-stack token). Omit for studio-only synth. */
   rifflePlayOriginBucketName?: string;
+  /** Play-origin bucket name from ScribbleRuntimeStack (cross-stack token), served at /scribble. */
+  scribblePlayOriginBucketName?: string;
   /** Profile HTTP API host from GalaxyClassAuth-prod (cross-stack token), served at /api/*. */
   profileApiDomainName?: string;
 }
@@ -86,10 +92,17 @@ export class GalaxyClassSiteStack extends Stack {
       ? Bucket.fromBucketName(this, 'RifflePlayOrigin', props.rifflePlayOriginBucketName)
       : undefined;
 
+    const scribbleBucket = props.scribblePlayOriginBucketName
+      ? Bucket.fromBucketName(this, 'ScribblePlayOrigin', props.scribblePlayOriginBucketName)
+      : undefined;
+
     const originAccessControl = new S3OriginAccessControl(this, 'OriginAccessControl');
     const studioOrigin = S3BucketOrigin.withOriginAccessControl(studioBucket, { originAccessControl });
     const riffleOrigin = riffleBucket
       ? S3BucketOrigin.withOriginAccessControl(riffleBucket, { originAccessControl })
+      : undefined;
+    const scribbleOrigin = scribbleBucket
+      ? S3BucketOrigin.withOriginAccessControl(scribbleBucket, { originAccessControl })
       : undefined;
 
     const viewerRequest = new Function(this, 'CanonicalRedirect', {
@@ -114,6 +127,14 @@ export class GalaxyClassSiteStack extends Stack {
           securityHeadersBehavior: {
             strictTransportSecurity: hsts,
             contentSecurityPolicy: { contentSecurityPolicy: RIFFLE_CSP, override: true },
+          },
+        })
+      : undefined;
+    const scribbleHeaders = scribbleOrigin
+      ? new ResponseHeadersPolicy(this, 'ScribbleHeaders', {
+          securityHeadersBehavior: {
+            strictTransportSecurity: hsts,
+            contentSecurityPolicy: { contentSecurityPolicy: SCRIBBLE_CSP, override: true },
           },
         })
       : undefined;
@@ -157,6 +178,15 @@ export class GalaxyClassSiteStack extends Stack {
         ...behavior,
       };
     }
+    if (scribbleOrigin && scribbleHeaders) {
+      for (const pattern of ['/scribble', '/scribble/*']) {
+        additionalBehaviors[pattern] = {
+          origin: scribbleOrigin,
+          responseHeadersPolicy: scribbleHeaders,
+          ...behavior,
+        };
+      }
+    }
 
     const distribution = new Distribution(this, 'Site', {
       certificate,
@@ -186,7 +216,10 @@ export class GalaxyClassSiteStack extends Stack {
     });
 
     if (riffleBucket) {
-      grantRiffleOriginRead(this, riffleBucket, distribution.distributionId);
+      grantPlayOriginRead(this, 'RiffleOriginReadPolicy', riffleBucket, distribution.distributionId);
+    }
+    if (scribbleBucket) {
+      grantPlayOriginRead(this, 'ScribbleOriginReadPolicy', scribbleBucket, distribution.distributionId);
     }
 
     new ARecord(this, 'ApexAlias', {
@@ -223,8 +256,8 @@ function nameStudioDeployLayer(deployment: Construct): void {
   }
 }
 
-function grantRiffleOriginRead(scope: Stack, bucket: IBucket, distributionId: string): void {
-  new CfnBucketPolicy(scope, 'RiffleOriginReadPolicy', {
+function grantPlayOriginRead(scope: Stack, id: string, bucket: IBucket, distributionId: string): void {
+  new CfnBucketPolicy(scope, id, {
     bucket: bucket.bucketName,
     policyDocument: new PolicyDocument({
       statements: [

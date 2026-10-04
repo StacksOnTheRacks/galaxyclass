@@ -1,5 +1,6 @@
 import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from '../themes/ids.js';
-import { MAX_PLAYERS } from '../rules/game.js';
+import { MAX_PLAYERS } from '../rules/limits.js';
+import { META_SK, tablePk } from './keys.js';
 import type { StoredGame, TableRecord, TableVisibility } from './types.js';
 
 export function emptyStoredGame(): StoredGame {
@@ -46,6 +47,15 @@ export function newTableRecord(input: NewTableInput): TableRecord {
     ...(input.tableName ? { tableName: input.tableName } : {}),
     game: emptyStoredGame(),
   };
+}
+
+export function tableMetaKey(tableId: string): { PK: string; SK: string } {
+  return { PK: tablePk(tableId), SK: META_SK };
+}
+
+/** The DynamoDB item for a table's META row, as the runtime store reads it. */
+export function tableMetaItem(table: TableRecord): Record<string, unknown> {
+  return { ...tableMetaKey(table.tableId), ...table };
 }
 
 /** Reads a stored table item defensively so older or partial records still load. */

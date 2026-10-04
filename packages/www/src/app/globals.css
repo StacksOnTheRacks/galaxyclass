@@ -22,6 +22,10 @@
     --c-riffle: 62 232 165;
     --c-riffle-felt: 12 70 54;
     --c-riffle-rail: 34 24 18;
+    --c-scribble: 236 194 92;
+    --c-scribble-tile: 244 233 208;
+    --c-scribble-ink: 46 36 28;
+    --c-scribble-board: 38 74 70;
     --c-suit-red: 214 40 57;
     --c-suit-black: 16 14 24;
 
@@ -52,6 +56,8 @@
       0 0 26px rgb(var(--c-pink) / 0.35);
     --glow-riffle: 0 0 0 1px rgb(var(--c-riffle) / 0.55),
       0 0 26px rgb(var(--c-riffle) / 0.28);
+    --glow-scribble: 0 0 0 1px rgb(var(--c-scribble) / 0.55),
+      0 0 26px rgb(var(--c-scribble) / 0.28);
 
     /* Motion */
     --motion-quick: 140ms;

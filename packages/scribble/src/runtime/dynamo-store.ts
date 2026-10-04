@@ -8,7 +8,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { BY_TABLE_INDEX, connGsiSk, connPk, META_SK, SEAT_SK_PREFIX, seatSk, tableGsiPk, tablePk } from './keys.js';
 import { sortSeats, type ScribbleStore, type TableCommit } from './store.js';
-import { parseTableItem } from './table-record.js';
+import { parseTableItem, tableMetaItem as tableItem } from './table-record.js';
 import type { SeatRecord, TableRecord } from './types.js';
 
 export interface DocumentClientLike {
@@ -31,10 +31,6 @@ function parseSeatItem(item: Record<string, unknown>): SeatRecord {
     seat.connectionId = item.connectionId;
   }
   return seat;
-}
-
-function tableItem(table: TableRecord): Record<string, unknown> {
-  return { PK: tablePk(table.tableId), SK: META_SK, ...table };
 }
 
 function seatItem(tableId: string, seat: SeatRecord): Record<string, unknown> {

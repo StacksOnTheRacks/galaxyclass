@@ -5,20 +5,23 @@ import {
   ButtonLink,
   HudLabel,
   PLAY_RIFFLE_HREF,
+  PLAY_SCRIBBLE_HREF,
   StatusTag,
   type GameStatus,
 } from "./primitives";
 import { RiffleTileScreen, RiffleWordmark } from "./RiffleScreen";
+import { ScribbleTileScreen, ScribbleWordmark } from "./ScribbleScreen";
 
 type Filter = "all" | GameStatus;
 
 type Cabinet =
   | { kind: "riffle"; status: "live" }
+  | { kind: "scribble"; status: "live" }
   | { kind: "placeholder"; status: "soon"; slot: string };
 
 const cabinets: Cabinet[] = [
   { kind: "riffle", status: "live" },
-  { kind: "placeholder", status: "soon", slot: "02" },
+  { kind: "scribble", status: "live" },
   { kind: "placeholder", status: "soon", slot: "03" },
   { kind: "placeholder", status: "soon", slot: "04" },
 ];
@@ -56,6 +59,33 @@ function RiffleCabinet() {
         </p>
         <ButtonLink href={PLAY_RIFFLE_HREF} className="mt-auto w-full" arrow>
           Play Riffle Poker
+        </ButtonLink>
+      </div>
+    </article>
+  );
+}
+
+function ScribbleCabinet() {
+  return (
+    <article
+      aria-labelledby="library-scribble"
+      className="cabinet t-molding group flex h-full flex-col gap-4 p-3 transition duration-base motion-safe:hover:-translate-y-1 hover:shadow-glow-scribble"
+      style={{ "--molding": "rgb(var(--c-scribble))" } as CSSProperties}
+    >
+      <ScribbleTileScreen className="aspect-[4/3]" />
+      <div className="flex flex-1 flex-col gap-3 px-1">
+        <div className="flex flex-col items-start gap-3">
+          <StatusTag status="live" />
+          <h3 id="library-scribble" className="leading-none">
+            <span className="sr-only">Scribble</span>
+            <ScribbleWordmark className="text-[24px]" />
+          </h3>
+        </div>
+        <p className="text-small text-ink-muted">
+          Word game · Crossword board · 2–4 players · Browser
+        </p>
+        <ButtonLink href={PLAY_SCRIBBLE_HREF} className="mt-auto w-full" arrow>
+          Play Scribble
         </ButtonLink>
       </div>
     </article>
@@ -111,7 +141,8 @@ export function GameLibrary() {
             Library
           </h2>
           <p className="text-ink-muted">
-            {count("live")} game playable now · {count("soon")} cabinets being built
+            {count("live")} {count("live") === 1 ? "game" : "games"} playable now ·{" "}
+            {count("soon")} cabinets being built
           </p>
         </div>
 
@@ -150,9 +181,11 @@ export function GameLibrary() {
 
       <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {visible.map((cabinet) => (
-          <li key={cabinet.kind === "riffle" ? "riffle" : cabinet.slot}>
+          <li key={cabinet.kind === "placeholder" ? cabinet.slot : cabinet.kind}>
             {cabinet.kind === "riffle" ? (
               <RiffleCabinet />
+            ) : cabinet.kind === "scribble" ? (
+              <ScribbleCabinet />
             ) : (
               <PlaceholderCabinet slot={cabinet.slot} />
             )}

@@ -29,6 +29,16 @@ jobs:
       - name: Test Riffle
         run: npm run test --workspace=@galaxyclass/riffle
 
+      - name: Test Scribble
+        run: npm run test --workspace=@galaxyclass/scribble
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: packages/scribble
+
+      - name: Scribble two-browser e2e
+        run: npm run test:e2e --workspace=@galaxyclass/scribble
+
       - name: Test infrastructure
         run: npm run test --workspace=@galaxyclass/infra
         env:

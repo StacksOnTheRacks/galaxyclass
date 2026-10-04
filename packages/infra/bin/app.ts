@@ -6,6 +6,7 @@ import { App } from 'aws-cdk-lib';
 import { GalaxyClassAuthStack } from '../lib/galaxy-class-auth-stack.js';
 import { GalaxyClassSiteStack } from '../lib/galaxy-class-site-stack.js';
 import { MatchRuntimeStack } from '../lib/match-runtime-stack.js';
+import { ScribbleRuntimeStack } from '../lib/scribble-runtime-stack.js';
 
 const app = new App();
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -29,6 +30,11 @@ const matchStack = new MatchRuntimeStack(app, 'MatchRuntimeStack', {
   playerAuth: authStack.playerAuth,
 });
 
+const scribbleStack = new ScribbleRuntimeStack(app, 'ScribbleRuntimeStack', {
+  env,
+  playerAuth: authStack.playerAuth,
+});
+
 new GalaxyClassSiteStack(app, 'GalaxyClassSite-prod', {
   env: {
     account: env.account,
@@ -36,5 +42,6 @@ new GalaxyClassSiteStack(app, 'GalaxyClassSite-prod', {
   },
   studioAssetPath: existsSync(studioOut) ? studioOut : studioFixture,
   rifflePlayOriginBucketName: matchStack.playOriginBucket.bucketName,
+  scribblePlayOriginBucketName: scribbleStack.playOriginBucket.bucketName,
   profileApiDomainName: authStack.profileApiDomainName,
 });

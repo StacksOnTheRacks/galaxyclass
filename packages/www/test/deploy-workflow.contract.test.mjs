@@ -58,33 +58,50 @@ test('assumes the OIDC role with the production vars and no long-lived keys', ()
   }
 });
 
-test('deploys auth, match runtime, then site with locked CDK flags', () => {
+test('deploys auth, match runtime, scribble runtime, then site with locked CDK flags', () => {
   const checkout = at('actions/checkout@v4');
   const node = at("node-version: '22'");
   const assume = at('aws-actions/configure-aws-credentials@v4');
   const cdkInfra = at('working-directory: packages/infra');
+  const scribbleBuild = at('npm run build:scribble');
   const auth = at('npx cdk deploy GalaxyClassAuth-prod');
   const outputs = at('-O "$RUNNER_TEMP/galaxyclass-auth-outputs.json"');
   const riffleBuild = at('npm run build:riffle');
   const wwwBuild = at('npm run build:www');
   const exportCheck = at('packages/www/out/index.html');
   const match = at('npx cdk deploy MatchRuntimeStack');
+  const scribble = at('npx cdk deploy ScribbleRuntimeStack');
   const site = at('npx cdk deploy GalaxyClassSite-prod');
   const apex = at('https://galaxyclass.app/');
   const rifflePath = at('https://galaxyclass.app/riffle/');
+  const scribblePath = at('https://galaxyclass.app/scribble/');
 
-  assert.deepEqual(
-    [checkout, node, assume, cdkInfra, auth, outputs, riffleBuild, wwwBuild, exportCheck, match, site, apex, rifflePath].sort(
-      (a, b) => a - b,
-    ),
-    [checkout, node, assume, cdkInfra, auth, outputs, riffleBuild, wwwBuild, exportCheck, match, site, apex, rifflePath],
-  );
+  // Every cdk deploy synthesizes ScribbleRuntimeStack, which stages the built client.
+  const order = [
+    checkout,
+    node,
+    assume,
+    scribbleBuild,
+    cdkInfra,
+    auth,
+    outputs,
+    riffleBuild,
+    wwwBuild,
+    exportCheck,
+    match,
+    scribble,
+    site,
+    apex,
+    rifflePath,
+    scribblePath,
+  ];
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
   assert.match(yaml, /name: Install dependencies\n\s+run: npm ci/);
   assert.doesNotMatch(yaml, /name: Install CDK CLI/);
   assert.equal(yaml.match(/actions\/setup-node@v4/g)?.length, 1);
-  assert.equal(yaml.match(/--require-approval never/g)?.length, 3);
-  assert.equal(yaml.match(/--toolkit-stack-name GalaxyClassToolkit/g)?.length, 3);
-  assert.equal(yaml.match(/--context @aws-cdk\/core:bootstrapQualifier=galcls/g)?.length, 3);
+  assert.equal(yaml.match(/--require-approval never/g)?.length, 4);
+  assert.equal(yaml.match(/--toolkit-stack-name GalaxyClassToolkit/g)?.length, 4);
+  assert.equal(yaml.match(/--context @aws-cdk\/core:bootstrapQualifier=galcls/g)?.length, 4);
   assert.equal(yaml.match(/-O "/g)?.length, 1);
 });
 
@@ -114,13 +131,17 @@ test('builds on Node 22 and fails when packages/www/out/index.html is missing be
   assert.match(yaml.slice(exportCheck, match), /exit 1/);
 });
 
-test('retries apex and riffle until HTTP 200 within 12 attempts 10 seconds apart', () => {
+test('retries apex, riffle and scribble until HTTP 200 within 12 attempts 10 seconds apart', () => {
   const site = at('npx cdk deploy GalaxyClassSite-prod');
   const apex = at('name: Verify apex');
   const riffle = at('name: Verify Riffle subpath');
+  const scribble = at('name: Verify Scribble subpath');
   const tail = yaml.slice(apex);
   assert.ok(site < apex);
   assert.ok(apex < riffle);
+  assert.ok(riffle < scribble);
+  assert.match(yaml.slice(scribble), /https:\/\/galaxyclass\.app\/scribble\/config\.json/);
+  assert.match(yaml.slice(scribble), /wss:/);
   assert.match(tail, /https:\/\/galaxyclass\.app\//);
   assert.match(tail, /https:\/\/galaxyclass\.app\/riffle\//);
   assert.match(tail, /seq 1 12/);
