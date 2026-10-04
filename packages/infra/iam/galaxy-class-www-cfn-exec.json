@@ -263,6 +263,24 @@
                 "s3:DeleteBucketPolicy"
             ],
             "Resource": "arn:aws:s3:::matchruntimestack-playoriginbucket*"
+        },
+        {
+            "Sid": "RiffleTableSweepSchedule",
+            "Effect": "Allow",
+            "Action": [
+                "events:PutRule",
+                "events:DeleteRule",
+                "events:DescribeRule",
+                "events:EnableRule",
+                "events:DisableRule",
+                "events:PutTargets",
+                "events:RemoveTargets",
+                "events:ListTargetsByRule",
+                "events:ListTagsForResource",
+                "events:TagResource",
+                "events:UntagResource"
+            ],
+            "Resource": "arn:aws:events:us-east-1:903395879533:rule/MatchRuntimeStack-*"
         }
     ]
 }

@@ -288,6 +288,8 @@ export class MatchRuntimeStack extends Stack {
     });
     table.grantReadWriteData(sweepHandler);
 
+    // cdk-galcls-cfn-exec-role must be allowed events:* on this rule.
+    // See RiffleTableSweepSchedule in packages/infra/iam/galaxy-class-www-cfn-exec.json.
     new events.Rule(this, 'TableSweepSchedule', {
       schedule: events.Schedule.rate(Duration.hours(1)),
       targets: [new targets.LambdaFunction(sweepHandler)],

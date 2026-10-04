@@ -9,6 +9,24 @@ const policy = JSON.parse(
   Statement: Array<{ Sid?: string; Action?: string | string[]; Resource?: string | string[] }>;
 };
 
+test('CloudFormation execution policy can manage the Riffle table sweep schedule', () => {
+  const statement = policy.Statement.find((entry) => entry.Sid === 'RiffleTableSweepSchedule');
+  assert.ok(statement);
+  const actions = statement.Action;
+  assert.ok(Array.isArray(actions));
+  for (const action of [
+    'events:DescribeRule',
+    'events:PutRule',
+    'events:DeleteRule',
+    'events:PutTargets',
+    'events:RemoveTargets',
+    'events:ListTargetsByRule',
+  ]) {
+    assert.ok(actions.includes(action), action);
+  }
+  assert.equal(statement.Resource, 'arn:aws:events:us-east-1:903395879533:rule/MatchRuntimeStack-*');
+});
+
 test('CloudFormation execution policy can create the profiles table', () => {
   const statement = policy.Statement.find((entry) => entry.Sid === 'ProfileDynamoDB');
   assert.ok(statement);
