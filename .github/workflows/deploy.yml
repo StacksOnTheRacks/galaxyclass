@@ -33,6 +33,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Every cdk deploy synthesizes the whole app, and ScribbleRuntimeStack stages this artifact.
+      - name: Build Scribble client artifacts
+        run: npm run build:scribble
+
       - name: Deploy GalaxyClassAuth-prod
         working-directory: packages/infra
         run: >
@@ -87,6 +91,14 @@ jobs:
           --toolkit-stack-name GalaxyClassToolkit
           --context @aws-cdk/core:bootstrapQualifier=galcls
 
+      - name: Deploy ScribbleRuntimeStack
+        working-directory: packages/infra
+        run: >
+          npx cdk deploy ScribbleRuntimeStack
+          --require-approval never
+          --toolkit-stack-name GalaxyClassToolkit
+          --context @aws-cdk/core:bootstrapQualifier=galcls
+
       - name: Deploy GalaxyClassSite-prod
         working-directory: packages/infra
         run: >
@@ -121,4 +133,19 @@ jobs:
             fi
           done
           echo 'https://galaxyclass.app/riffle/ did not return HTTP 200'
+          exit 1
+
+      - name: Verify Scribble subpath
+        run: |
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://galaxyclass.app/scribble/ || true)"
+            config="$(curl -sS --max-time 20 https://galaxyclass.app/scribble/config.json || true)"
+            if [ "$code" = "200" ] && printf '%s' "$config" | grep -q '"webSocketUrl":"wss://'; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              sleep 10
+            fi
+          done
+          echo 'https://galaxyclass.app/scribble/ did not serve the client and its config'
           exit 1

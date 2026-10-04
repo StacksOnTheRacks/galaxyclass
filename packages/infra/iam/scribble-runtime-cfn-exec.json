@@ -1,0 +1,98 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ScribbleStack",
+            "Effect": "Allow",
+            "Action": "cloudformation:*",
+            "Resource": "arn:aws:cloudformation:us-east-1:903395879533:stack/ScribbleRuntimeStack/*"
+        },
+        {
+            "Sid": "ScribbleLambda",
+            "Effect": "Allow",
+            "Action": "lambda:*",
+            "Resource": [
+                "arn:aws:lambda:us-east-1:903395879533:function:ScribbleRuntimeStack-*",
+                "arn:aws:lambda:us-east-1:903395879533:layer:ScribbleRuntimeStack*"
+            ]
+        },
+        {
+            "Sid": "ScribbleLogs",
+            "Effect": "Allow",
+            "Action": "logs:*",
+            "Resource": [
+                "arn:aws:logs:us-east-1:903395879533:log-group:/aws/lambda/ScribbleRuntimeStack-*",
+                "arn:aws:logs:us-east-1:903395879533:log-group:/aws/lambda/ScribbleRuntimeStack-*:*"
+            ]
+        },
+        {
+            "Sid": "ScribbleRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:UpdateRole",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:PassRole",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRoleTags"
+            ],
+            "Resource": "arn:aws:iam::903395879533:role/ScribbleRuntimeStack-*"
+        },
+        {
+            "Sid": "ScribbleDynamoDB",
+            "Effect": "Allow",
+            "Action": "dynamodb:*",
+            "Resource": [
+                "arn:aws:dynamodb:us-east-1:903395879533:table/ScribbleRuntimeStack-*",
+                "arn:aws:dynamodb:us-east-1:903395879533:table/ScribbleRuntimeStack-*/index/*"
+            ]
+        },
+        {
+            "Sid": "ScribbleBuckets",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::scribbleruntimestack-*",
+                "arn:aws:s3:::scribbleruntimestack-*/*"
+            ]
+        },
+        {
+            "Sid": "ScribbleWebSocketApi",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:POST",
+                "apigateway:PUT",
+                "apigateway:PATCH",
+                "apigateway:DELETE",
+                "apigateway:TagResource",
+                "apigateway:UntagResource"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:us-east-1::/apis",
+                "arn:aws:apigateway:us-east-1::/apis/*",
+                "arn:aws:apigateway:us-east-1::/tags/*"
+            ]
+        },
+        {
+            "Sid": "ScribblePlayOriginBucketPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy",
+                "s3:DeleteBucketPolicy"
+            ],
+            "Resource": "arn:aws:s3:::scribbleruntimestack-scribbleplayoriginbucket*"
+        }
+    ]
+}

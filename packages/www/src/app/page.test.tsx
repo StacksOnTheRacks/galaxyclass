@@ -168,11 +168,22 @@ describe("game library", () => {
     );
   });
 
+  it("lists a playable Scribble cabinet that opens same-origin /scribble", () => {
+    render(<GameLibrary />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Scribble" });
+    const cabinet = within(heading.closest("article") as HTMLElement);
+    expect(cabinet.getByText("Playable now")).toBeInTheDocument();
+    expect(cabinet.getByText(/Word game/)).toBeInTheDocument();
+    expect(cabinet.getByRole("link", { name: "Play Scribble" })).toHaveAttribute("href", "/scribble");
+    expect(screen.getByText(/2 games playable now/)).toBeInTheDocument();
+  });
+
   it("marks placeholder cabinets as coming soon with nothing to play", () => {
     render(<GameLibrary />);
 
     const placeholders = screen.getAllByRole("heading", { level: 3, name: /^slot \d+$/i });
-    expect(placeholders).toHaveLength(3);
+    expect(placeholders).toHaveLength(2);
     for (const heading of placeholders) {
       const cabinet = within(heading.closest("article") as HTMLElement);
       expect(cabinet.getByText("Coming soon")).toBeInTheDocument();
@@ -190,16 +201,19 @@ describe("game library", () => {
     );
     expect(screen.queryAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(0);
     expect(screen.getByRole("heading", { level: 3, name: "Riffle Poker" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Scribble" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /coming soon/i }));
     expect(screen.queryByRole("heading", { level: 3, name: "Riffle Poker" })).toBeNull();
-    expect(screen.getAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(3);
+    expect(screen.queryByRole("heading", { level: 3, name: "Scribble" })).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(2);
   });
 });
 
 describe("home boundaries", () => {
-  it("does not capture /riffle in Next", () => {
+  it("does not capture /riffle or /scribble in Next", () => {
     expect(existsSync(path.join(root, "src/app/riffle"))).toBe(false);
+    expect(existsSync(path.join(root, "src/app/scribble"))).toBe(false);
     const nextConfig = readFileSync(path.join(root, "next.config.ts"), "utf8");
     expect(nextConfig).toMatch(/output:\s*"export"/);
     expect(nextConfig).not.toMatch(/rewrites|redirects/);

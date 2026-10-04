@@ -6,15 +6,17 @@
   "scripts": {
     "build": "tsc --noEmit",
     "synth": "cdk synth",
-    "pretest": "npm run build:dashboard-riffle --workspace=@galaxyclass/riffle",
+    "pretest": "npm run build:dashboard-riffle --workspace=@galaxyclass/riffle && npm run build:client --workspace=@galaxyclass/scribble",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@galaxyclass/scribble": "*",
     "aws-cdk-lib": "^2.196.0",
     "constructs": "^10.4.2"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1141.0",
+    "@aws-sdk/lib-dynamodb": "^3.787.0",
     "@types/node": "^22.14.1",
     "aws-cdk": "^2.196.0",
     "tsx": "^4.23.15",

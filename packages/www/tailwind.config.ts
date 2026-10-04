@@ -34,6 +34,12 @@ const config: Config = {
           felt: channel("riffle-felt"),
           rail: channel("riffle-rail"),
         },
+        scribble: {
+          DEFAULT: channel("scribble"),
+          tile: channel("scribble-tile"),
+          ink: channel("scribble-ink"),
+          board: channel("scribble-board"),
+        },
         suit: {
           red: channel("suit-red"),
           black: channel("suit-black"),
@@ -81,6 +87,7 @@ const config: Config = {
         "glow-cyan": "var(--glow-cyan)",
         "glow-pink": "var(--glow-pink)",
         "glow-riffle": "var(--glow-riffle)",
+        "glow-scribble": "var(--glow-scribble)",
       },
       maxWidth: {
         frame: "var(--size-frame)",

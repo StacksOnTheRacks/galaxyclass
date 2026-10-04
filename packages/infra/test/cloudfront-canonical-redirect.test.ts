@@ -78,3 +78,24 @@ test('extensionless /riffle routes rewrite to /riffle/index.html and files pass 
     '/riffle/assets/app.js',
   );
 });
+
+test('extensionless /scribble routes rewrite to /scribble/index.html and files pass through', () => {
+  const rewrite = (uri: string) => asRequest(runViewerRequest(event(uri, 'galaxyclass.app'))).uri;
+  assert.equal(rewrite('/scribble'), '/scribble/index.html');
+  assert.equal(rewrite('/scribble/'), '/scribble/index.html');
+  assert.equal(rewrite(`/scribble/${TABLE_GUID}`), '/scribble/index.html');
+  assert.equal(rewrite('/scribble/config.json'), '/scribble/config.json');
+  assert.equal(rewrite('/scribble/main.js'), '/scribble/main.js');
+  assert.equal(rewrite('/scribble/chunks/table-app-ABC123.js'), '/scribble/chunks/table-app-ABC123.js');
+  assert.equal(rewrite('/scribble/assets/fonts/inter-latin-400.woff2'), '/scribble/assets/fonts/inter-latin-400.woff2');
+  // Only the exact game roots are SPA paths; look-alikes stay on the studio.
+  assert.equal(rewrite('/scribbles'), '/scribbles.html');
+  assert.equal(rewrite('/rifflescribble'), '/rifflescribble.html');
+});
+
+test('www redirect keeps /scribble table paths', () => {
+  assert.equal(
+    locationOf(runViewerRequest(event(`/scribble/${TABLE_GUID}`, 'www.galaxyclass.app'))),
+    `https://galaxyclass.app/scribble/${TABLE_GUID}`,
+  );
+});

@@ -10,10 +10,12 @@ import {
   GalaxyClassSiteStack,
   PROFILE_API_PATH,
   RIFFLE_CSP,
+  SCRIBBLE_CSP,
   STUDIO_CSP,
   STUDIO_DEPLOY_LAYER_NAME,
 } from '../lib/galaxy-class-site-stack.js';
 import { MatchRuntimeStack } from '../lib/match-runtime-stack.js';
+import { ScribbleRuntimeStack } from '../lib/scribble-runtime-stack.js';
 import { TEST_ACCOUNT, TEST_REGION } from './support.js';
 
 const EXPECTED_STUDIO_CSP =
@@ -21,10 +23,17 @@ const EXPECTED_STUDIO_CSP =
 const EXPECTED_RIFFLE_CSP =
   "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss://*.execute-api.us-east-1.amazonaws.com https://cognito-idp.us-east-1.amazonaws.com; frame-src 'none'; upgrade-insecure-requests";
 
-function synthSite(options?: { withRiffle?: boolean; withProfileApi?: boolean }) {
+function synthSite(options?: { withRiffle?: boolean; withProfileApi?: boolean; withScribble?: boolean }) {
   const app = new App({
     context: { 'aws:cdk:bundling-stacks': [] },
   });
+  let scribblePlayOriginBucketName: string | undefined;
+  if (options?.withScribble) {
+    const scribble = new ScribbleRuntimeStack(app, 'ScribbleRuntimeStack', {
+      env: { account: TEST_ACCOUNT, region: TEST_REGION },
+    });
+    scribblePlayOriginBucketName = scribble.playOriginBucket.bucketName;
+  }
   let rifflePlayOriginBucketName: string | undefined;
   if (options?.withRiffle !== false) {
     const match = new MatchRuntimeStack(app, 'MatchRuntimeStack', {
@@ -43,6 +52,7 @@ function synthSite(options?: { withRiffle?: boolean; withProfileApi?: boolean })
     env: { account: TEST_ACCOUNT, region: TEST_REGION },
     studioAssetPath: path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/site-out'),
     rifflePlayOriginBucketName,
+    scribblePlayOriginBucketName,
     profileApiDomainName,
   });
   return { stack, template: Template.fromStack(stack) };
@@ -230,7 +240,8 @@ test('viewer-request function is associated before origin on every behavior', ()
   const code = String((functions[functionIds[0]] as Resource).Properties?.FunctionCode);
   assert.equal(code, canonicalRedirectFunctionCode);
   assert.match(code, /www\.galaxyclass\.app/);
-  assert.match(code, /\/riffle\/index\.html/);
+  assert.match(code, /\['\/riffle', '\/scribble'\]/);
+  assert.match(code, /'\/index\.html'/);
 
   const distribution = distributionConfig(template);
   assertFunction(distribution.DefaultCacheBehavior);
@@ -303,6 +314,58 @@ test('template resources do not embed secrets or an access-log bucket', () => {
   assert.equal(Object.keys(template.findResources('AWS::S3::Bucket')).length, 1);
   const distribution = distributionConfig(template);
   assert.equal(distribution.Logging, undefined);
+});
+
+test('scribble is served from its own play origin at /scribble with its own CSP', () => {
+  const { template } = synthSite({ withScribble: true });
+  const distribution = distributionConfig(template);
+  const behaviors = distribution.CacheBehaviors as Array<Record<string, any>>;
+  assert.deepEqual(
+    behaviors.map((behavior) => behavior.PathPattern).sort(),
+    [PROFILE_API_PATH, '/riffle', '/riffle/*', '/scribble', '/scribble/*'],
+  );
+  const scribble = behaviors.filter((behavior) => String(behavior.PathPattern).startsWith('/scribble'));
+  const riffle = behaviors.find((behavior) => behavior.PathPattern === '/riffle')!;
+  assert.equal(scribble[0]!.TargetOriginId, scribble[1]!.TargetOriginId);
+  assert.notEqual(scribble[0]!.TargetOriginId, riffle.TargetOriginId);
+  for (const behavior of scribble) {
+    assert.equal(behavior.ViewerProtocolPolicy, 'redirect-to-https');
+    assertFunction(behavior);
+  }
+
+  const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy') as Record<string, Resource>;
+  assert.equal(Object.keys(policies).length, 3);
+  const scribbleCspId = Object.keys(policies).find((id) => id.startsWith('ScribbleHeaders'));
+  assert.ok(scribbleCspId);
+  assert.equal(
+    headerConfig(policies[scribbleCspId]!).ContentSecurityPolicy.ContentSecurityPolicy,
+    SCRIBBLE_CSP,
+  );
+  assert.match(SCRIBBLE_CSP, /connect-src 'self' wss:\/\/\*\.execute-api\.us-east-1\.amazonaws\.com https:\/\/cognito-idp/);
+  assert.match(SCRIBBLE_CSP, /img-src 'self' data: blob:/);
+  assert.match(SCRIBBLE_CSP, /frame-ancestors 'none'/);
+  assert.doesNotMatch(SCRIBBLE_CSP, /unsafe-eval|cognito-identity/);
+  for (const behavior of scribble) {
+    assert.equal(refId(behavior.ResponseHeadersPolicyId), scribbleCspId);
+  }
+
+  const origins = distribution.Origins as Array<{ OriginPath?: string; S3OriginConfig?: unknown; OriginAccessControlId?: unknown }>;
+  const s3Origins = origins.filter((origin) => origin.S3OriginConfig);
+  assert.equal(s3Origins.length, 3);
+  for (const origin of s3Origins) {
+    assert.ok(origin.OriginAccessControlId);
+    assert.equal(origin.OriginPath, undefined);
+  }
+
+  const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
+  const scribblePolicyId = Object.keys(bucketPolicies).find((id) => id.startsWith('ScribbleOriginReadPolicy'));
+  assert.ok(scribblePolicyId, 'expected a cross-stack bucket policy for the scribble play origin');
+  const doc = JSON.stringify(bucketPolicies[scribblePolicyId]);
+  assert.match(doc, /ScribbleRuntimeStack/);
+  assert.match(doc, /s3:GetObject/);
+  assert.match(doc, /AWS:SourceArn/);
+  assert.match(doc, /aws:SecureTransport/);
+  assert.doesNotMatch(doc, /s3:PutObject|s3:DeleteObject/);
 });
 
 function distributionConfig(template: Template): Record<string, any> {

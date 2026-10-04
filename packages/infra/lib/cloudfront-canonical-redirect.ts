@@ -15,9 +15,10 @@ export const canonicalRedirectFunctionCode = `function handler(event) {
       }
     };
   }
-  if (isRifflePath(request.uri)) {
+  var game = gameRoot(request.uri);
+  if (game) {
     if (!hasFileExtension(request.uri)) {
-      request.uri = '/riffle/index.html';
+      request.uri = game + '/index.html';
     }
     return request;
   }
@@ -28,8 +29,14 @@ export const canonicalRedirectFunctionCode = `function handler(event) {
   }
   return request;
 }
-function isRifflePath(uri) {
-  return uri === '/riffle' || uri.indexOf('/riffle/') === 0;
+function gameRoot(uri) {
+  var roots = ['/riffle', '/scribble'];
+  for (var i = 0; i < roots.length; i++) {
+    if (uri === roots[i] || uri.indexOf(roots[i] + '/') === 0) {
+      return roots[i];
+    }
+  }
+  return null;
 }
 function hasFileExtension(uri) {
   var segment = uri.split('/').pop();
