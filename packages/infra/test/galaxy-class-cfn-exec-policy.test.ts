@@ -37,16 +37,18 @@ test('CloudFormation execution policy can create the profiles table', () => {
   ]);
 });
 
-test('site execution policy can write the Scribble play-origin bucket policy, and nothing else on it', () => {
-  const statement = policy.Statement.find((entry) => entry.Sid === 'ScribblePlayOriginBucketPolicy');
-  assert.ok(statement);
-  assert.deepEqual(statement.Action, ['s3:GetBucketPolicy', 's3:PutBucketPolicy', 's3:DeleteBucketPolicy']);
-  assert.equal(statement.Resource, 'arn:aws:s3:::scribbleruntimestack-scribbleplayoriginbucket*');
-});
-
 const scribblePolicy = JSON.parse(
   readFileSync(fileURLToPath(new URL('../iam/scribble-runtime-cfn-exec.json', import.meta.url)), 'utf8'),
 ) as typeof policy;
+
+test('each execution policy fits the 6,144-character managed-policy limit', () => {
+  for (const [name, doc] of [
+    ['galaxy-class-www-cfn-exec', policy],
+    ['scribble-runtime-cfn-exec', scribblePolicy],
+  ] as const) {
+    assert.ok(JSON.stringify(doc).length <= 6144, name);
+  }
+});
 
 test('Scribble runtime execution policy is scoped to ScribbleRuntimeStack resources', () => {
   const resources = scribblePolicy.Statement.flatMap((entry) =>
@@ -63,4 +65,11 @@ test('Scribble runtime execution policy is scoped to ScribbleRuntimeStack resour
   }
   const layers = scribblePolicy.Statement.find((entry) => entry.Sid === 'ScribbleLambda');
   assert.ok((layers?.Resource as string[]).includes('arn:aws:lambda:us-east-1:903395879533:layer:ScribbleRuntimeStack*'));
+});
+
+test('the site stack can write the Scribble play-origin bucket policy, and nothing else on it', () => {
+  const statement = scribblePolicy.Statement.find((entry) => entry.Sid === 'ScribblePlayOriginBucketPolicy');
+  assert.ok(statement);
+  assert.deepEqual(statement.Action, ['s3:GetBucketPolicy', 's3:PutBucketPolicy', 's3:DeleteBucketPolicy']);
+  assert.equal(statement.Resource, 'arn:aws:s3:::scribbleruntimestack-scribbleplayoriginbucket*');
 });

@@ -265,16 +265,6 @@
             "Resource": "arn:aws:s3:::matchruntimestack-playoriginbucket*"
         },
         {
-            "Sid": "ScribblePlayOriginBucketPolicy",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetBucketPolicy",
-                "s3:PutBucketPolicy",
-                "s3:DeleteBucketPolicy"
-            ],
-            "Resource": "arn:aws:s3:::scribbleruntimestack-scribbleplayoriginbucket*"
-        },
-        {
             "Sid": "RiffleTableSweepSchedule",
             "Effect": "Allow",
             "Action": [

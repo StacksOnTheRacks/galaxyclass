@@ -83,6 +83,16 @@
                 "arn:aws:apigateway:us-east-1::/apis/*",
                 "arn:aws:apigateway:us-east-1::/tags/*"
             ]
+        },
+        {
+            "Sid": "ScribblePlayOriginBucketPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketPolicy",
+                "s3:PutBucketPolicy",
+                "s3:DeleteBucketPolicy"
+            ],
+            "Resource": "arn:aws:s3:::scribbleruntimestack-scribbleplayoriginbucket*"
         }
     ]
 }
