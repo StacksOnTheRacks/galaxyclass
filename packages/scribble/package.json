@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=22"
   },
+  "exports": {
+    "./table-record": "./src/runtime/table-record.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
