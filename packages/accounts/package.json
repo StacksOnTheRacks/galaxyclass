@@ -10,7 +10,8 @@
     "./gamer-tag": "./src/gamer-tag.ts",
     "./avatars": "./src/avatars.ts",
     "./account-hint": "./src/account-hint.ts",
-    "./profile-api-contract": "./src/profile-api-contract.ts"
+    "./profile-api-contract": "./src/profile-api-contract.ts",
+    "./player-verifier": "./src/player-verifier.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -18,7 +19,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1141.0",
-    "@aws-sdk/lib-dynamodb": "^3.1141.0"
+    "@aws-sdk/lib-dynamodb": "^3.1141.0",
+    "aws-jwt-verify": "^5.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",

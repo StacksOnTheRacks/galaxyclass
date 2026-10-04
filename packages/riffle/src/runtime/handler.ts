@@ -14,10 +14,9 @@ import { handleLeave, handleResumeSeat, handleSit } from './sit.js';
 import { reapDepartedSeats } from './reap.js';
 import { handleStartHand } from './start-hand.js';
 import { continueAfterHand, dealIfReady, isHandComplete, NEXT_HAND_DELAY_MS } from './auto-deal.js';
-import { playerResolverFromEnv, type ResolvePlayer, type VerifiedPlayer } from './player-identity.js';
+import { playerResolverFromEnv, resolveSitIdentity, type ResolvePlayer } from './player-identity.js';
 import { createMatchStore, type MatchStore } from './store.js';
 import type {
-  ClientMessage,
   ErrorMessage,
   LambdaContext,
   OutboundMessage,
@@ -47,48 +46,6 @@ export interface RuntimeDeps {
 
 function errorMessage(code: string): ErrorMessage {
   return { type: 'error', code };
-}
-
-type SitIdentity = { ok: true; player: VerifiedPlayer | null } | { ok: false; code: string };
-
-/** A supplied token must verify; it never silently becomes a guest sit. */
-async function resolveSitIdentity(
-  message: ClientMessage,
-  resolvePlayer: ResolvePlayer | null | undefined,
-): Promise<SitIdentity> {
-  if (message.accessToken === undefined) {
-    console.info('[riffle] sit identity', { outcome: 'guest_no_token' });
-    return { ok: true, player: null };
-  }
-  if (typeof message.accessToken !== 'string' || !message.accessToken || !resolvePlayer) {
-    console.warn('[riffle] sit identity', {
-      outcome: 'rejected',
-      reason: resolvePlayer ? 'malformed_token' : 'resolver_not_configured',
-    });
-    return { ok: false, code: 'invalid_access_token' };
-  }
-  try {
-    const player = await resolvePlayer(message.accessToken);
-    if (!player) {
-      console.warn('[riffle] sit identity', { outcome: 'rejected', reason: 'token_did_not_verify' });
-      return { ok: false, code: 'invalid_access_token' };
-    }
-    console.info('[riffle] sit identity', {
-      outcome: 'verified',
-      hasGamerTag: player.gamerTag !== null,
-      hasAvatar: player.avatarId !== null,
-    });
-    return { ok: true, player };
-  } catch (error) {
-    console.error('[riffle] sit identity', { outcome: 'unavailable', ...describeError(error) });
-    return { ok: false, code: 'identity_unavailable' };
-  }
-}
-
-function describeError(error: unknown): { error: string; detail: string } {
-  return error instanceof Error
-    ? { error: error.name, detail: error.message }
-    : { error: 'unknown', detail: String(error) };
 }
 
 const MAX_LIST_GROUP_IDS = 32;
@@ -296,7 +253,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         return { statusCode: 200 };
       }
 
-      const identity = await resolveSitIdentity(message, deps.resolvePlayer);
+      const identity = await resolveSitIdentity(message.accessToken, deps.resolvePlayer);
       if (!identity.ok) {
         await deps.postToConnection(connectionId, errorMessage(identity.code));
         return { statusCode: 200 };
