@@ -150,6 +150,7 @@ export function buildSeatScopedSnapshot(
   const snapshot: TableSnapshotMessage = {
     type: 'table_snapshot',
     tableId: table.tableId,
+    ...(table.tableName ? { tableName: table.tableName } : {}),
     version: table.version,
     status: table.status,
     createdAt: table.createdAt,

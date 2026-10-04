@@ -105,7 +105,7 @@ describe('dashboard play GUID join', () => {
     setViewport(1440);
   });
 
-  it.each([`/play/${TABLE_ID}`, `/${TABLE_ID}/extra`, '/not-a-uuid'])(
+  it.each([`/play/${TABLE_ID}`, `/${TABLE_ID}/extra`, '/not_a_uuid'])(
     'fails closed on %s without fetching config or opening a socket',
     async (pathname) => {
       const { root, sockets, sessionPromise, fetchCalls } = await start(pathname);
@@ -233,7 +233,7 @@ describe('dashboard play GUID join', () => {
       'utf8',
     );
     expect(bundle).toContain('join_table');
-    expect(bundle).toContain('list_tables');
+    expect(bundle).toContain('list_groups');
     expect(bundle).not.toMatch(/create_table|\/v1\/play\/matches|\/v1\/bootstrap|bootstrapToken/);
   });
 

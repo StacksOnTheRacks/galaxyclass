@@ -30,8 +30,7 @@
 
 /* ---------- Top bar ---------- */
 
-.table-list-top-bar,
-.table-list-toolbar {
+.table-list-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -39,9 +38,6 @@
 }
 
 .table-list-controls,
-.table-list-filters,
-.table-list-sort,
-.table-list-search,
 .table-list-playing-as {
   display: flex;
   align-items: center;
@@ -143,23 +139,9 @@
   white-space: nowrap;
 }
 
-.table-list-settings-button,
-.table-list-filter,
 .table-list-secondary-button {
   border: 0;
-  cursor: not-allowed;
   font: inherit;
-}
-
-.table-list-settings-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-full);
-  background: rgba(10, 16, 13, 0.6);
 }
 
 .table-list-icon {
@@ -355,59 +337,6 @@
   --edge: var(--riffle-charcoal);
 }
 
-/* ---------- Toolbar ---------- */
-
-.table-list-toolbar {
-  flex-wrap: wrap;
-}
-
-.table-list-search {
-  width: min(320px, 100%);
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-full);
-  background: rgba(10, 16, 13, 0.6);
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
-
-.table-list-filters {
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-}
-
-.table-list-filter {
-  flex: none;
-  white-space: nowrap;
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-full);
-  background: rgba(10, 16, 13, 0.6);
-  color: var(--color-text-default);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.table-list-filter-active {
-  border-color: var(--riffle-white);
-  background: var(--riffle-white);
-  color: var(--riffle-charcoal);
-  font-weight: 700;
-}
-
-.table-list-sort {
-  margin-left: auto;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.table-list-sort-value {
-  color: var(--color-text-default);
-  font-size: 14px;
-  font-weight: 500;
-}
 
 /* ---------- Mini poker table ---------- */
 
@@ -690,14 +619,11 @@
 
 /* ---------- Responsive cards ---------- */
 
-.table-list-responsive,
-.table-list-join-panel,
-.table-list-join-link-tablet {
+.table-list-responsive {
   display: none;
 }
 
-.table-list-card,
-.table-list-join-panel {
+.table-list-card {
   border: 1px solid var(--color-border-subtle);
   border-radius: 20px;
   background: var(--color-background-card);
@@ -855,9 +781,7 @@
     padding: var(--spacing-lg);
   }
 
-  .table-list-panel-desktop,
-  .table-list-join-link-desktop,
-  .table-list-sort {
+  .table-list-panel-desktop {
     display: none;
   }
 
@@ -874,23 +798,6 @@
 
   .table-list-title {
     font-size: 34px;
-  }
-
-  .table-list-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .table-list-search,
-  .table-list-filters {
-    width: 100%;
-  }
-
-  .table-list-filters {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
-    scrollbar-width: none;
   }
 
   .table-list-responsive {
@@ -926,28 +833,6 @@
     padding: 0 4px;
   }
 
-  .table-list-join-panel {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-lg);
-  }
-
-  .table-list-join-panel-title {
-    font-family: var(--font-display);
-    font-size: 18px;
-    font-weight: 800;
-  }
-
-  .table-list-join-panel-copy {
-    color: var(--color-text-muted);
-    font-size: 14px;
-  }
-
-  .table-list-join-link-tablet {
-    display: inline-flex;
-    align-self: flex-start;
-  }
 }
 
 @media (max-width: 480px) {
@@ -1010,10 +895,6 @@
   .table-list-heading:hover .table-list-hero-card-front {
     transform: rotate(10deg);
   }
-}
-
-#app[data-surface='table-list'] button[aria-disabled='true'] {
-  opacity: 1;
 }
 
 #app[data-surface='table-list'] a:focus-visible,

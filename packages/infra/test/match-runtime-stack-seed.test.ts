@@ -46,10 +46,13 @@ describe('MatchRuntimeStack seeded table', () => {
       assert.deepEqual(Object.keys(seed.Properties ?? {}).sort(), [
         'BigBlind',
         'DefaultStack',
+        'GroupId',
         'ServiceToken',
         'SmallBlind',
+        'TableLabel',
         'TableName',
       ]);
+      assert.equal(seed.Properties?.GroupId, SEEDED_TABLES.find((spec) => spec.smallBlind === seed.Properties?.SmallBlind)?.groupId);
     }
   });
 
@@ -69,7 +72,7 @@ describe('MatchRuntimeStack seeded table', () => {
     assert.doesNotMatch(JSON.stringify(value), UUID_LIKE);
   });
 
-  it('grants the seed function only dynamodb:PutItem on the match table ARN', () => {
+  it('grants the seed function put, get, and update on the match table ARN', () => {
     const seedFunctions = Object.entries(
       synth.template.findResources('AWS::Lambda::Function'),
     ).filter(([id]) => id.startsWith('SeedTableHandler'));
@@ -88,14 +91,14 @@ describe('MatchRuntimeStack seeded table', () => {
     ).Statement;
     assert.deepEqual(statements, [
       {
-        Action: 'dynamodb:PutItem',
+        Action: ['dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:GetItem'],
         Effect: 'Allow',
         Resource: { 'Fn::GetAtt': [matchTableId, 'Arn'] },
       },
     ]);
   });
 
-  it('keeps the seeded id out of the SPA artifact but publishes it in config.json', () => {
+  it('publishes stakes groups in config.json without embedding anchor table ids', () => {
     for (const dir of [DASHBOARD_ARTIFACT_DIR, PLAY_ORIGIN_ARTIFACT_DIR]) {
       for (const file of listTextArtifacts(dir)) {
         const body = fs.readFileSync(file, 'utf8');
@@ -113,8 +116,10 @@ describe('MatchRuntimeStack seeded table', () => {
         /"name":"The Limp".*"name":"The Button".*"name":"Big Slick".*"name":"Pocket Rockets"/,
       );
       assert.match(raw, /"blindsLabel":"\$1 \/ \$2".*"blindsLabel":"\$25 \/ \$50"/);
+      assert.match(raw, /"id":"the-limp"/);
       assert.match(raw, /"maxSeats":8/);
-      assert.match(JSON.stringify(props.SourceMarkers), new RegExp(seedLogicalId));
+      assert.doesNotMatch(raw, UUID_LIKE);
+      assert.doesNotMatch(JSON.stringify(props.SourceMarkers), new RegExp(seedLogicalId));
     }
   });
 

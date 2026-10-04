@@ -1,6 +1,12 @@
-import type { OutboundMessage, TableListMessage } from '../../runtime/types.js';
+import type { GroupListMessage, OutboundMessage } from '../../runtime/types.js';
 
-export type OccupancyById = Record<string, number>;
+export interface GroupOccupancy {
+  seatedCount: number;
+  tableCount: number;
+  nextTableSeated: number;
+}
+
+export type OccupancyById = Record<string, GroupOccupancy>;
 
 export interface OccupancySocket {
   send(data: string): void;
@@ -11,7 +17,7 @@ export interface OccupancySocket {
 
 export interface ListOccupancyDeps {
   webSocketUrl: string;
-  tableIds: string[];
+  groupIds: string[];
   createSocket: (url: string) => OccupancySocket;
   onUpdate: (occupancy: OccupancyById) => void;
   keepAliveMs?: number;
@@ -36,24 +42,35 @@ function parseServerMessage(data: unknown): OutboundMessage | null {
   return null;
 }
 
-function occupancyFromList(message: TableListMessage): OccupancyById {
+function occupancyFromList(message: GroupListMessage): OccupancyById {
   const occupancy: OccupancyById = {};
-  for (const row of message.tables) {
+  for (const row of message.groups) {
     if (
-      typeof row.tableId === 'string' &&
-      typeof row.seatedCount === 'number' &&
-      Number.isInteger(row.seatedCount) &&
-      row.seatedCount >= 0
+      typeof row.groupId !== 'string' ||
+      typeof row.seatedCount !== 'number' ||
+      !Number.isInteger(row.seatedCount) ||
+      row.seatedCount < 0 ||
+      typeof row.tableCount !== 'number' ||
+      !Number.isInteger(row.tableCount) ||
+      row.tableCount < 0 ||
+      typeof row.nextTableSeated !== 'number' ||
+      !Number.isInteger(row.nextTableSeated) ||
+      row.nextTableSeated < 0
     ) {
-      occupancy[row.tableId] = row.seatedCount;
+      continue;
     }
+    occupancy[row.groupId] = {
+      seatedCount: row.seatedCount,
+      tableCount: row.tableCount,
+      nextTableSeated: row.nextTableSeated,
+    };
   }
   return occupancy;
 }
 
-/** Opens a read-only socket and asks the runtime how many seats are taken on known tables. */
+/** Opens a read-only socket and asks the runtime how full each stakes group is. */
 export function startListOccupancy(deps: ListOccupancyDeps): { dispose: () => void } {
-  if (deps.tableIds.length === 0) {
+  if (deps.groupIds.length === 0) {
     return { dispose: () => undefined };
   }
 
@@ -83,7 +100,7 @@ export function startListOccupancy(deps: ListOccupancyDeps): { dispose: () => vo
   };
 
   const request = (active: OccupancySocket): void => {
-    active.send(JSON.stringify({ action: 'list_tables', tableIds: deps.tableIds }));
+    active.send(JSON.stringify({ action: 'list_groups', groupIds: deps.groupIds }));
   };
 
   const scheduleReconnect = (): void => {
@@ -145,7 +162,7 @@ export function startListOccupancy(deps: ListOccupancyDeps): { dispose: () => vo
         return;
       }
       const message = parseServerMessage(event.data);
-      if (!message || message.type !== 'table_list') {
+      if (!message || message.type !== 'group_list') {
         return;
       }
       deps.onUpdate(occupancyFromList(message));

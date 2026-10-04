@@ -13,6 +13,8 @@ import * as apigwv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -21,7 +23,7 @@ import * as s3Deployment from 'aws-cdk-lib/aws-s3-deployment';
 import * as customResources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import type { PlayerAuthRefs } from './galaxy-class-auth-stack.js';
-import { buildSeededTableListing, SEEDED_TABLES } from './seeded-table-listing.js';
+import { buildSeededGroupListing, SEEDED_TABLES } from './seeded-table-listing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.join(__dirname, '../../..');
@@ -163,7 +165,7 @@ export class MatchRuntimeStack extends Stack {
     });
     seedHandler.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['dynamodb:PutItem'],
+        actions: ['dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:GetItem'],
         resources: [table.tableArn],
       }),
     );
@@ -172,7 +174,7 @@ export class MatchRuntimeStack extends Stack {
       onEventHandler: seedHandler,
     });
 
-    const seededTableListings = SEEDED_TABLES.map((spec) => {
+    const seededTables = SEEDED_TABLES.map((spec) => {
       const seededTable = new CustomResource(this, spec.constructId, {
         serviceToken: seedProvider.serviceToken,
         resourceType: 'Custom::SeededPokerTable',
@@ -181,11 +183,14 @@ export class MatchRuntimeStack extends Stack {
           SmallBlind: spec.smallBlind,
           BigBlind: spec.bigBlind,
           DefaultStack: spec.defaultStack,
+          GroupId: spec.groupId,
+          TableLabel: spec.name,
         },
       });
-      return buildSeededTableListing(seededTable.getAttString('TableId'), spec);
+      return { tableId: seededTable.getAttString('TableId'), spec };
     });
-    const seededTableId = seededTableListings[0]!.id;
+    const seededGroups = SEEDED_TABLES.map((spec) => buildSeededGroupListing(spec));
+    const seededTableId = seededTables[0]!.tableId;
 
     new CfnOutput(this, 'SeededTableId', {
       value: seededTableId,
@@ -223,7 +228,7 @@ export class MatchRuntimeStack extends Stack {
         s3Deployment.Source.asset(DASHBOARD_ARTIFACT_DIR),
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
-          tables: seededTableListings,
+          groups: seededGroups,
         }),
       ],
       distribution,
@@ -250,7 +255,7 @@ export class MatchRuntimeStack extends Stack {
         s3Deployment.Source.asset(PLAY_ORIGIN_ARTIFACT_DIR),
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
-          tables: seededTableListings,
+          groups: seededGroups,
           ...clientAuthConfig,
         }),
       ],
@@ -263,6 +268,30 @@ export class MatchRuntimeStack extends Stack {
       value: playOriginBucket.bucketName,
     });
 
+    const sweepHandler = new lambdaNodejs.NodejsFunction(this, 'TableSweepHandler', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: path.join(rifflePackageRoot, 'src/runtime/sweep.ts'),
+      projectRoot: monorepoRoot,
+      handler: 'handler',
+      timeout: Duration.seconds(60),
+      environment: {
+        TABLE_NAME: table.tableName,
+        GROUP_IDS: SEEDED_TABLES.map((spec) => spec.groupId).join(','),
+      },
+      bundling: {
+        target: 'node22',
+        format: lambdaNodejs.OutputFormat.ESM,
+        mainFields: ['module', 'main'],
+        externalModules: ['@aws-sdk/*'],
+      },
+      depsLockFilePath: path.join(monorepoRoot, 'package-lock.json'),
+    });
+    table.grantReadWriteData(sweepHandler);
+
+    new events.Rule(this, 'TableSweepSchedule', {
+      schedule: events.Schedule.rate(Duration.hours(1)),
+      targets: [new targets.LambdaFunction(sweepHandler)],
+    });
   }
 }
 

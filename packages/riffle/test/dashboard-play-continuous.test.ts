@@ -169,31 +169,13 @@ describe('continuous play on one table', () => {
     expect(carol.session.snapshot!.pocketCards).toHaveLength(2);
   });
 
-  it('Leave seat drops you to watching with a Take a seat button', async () => {
+  it('does not offer Leave seat once you are at the table', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
-    const carol = await openPlayer();
-    await playHand([alice, bob], 'fold');
-
-    const players = [alice, bob, carol];
-    const leaver = players.find(({ root }) => !root.querySelector('[data-field="action-controls"]'))!;
-    const leaverSeat = leaver.session.seatId!;
-    const stayers = players.filter((player) => player !== leaver);
-
-    await click(leaver, 'leave-seat');
-    expect(leaver.session.hasSeatToken()).toBe(false);
-    expect(leaver.storage.items.size).toBe(0);
-    expect(button(leaver, 'take-seat')).not.toBeNull();
-
-    await playHand(stayers, 'fold');
-    expect(stayers[0]!.session.snapshot!.seats.map((seat) => seat.seatId)).toEqual(
-      ['1', '2', '3'].filter((seatId) => seatId !== leaverSeat),
-    );
-    expect(leaver.session.seatId).toBeNull();
-
-    await click(leaver, 'take-seat');
-    expect(leaver.session.seatId).toBe(leaverSeat);
-    expect(leaver.session.hasSeatToken()).toBe(true);
+    expect(button(alice, 'leave-seat')).toBeNull();
+    expect(button(bob, 'leave-seat')).toBeNull();
+    expect(button(alice, 'leave-table')).not.toBeNull();
+    expect(button(bob, 'leave-table')).not.toBeNull();
   });
 
   it('skips a busted seat when dealing the next hand', async () => {
@@ -330,11 +312,12 @@ describe('continuous play on one table', () => {
     expect(alice.session.snapshot!.handNumber).toBe(3);
   });
 
-  it('shows Leave seat while waiting on another player mid-hand', async () => {
+  it('shows Leave table while waiting on another player mid-hand', async () => {
     const alice = await openPlayer();
     const bob = await openPlayer();
 
     const waiting = [alice, bob].find(({ root }) => !root.querySelector('[data-field="action-controls"]'))!;
-    expect(button(waiting, 'leave-seat')).not.toBeNull();
+    expect(button(waiting, 'leave-seat')).toBeNull();
+    expect(button(waiting, 'leave-table')).not.toBeNull();
   });
 });

@@ -1,9 +1,9 @@
 import { publicBase } from '../dashboard/public-base.js';
 
-const TABLE_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const GROUP_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export interface TableListing {
+export interface GroupListing {
   id: string;
   name: string;
   hostLabel: string;
@@ -13,6 +13,8 @@ export interface TableListing {
   maxSeats: number;
 }
 
+export type TableListing = GroupListing;
+
 /** Public Cognito ids for the Galaxy Class player pool; no secrets. */
 export interface PlayAuthConfig {
   userPoolId: string;
@@ -21,7 +23,7 @@ export interface PlayAuthConfig {
 
 export interface PlayConfig {
   webSocketUrl: string;
-  tables: TableListing[];
+  groups: GroupListing[];
   auth?: PlayAuthConfig;
 }
 
@@ -44,13 +46,13 @@ function parseAuthConfig(value: unknown): PlayAuthConfig | undefined {
   return { userPoolId, userPoolClientId };
 }
 
-function parseTableListing(value: unknown): TableListing | null {
+function parseGroupListing(value: unknown): GroupListing | null {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
   const row = value as Record<string, unknown>;
   const { id, name, hostLabel, variantLabel, blindsLabel, buyInLabel, maxSeats } = row;
-  if (typeof id !== 'string' || !TABLE_ID_RE.test(id)) {
+  if (typeof id !== 'string' || !GROUP_ID_RE.test(id) || UUID_RE.test(id)) {
     return null;
   }
   if (
@@ -78,19 +80,19 @@ export async function loadPlayConfig(fetchImpl: typeof fetch): Promise<PlayConfi
     if (typeof body !== 'object' || body === null) {
       return null;
     }
-    const { webSocketUrl, tables, auth } = body as Record<string, unknown>;
+    const { webSocketUrl, groups, auth } = body as Record<string, unknown>;
     if (typeof webSocketUrl !== 'string' || !/^wss?:\/\//.test(webSocketUrl)) {
       return null;
     }
-    const parsedTables = Array.isArray(tables)
-      ? tables
-          .map(parseTableListing)
-          .filter((entry): entry is TableListing => entry !== null)
+    const parsedGroups = Array.isArray(groups)
+      ? groups
+          .map(parseGroupListing)
+          .filter((entry): entry is GroupListing => entry !== null)
       : [];
     const parsedAuth = parseAuthConfig(auth);
     return parsedAuth
-      ? { webSocketUrl, tables: parsedTables, auth: parsedAuth }
-      : { webSocketUrl, tables: parsedTables };
+      ? { webSocketUrl, groups: parsedGroups, auth: parsedAuth }
+      : { webSocketUrl, groups: parsedGroups };
   } catch {
     return null;
   }

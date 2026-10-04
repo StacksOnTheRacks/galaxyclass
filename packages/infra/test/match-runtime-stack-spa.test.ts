@@ -127,7 +127,7 @@ describe('MatchRuntimeStack dashboard SPA hosting', () => {
     const { raw: rawConfig, marker } = stagedConfigForDeployment(synth.outdir, props);
     assert.match(
       rawConfig,
-      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"The Limp"/,
+      /^\{"webSocketUrl":(<<marker:[^>]+>>),"groups":\[\{"id":"the-limp","name":"The Limp"/,
       `config.json includes webSocketUrl and seeded table listing: ${rawConfig}`,
     );
     assert.match(rawConfig, /"maxSeats":8\}\]\}$/);

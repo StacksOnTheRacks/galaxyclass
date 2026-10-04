@@ -143,7 +143,7 @@ describe('MatchRuntimeStack play origin', () => {
     const { raw, marker } = stagedConfigForDeployment(synth.outdir, playDeploymentProps);
     assert.match(
       raw,
-      /^\{"webSocketUrl":(<<marker:[^>]+>>),"tables":\[\{"id":(<<marker:[^>]+>>),"name":"The Limp"/,
+      /^\{"webSocketUrl":(<<marker:[^>]+>>),"groups":\[\{"id":"the-limp","name":"The Limp"/,
       `riffle config.json includes webSocketUrl and seeded table listing: ${raw}`,
     );
     assert.match(raw, /"maxSeats":8\}\]\}$/);
@@ -156,7 +156,9 @@ describe('MatchRuntimeStack play origin', () => {
       assert.doesNotMatch(serialized, pattern);
     }
     assert.doesNotMatch(serialized, /riffle\.seat|hole/i);
-    assert.match(serialized, new RegExp(seedLogicalId));
+    assert.doesNotMatch(serialized, new RegExp(seedLogicalId));
+    assert.match(raw, /"id":"the-button"/);
+    assert.match(raw, /"id":"pocket-rockets"/);
   });
 
   it('names the play-origin deploy layer for the cfn exec role', () => {

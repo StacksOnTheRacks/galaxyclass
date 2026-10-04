@@ -5,7 +5,7 @@ function fetchJson(body: unknown): typeof fetch {
   return (async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch;
 }
 
-const base = { webSocketUrl: 'wss://example.execute-api.us-east-1.amazonaws.com/prod', tables: [] };
+const base = { webSocketUrl: 'wss://example.execute-api.us-east-1.amazonaws.com/prod', groups: [] };
 
 describe('loadPlayConfig auth', () => {
   it('parses the studio user pool and app client', async () => {

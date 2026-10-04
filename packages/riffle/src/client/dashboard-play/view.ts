@@ -61,7 +61,7 @@ export function renderSnapshotShell(
   onLeaveTable?: () => void,
 ): DashboardRegions {
   renderDashboardTableShell(root, {
-    tableName: DASHBOARD_TABLE_NAME,
+    tableName: snapshot.tableName?.trim() || DASHBOARD_TABLE_NAME,
     blindsLabel: snapshot.blindsLabel,
     seatedPlayersLabel: snapshot.seatedPlayersLabel,
     handNumber: snapshot.handNumber,

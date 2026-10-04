@@ -9,7 +9,7 @@ export interface DashboardTableShellProps {
   seatedPlayersLabel: string;
   handNumber: number | null;
   street: string | null;
-  /** Shown only while the viewer holds a seat. */
+  /** Returns to the table list. Shown on every breakpoint while the viewer is at the table. */
   onLeaveTable?: () => void;
 }
 
@@ -137,17 +137,26 @@ function renderTopBar(
   const controls = document.createElement('div');
   controls.className = 'dashboard-top-bar-controls';
 
+  const { onLeaveTable } = props;
+  const appendLeave = (): void => {
+    if (!onLeaveTable) {
+      return;
+    }
+    const leave = createControlButton('Leave table', 'dashboard-control-leave');
+    leave.dataset.field = 'leave-table';
+    leave.addEventListener('click', () => onLeaveTable());
+    controls.append(leave);
+  };
+
   if (breakpoint === 'phone') {
-    controls.append(createIconButton('More', 'dashboard-control-more', 'more'));
+    if (onLeaveTable) {
+      appendLeave();
+    } else {
+      controls.append(createIconButton('More', 'dashboard-control-more', 'more'));
+    }
   } else {
     controls.append(createIconButton('Settings', 'dashboard-control-settings', 'settings'));
-    const { onLeaveTable } = props;
-    if (onLeaveTable) {
-      const leave = createControlButton('Leave table', 'dashboard-control-leave');
-      leave.dataset.field = 'leave-table';
-      leave.addEventListener('click', () => onLeaveTable());
-      controls.append(leave);
-    }
+    appendLeave();
   }
 
   const metaRow = document.createElement('div');

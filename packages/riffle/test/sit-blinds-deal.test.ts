@@ -148,6 +148,18 @@ class MemoryStore implements MatchStore {
     return table;
   }
 
+  async listGroupTables() {
+    return [];
+  }
+
+  async createGroupTable(): Promise<TableRecord> {
+    throw new Error('createGroupTable is not supported');
+  }
+
+  async deleteTable(): Promise<void> {
+    throw new Error('deleteTable is not supported');
+  }
+
   listSeatsForTable(tableId: string): SeatRecord[] {
     return [...this.seats.entries()]
       .filter(([key]) => key.startsWith(`${tableId}:`))

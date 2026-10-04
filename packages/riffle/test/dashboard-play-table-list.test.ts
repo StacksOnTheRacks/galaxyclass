@@ -9,11 +9,12 @@ import { ACCOUNT_HINT_KEY, type AccountStorage } from '../src/client/dashboard-p
 import { configFetch, FakePlaySocket, flush, mountRoot, setViewport } from './support/fake-play-socket.js';
 
 const TABLE_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+const GROUP_ID = 'the-limp';
 const WS_URL = 'wss://example.execute-api.us-east-1.amazonaws.com/prod';
 
 const SAMPLE_TABLE: TableListing = {
-  id: TABLE_ID,
-  name: 'Galaxy Class Table',
+  id: GROUP_ID,
+  name: 'The Limp',
   hostLabel: 'Hosted by Galaxy Class',
   variantLabel: "No-Limit Hold'em",
   blindsLabel: '$1 / $2',
@@ -21,8 +22,8 @@ const SAMPLE_TABLE: TableListing = {
   maxSeats: 8,
 };
 
-function listConfigFetch(tables: unknown = [SAMPLE_TABLE]) {
-  return configFetch({ webSocketUrl: WS_URL, tables });
+function listConfigFetch(groups: unknown = [SAMPLE_TABLE]) {
+  return configFetch({ webSocketUrl: WS_URL, groups });
 }
 
 function accountStorage(entries: Record<string, string> = {}): AccountStorage {
@@ -90,11 +91,11 @@ describe('dashboard play table list', () => {
     expect(sockets[0]?.url).toBe(WS_URL);
     expect(root.dataset.surface).toBe('table-list');
     expect(root.textContent).toContain('Open tables');
-    expect(root.textContent).toContain('Galaxy Class Table');
+    expect(root.textContent).toContain('The Limp');
     expect(root.textContent).toContain('$1 / $2');
-    expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('1 open');
-    expect(root.querySelector('.table-list-join-button')?.getAttribute('href')).toBe(`/${TABLE_ID}`);
-    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('0 / 8');
+    expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('0 playing');
+    expect(root.querySelector('.table-list-join-button')?.getAttribute('href')).toBe(`/${GROUP_ID}`);
+    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('0 playing · 1 table');
   });
 
   it('asks the runtime for seated counts and paints them on the list', async () => {
@@ -102,25 +103,27 @@ describe('dashboard play table list', () => {
     const socket = sockets[0]!;
 
     socket.emit('open');
-    expect(socket.sent).toEqual([{ action: 'list_tables', tableIds: [TABLE_ID] }]);
+    expect(socket.sent).toEqual([{ action: 'list_groups', groupIds: [GROUP_ID] }]);
     expect(socket.actions()).not.toContain('join_table');
 
     socket.receive({
-      type: 'table_list',
-      tables: [{ tableId: TABLE_ID, seatedCount: 2, maxSeats: 8 }],
+      type: 'group_list',
+      groups: [{ groupId: GROUP_ID, seatedCount: 2, tableCount: 1, nextTableSeated: 2 }],
     });
 
     const counts = Array.from(root.querySelectorAll('.table-list-player-count'), (node) => node.textContent);
-    expect(counts).toContain('2 / 8');
-    expect(counts).toContain('2 / 8 seated');
+    expect(counts).toContain('2 playing · 1 table');
+    expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('2 playing');
     expect(root.querySelectorAll('.table-list-row .table-list-seat-filled')).toHaveLength(2);
     expect(root.querySelectorAll('.table-list-row .table-list-seat-open')).toHaveLength(6);
   });
 
   it('renders seated occupancy when the list is painted with live counts', () => {
     const root = mountRoot();
-    renderTableList(root, [SAMPLE_TABLE], null, { [TABLE_ID]: 2 });
-    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('2 / 8');
+    renderTableList(root, [SAMPLE_TABLE], null, {
+      [GROUP_ID]: { seatedCount: 2, tableCount: 1, nextTableSeated: 2 },
+    });
+    expect(root.querySelector('.table-list-player-count')?.textContent).toBe('2 playing · 1 table');
     expect(root.querySelectorAll('.table-list-row .table-list-seat-filled')).toHaveLength(2);
     expect(root.querySelectorAll('.table-list-row .table-list-seat-open')).toHaveLength(6);
   });
@@ -183,15 +186,14 @@ describe('dashboard play table list', () => {
     expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
   });
 
-  it('renders inert controls with aria-disabled', async () => {
+  it('does not render inert filters, search, or join-with-a-link controls', async () => {
     const { root } = await startList('/riffle');
-
-    const inertControls = root.querySelectorAll('[aria-disabled="true"]');
-    expect(inertControls.length).toBeGreaterThan(0);
-    inertControls.forEach((control) => {
-      control.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(root.dataset.surface).toBe('table-list');
+    expect(root.querySelector('[aria-disabled="true"]')).toBeNull();
+    expect(root.querySelector('.table-list-toolbar')).toBeNull();
+    expect(root.querySelector('.table-list-settings-button')).toBeNull();
+    expect(root.querySelector('.table-list-join-panel')).toBeNull();
+    expect(root.textContent).not.toContain('Search tables');
+    expect(root.textContent).not.toContain('Join with a link');
     expect(root.querySelector('.table-list-join-button')).not.toBeNull();
   });
 
@@ -199,7 +201,8 @@ describe('dashboard play table list', () => {
     const { root } = await startList(
       '/riffle',
       listConfigFetch([
-        { id: 'bad-id', name: 'Broken' },
+        { id: 'Not A Group', name: 'Broken' },
+        { ...SAMPLE_TABLE, id: TABLE_ID, maxSeats: 8 },
         { ...SAMPLE_TABLE, maxSeats: 0 },
         SAMPLE_TABLE,
         null,
@@ -207,13 +210,13 @@ describe('dashboard play table list', () => {
     );
 
     expect(root.querySelectorAll('.table-list-row')).toHaveLength(1);
-    expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('1 open');
+    expect(root.querySelector('.table-list-status-pill')?.textContent).toBe('0 playing');
   });
 
   it('renders zero rows when tables is missing or empty', async () => {
     const missing = await startList('/riffle', configFetch({ webSocketUrl: WS_URL }));
     expect(missing.root.querySelectorAll('.table-list-row')).toHaveLength(0);
-    expect(missing.root.querySelector('.table-list-status-pill')?.textContent).toBe('0 open');
+    expect(missing.root.querySelector('.table-list-status-pill')?.textContent).toBe('0 playing');
     expect(missing.sockets).toEqual([]);
 
     const empty = await startList('/riffle', listConfigFetch([]));
@@ -249,13 +252,16 @@ describe('dashboard play table list', () => {
 
   it('labels each table with its seat status', () => {
     const root = mountRoot();
-    const full = { ...SAMPLE_TABLE, id: 'a47ac10b-58cc-4372-a567-0e02b2c3d479', maxSeats: 2 };
-    renderTableList(root, [SAMPLE_TABLE, full], null, { [TABLE_ID]: 3, [full.id]: 2 });
+    const quiet = { ...SAMPLE_TABLE, id: 'the-button', name: 'The Button' };
+    renderTableList(root, [SAMPLE_TABLE, quiet], null, {
+      [GROUP_ID]: { seatedCount: 3, tableCount: 2, nextTableSeated: 5 },
+      'the-button': { seatedCount: 0, tableCount: 1, nextTableSeated: 0 },
+    });
     const badges = Array.from(
       root.querySelectorAll('.table-list-row .table-list-status-badge'),
       (badge) => badge.textContent,
     );
-    expect(badges).toEqual(['Seats open', 'Table full']);
+    expect(badges).toEqual(['Players seated', 'Waiting for players']);
   });
 
   it('shows a busy skeleton while the table config loads', async () => {
