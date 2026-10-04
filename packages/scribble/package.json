@@ -1,0 +1,26 @@
+{
+  "name": "@galaxyclass/scribble",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.787.0",
+    "@aws-sdk/client-dynamodb": "^3.787.0",
+    "@aws-sdk/lib-dynamodb": "^3.787.0",
+    "@galaxyclass/accounts": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "esbuild": "^0.25.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.2"
+  }
+}
