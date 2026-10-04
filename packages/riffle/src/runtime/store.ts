@@ -3,18 +3,40 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  TransactWriteCommand,
   UpdateCommand,
   type DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
 import {
   connGsiSk,
   connPk,
+  groupPk,
+  groupTableSk,
   META_SK,
   seatSk,
   tableGsiPk,
   tablePk,
 } from './keys.js';
-import type { ConnectionRecord, RuntimeEnv, SeatRecord, TableRecord } from './types.js';
+import type { BlindsConfig, ConnectionRecord, RuntimeEnv, SeatRecord, TableRecord } from './types.js';
+
+export interface GroupTableMembership {
+  tableId: string;
+  groupId: string;
+  createdAt: string;
+  anchor: boolean;
+  membershipSk: string;
+}
+
+export interface NewGroupTable {
+  tableId: string;
+  groupId: string;
+  tableName: string;
+  createdAt: string;
+  defaultStack: number;
+  maxSeats: number;
+  blinds: BlindsConfig;
+  anchor: boolean;
+}
 
 export interface MatchStore {
   putConnection(connectionId: string): Promise<void>;
@@ -31,6 +53,9 @@ export interface MatchStore {
   listSeats(tableId: string): Promise<SeatRecord[]>;
   putSeat(tableId: string, seat: SeatRecord): Promise<void>;
   deleteSeat(tableId: string, seatId: string): Promise<void>;
+  listGroupTables(groupId: string): Promise<GroupTableMembership[]>;
+  createGroupTable(input: NewGroupTable): Promise<TableRecord>;
+  deleteTable(tableId: string, groupId: string, membershipSk: string): Promise<void>;
   updateTableWithVersion(
     tableId: string,
     expectedVersion: number,
@@ -52,6 +77,8 @@ function parseTableItem(item: Record<string, unknown>): TableRecord {
       bigBlind: Number((item.blinds as { bigBlind?: number })?.bigBlind ?? 2),
     },
     handNumber: Number(item.handNumber ?? 0),
+    ...(typeof item.groupId === 'string' && item.groupId ? { groupId: item.groupId } : {}),
+    ...(typeof item.tableName === 'string' && item.tableName ? { tableName: item.tableName } : {}),
     buttonSeatId: item.buttonSeatId ? String(item.buttonSeatId) : undefined,
     street: item.street ? (String(item.street) as TableRecord['street']) : null,
     currentSeatId:
@@ -119,6 +146,42 @@ function parseSeatItem(item: Record<string, unknown>): SeatRecord {
     seat.hole = [String(item.hole[0]), String(item.hole[1])] as SeatRecord['hole'];
   }
   return seat;
+}
+
+function parseMembershipItem(item: Record<string, unknown>): GroupTableMembership | null {
+  const tableId = typeof item.tableId === 'string' ? item.tableId : '';
+  const groupId = typeof item.groupId === 'string' ? item.groupId : '';
+  const createdAt = typeof item.createdAt === 'string' ? item.createdAt : '';
+  const membershipSk = typeof item.SK === 'string' ? item.SK : '';
+  if (!tableId || !groupId || !createdAt || !membershipSk) {
+    return null;
+  }
+  return {
+    tableId,
+    groupId,
+    createdAt,
+    anchor: item.anchor === true,
+    membershipSk,
+  };
+}
+
+function groupTableRecord(input: NewGroupTable): TableRecord {
+  return {
+    tableId: input.tableId,
+    version: 1,
+    status: 'open',
+    createdAt: input.createdAt,
+    defaultStack: input.defaultStack,
+    maxSeats: input.maxSeats,
+    blinds: input.blinds,
+    groupId: input.groupId,
+    tableName: input.tableName,
+    handNumber: 0,
+    pot: 0,
+    board: [],
+    street: null,
+    currentSeatId: null,
+  };
 }
 
 function seatItem(tableId: string, seat: SeatRecord): Record<string, unknown> {
@@ -388,6 +451,77 @@ export function createMatchStore(
             PK: tablePk(tableId),
             SK: seatSk(seatId),
           },
+        }),
+      );
+    },
+
+    async listGroupTables(groupId) {
+      const result = await client.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+          ExpressionAttributeValues: {
+            ':pk': groupPk(groupId),
+            ':skPrefix': 'TABLE#',
+          },
+        }),
+      );
+      return (result.Items ?? []).flatMap((item) => {
+        const membership = parseMembershipItem(item);
+        return membership ? [membership] : [];
+      });
+    },
+
+    async createGroupTable(input) {
+      const table = groupTableRecord(input);
+      await client.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: tableName,
+                Item: {
+                  PK: tablePk(input.tableId),
+                  SK: META_SK,
+                  ...table,
+                },
+                ConditionExpression: 'attribute_not_exists(PK)',
+              },
+            },
+            {
+              Put: {
+                TableName: tableName,
+                Item: {
+                  PK: groupPk(input.groupId),
+                  SK: groupTableSk(input.createdAt, input.tableId),
+                  tableId: input.tableId,
+                  groupId: input.groupId,
+                  createdAt: input.createdAt,
+                  anchor: input.anchor,
+                },
+              },
+            },
+          ],
+        }),
+      );
+      return table;
+    },
+
+    async deleteTable(tableId, groupId, membershipSk) {
+      const seats = await this.listSeats(tableId);
+      for (const seat of seats) {
+        await this.deleteSeat(tableId, seat.seatId);
+      }
+      await client.send(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: { PK: tablePk(tableId), SK: META_SK },
+        }),
+      );
+      await client.send(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: { PK: groupPk(groupId), SK: membershipSk },
         }),
       );
     },

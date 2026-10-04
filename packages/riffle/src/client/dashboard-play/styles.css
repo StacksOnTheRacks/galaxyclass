@@ -154,25 +154,6 @@ body {
   background: var(--color-action-primary-hover);
 }
 
-.seated-leave-button {
-  align-self: flex-start;
-  padding: 8px 24px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-action-secondary);
-  color: inherit;
-  font: inherit;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.seated-leave-button:disabled {
-  color: var(--text-muted);
-  cursor: not-allowed;
-}
-
 .seated-summary {
   margin: 0;
   font-size: 16px;

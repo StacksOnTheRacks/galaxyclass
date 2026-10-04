@@ -1,4 +1,4 @@
-import { createBrandLockup, createCardImage, createIcon } from '../dashboard/assets.js';
+import { createBrandLockup, createCardImage } from '../dashboard/assets.js';
 import {
   galaxyClassAccountUrl,
   galaxyClassAvatarUrl,
@@ -6,38 +6,17 @@ import {
 } from '../dashboard/galaxy-class.js';
 import { publicBase } from '../dashboard/public-base.js';
 import type { TableListing } from './config.js';
+import type { OccupancyById } from './list-occupancy.js';
 import type { StudioAccount } from './studio-account.js';
 
 const CHIP_TONES = ['red', 'black', 'blue', 'green', 'gold'] as const;
 
-type TableStatus = 'waiting' | 'open' | 'full';
+type TableStatus = 'waiting' | 'open';
 
 const STATUS_LABELS: Record<TableStatus, string> = {
   waiting: 'Waiting for players',
-  open: 'Seats open',
-  full: 'Table full',
+  open: 'Players seated',
 };
-
-function inertButton(label: string, className: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = className;
-  button.textContent = label;
-  button.setAttribute('aria-disabled', 'true');
-  button.tabIndex = -1;
-  return button;
-}
-
-function inertIconButton(className: string, iconName: string, label: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = className;
-  button.setAttribute('aria-label', label);
-  button.setAttribute('aria-disabled', 'true');
-  button.tabIndex = -1;
-  button.append(createIcon(iconName, 'table-list-icon'));
-  return button;
-}
 
 function textElement<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -50,18 +29,30 @@ function textElement<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-function seatedCountFor(table: TableListing, occupancy: Record<string, number>): number {
-  const count = occupancy[table.id];
-  if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
-    return 0;
+function groupOccupancy(
+  table: TableListing,
+  occupancy: OccupancyById,
+): { seatedCount: number; tableCount: number; nextTableSeated: number } {
+  const row = occupancy[table.id];
+  if (!row) {
+    return { seatedCount: 0, tableCount: 1, nextTableSeated: 0 };
   }
-  return Math.min(count, table.maxSeats);
+  const seatedCount = Number.isInteger(row.seatedCount) && row.seatedCount > 0 ? row.seatedCount : 0;
+  const tableCount = Number.isInteger(row.tableCount) && row.tableCount > 0 ? row.tableCount : 0;
+  const next = Number.isInteger(row.nextTableSeated) && row.nextTableSeated > 0 ? row.nextTableSeated : 0;
+  return {
+    seatedCount,
+    tableCount,
+    nextTableSeated: Math.min(next, table.maxSeats),
+  };
 }
 
-function tableStatus(seatedCount: number, maxSeats: number): TableStatus {
-  if (seatedCount >= maxSeats) {
-    return 'full';
-  }
+function playersLabel(seatedCount: number, tableCount: number): string {
+  const tables = tableCount === 1 ? 'table' : 'tables';
+  return `${seatedCount} playing · ${tableCount} ${tables}`;
+}
+
+function tableStatus(seatedCount: number): TableStatus {
   return seatedCount === 0 ? 'waiting' : 'open';
 }
 
@@ -138,9 +129,9 @@ function renderTableName(table: TableListing, idSuffix: string): HTMLElement {
   return name;
 }
 
-function renderTableRow(table: TableListing, occupancy: Record<string, number>): HTMLElement {
-  const seatedCount = seatedCountFor(table, occupancy);
-  const status = tableStatus(seatedCount, table.maxSeats);
+function renderTableRow(table: TableListing, occupancy: OccupancyById): HTMLElement {
+  const { seatedCount, tableCount, nextTableSeated } = groupOccupancy(table, occupancy);
+  const status = tableStatus(seatedCount);
   const row = document.createElement('article');
   row.className = 'table-list-row';
   row.dataset.tableId = table.id;
@@ -155,12 +146,12 @@ function renderTableRow(table: TableListing, occupancy: Record<string, number>):
     renderTableName(table, ''),
     textElement('p', 'table-list-row-meta', `${table.hostLabel} · ${table.variantLabel}`),
   );
-  tableCol.append(renderMiniTable(table.maxSeats, seatedCount), identity);
+  tableCol.append(renderMiniTable(table.maxSeats, nextTableSeated), identity);
 
   const playersCol = document.createElement('div');
   playersCol.className = 'table-list-col table-list-col-players';
-  const count = textElement('p', 'table-list-player-count', `${seatedCount} / ${table.maxSeats}`);
-  count.setAttribute('aria-label', `${seatedCount} of ${table.maxSeats} seats taken`);
+  const count = textElement('p', 'table-list-player-count', playersLabel(seatedCount, tableCount));
+  count.setAttribute('aria-label', playersLabel(seatedCount, tableCount));
   playersCol.append(count, renderStatusBadge(status));
 
   const actionCol = document.createElement('div');
@@ -171,9 +162,9 @@ function renderTableRow(table: TableListing, occupancy: Record<string, number>):
   return row;
 }
 
-function renderTableCard(table: TableListing, occupancy: Record<string, number>): HTMLElement {
-  const seatedCount = seatedCountFor(table, occupancy);
-  const status = tableStatus(seatedCount, table.maxSeats);
+function renderTableCard(table: TableListing, occupancy: OccupancyById): HTMLElement {
+  const { seatedCount, tableCount, nextTableSeated } = groupOccupancy(table, occupancy);
+  const status = tableStatus(seatedCount);
   const card = document.createElement('article');
   card.className = 'table-list-card';
   card.dataset.tableId = table.id;
@@ -181,7 +172,7 @@ function renderTableCard(table: TableListing, occupancy: Record<string, number>)
 
   const stage = document.createElement('div');
   stage.className = 'table-list-card-stage';
-  stage.append(renderMiniTable(table.maxSeats, seatedCount), renderStatusBadge(status));
+  stage.append(renderMiniTable(table.maxSeats, nextTableSeated), renderStatusBadge(status));
 
   const header = document.createElement('div');
   header.className = 'table-list-card-header';
@@ -193,7 +184,7 @@ function renderTableCard(table: TableListing, occupancy: Record<string, number>)
   const players = document.createElement('div');
   players.className = 'table-list-card-players';
   players.append(
-    textElement('p', 'table-list-player-count', `${seatedCount} / ${table.maxSeats} seated`),
+    textElement('p', 'table-list-player-count', playersLabel(seatedCount, tableCount)),
   );
 
   const details = document.createElement('div');
@@ -270,10 +261,7 @@ function renderTopBar(account: StudioAccount | null): HTMLElement {
 
   const controls = document.createElement('div');
   controls.className = 'table-list-controls';
-  controls.append(
-    renderPlayingAs(account),
-    inertIconButton('table-list-settings-button', 'settings', 'Settings'),
-  );
+  controls.append(renderPlayingAs(account));
 
   topBar.append(renderLibraryLink(), controls);
   return topBar;
@@ -302,7 +290,7 @@ function renderHeroArt(): HTMLElement {
   return art;
 }
 
-function renderHero(openCount: number, signedIn: boolean): HTMLElement {
+function renderHero(playingCount: number, signedIn: boolean): HTMLElement {
   const hero = document.createElement('section');
   hero.className = 'table-list-heading';
   hero.setAttribute('aria-labelledby', 'table-list-title');
@@ -318,7 +306,7 @@ function renderHero(openCount: number, signedIn: boolean): HTMLElement {
   titleRow.className = 'table-list-title-row';
   const title = textElement('h1', 'table-list-title', 'Open tables');
   title.id = 'table-list-title';
-  const status = textElement('p', 'table-list-status-pill', `${openCount} open`);
+  const status = textElement('p', 'table-list-status-pill', `${playingCount} playing`);
   titleRow.append(title, status);
   const subtitle = textElement(
     'p',
@@ -327,51 +315,13 @@ function renderHero(openCount: number, signedIn: boolean): HTMLElement {
       ? "Pick a table and take a seat. No-Limit Hold'em, dealt live."
       : "Pick a table and take a seat — no sign-up needed, you'll play as a guest.",
   );
-  titleBlock.append(
-    titleRow,
-    subtitle,
-    inertButton('Join with a link', 'table-list-secondary-button table-list-join-link-desktop'),
-  );
+  titleBlock.append(titleRow, subtitle);
 
   hero.append(brand, titleBlock, renderHeroArt());
   return hero;
 }
 
-function renderToolbar(): HTMLElement {
-  const toolbar = document.createElement('section');
-  toolbar.className = 'table-list-toolbar';
-  toolbar.setAttribute('aria-label', 'Table filters');
-
-  const search = document.createElement('div');
-  search.className = 'table-list-search';
-  search.append(createIcon('search', 'table-list-icon'));
-  const searchLabel = document.createElement('span');
-  searchLabel.textContent = 'Search tables or hosts';
-  search.append(searchLabel);
-
-  const filters = document.createElement('div');
-  filters.className = 'table-list-filters';
-  filters.append(
-    inertButton('All tables', 'table-list-filter table-list-filter-active'),
-    inertButton('Seats open', 'table-list-filter'),
-    inertButton('Micro stakes', 'table-list-filter'),
-    inertButton('Heads-up', 'table-list-filter'),
-  );
-
-  const sort = document.createElement('div');
-  sort.className = 'table-list-sort';
-  const sortPrefix = document.createElement('span');
-  sortPrefix.textContent = 'Sort by';
-  const sortValue = document.createElement('span');
-  sortValue.className = 'table-list-sort-value';
-  sortValue.textContent = 'Most players';
-  sort.append(sortPrefix, sortValue, createIcon('chevron-down', 'table-list-icon'));
-
-  toolbar.append(search, filters, sort);
-  return toolbar;
-}
-
-function renderDesktopList(tables: TableListing[], occupancy: Record<string, number>): HTMLElement {
+function renderDesktopList(tables: TableListing[], occupancy: OccupancyById): HTMLElement {
   const list = document.createElement('section');
   list.className = 'table-list-panel table-list-panel-desktop';
   list.setAttribute('aria-label', 'Open tables');
@@ -393,7 +343,7 @@ function renderDesktopList(tables: TableListing[], occupancy: Record<string, num
   return list;
 }
 
-function renderResponsiveList(tables: TableListing[], occupancy: Record<string, number>): HTMLElement {
+function renderResponsiveList(tables: TableListing[], occupancy: OccupancyById): HTMLElement {
   const grid = document.createElement('section');
   grid.className = 'table-list-grid';
   grid.setAttribute('aria-label', 'Open tables');
@@ -401,20 +351,9 @@ function renderResponsiveList(tables: TableListing[], occupancy: Record<string, 
     grid.append(renderTableCard(table, occupancy));
   }
 
-  const joinPanel = document.createElement('section');
-  joinPanel.className = 'table-list-join-panel';
-  joinPanel.setAttribute('aria-labelledby', 'table-list-join-panel-title');
-  const joinTitle = textElement('h2', 'table-list-join-panel-title', 'Join with link');
-  joinTitle.id = 'table-list-join-panel-title';
-  joinPanel.append(
-    joinTitle,
-    textElement('p', 'table-list-join-panel-copy', 'Paste a table link to jump straight to a seat.'),
-    inertButton('Join with a link', 'table-list-secondary-button table-list-join-link-tablet'),
-  );
-
   const wrapper = document.createElement('div');
   wrapper.className = 'table-list-responsive';
-  wrapper.append(grid, joinPanel);
+  wrapper.append(grid);
   return wrapper;
 }
 
@@ -454,7 +393,7 @@ export function renderTableList(
   root: HTMLElement,
   tables: TableListing[],
   account: StudioAccount | null = null,
-  occupancy: Record<string, number> = {},
+  occupancy: OccupancyById = {},
 ): void {
   root.replaceChildren();
   root.dataset.surface = 'table-list';
@@ -462,17 +401,14 @@ export function renderTableList(
   delete root.dataset.loading;
   root.removeAttribute('aria-busy');
 
+  const playing = tables.reduce((sum, table) => sum + groupOccupancy(table, occupancy).seatedCount, 0);
   const page = createPage();
-  page.append(renderTopBar(account), renderHero(tables.length, account !== null));
+  page.append(renderTopBar(account), renderHero(playing, account !== null));
 
   if (tables.length === 0) {
     page.append(renderEmptyState());
   } else {
-    page.append(
-      renderToolbar(),
-      renderDesktopList(tables, occupancy),
-      renderResponsiveList(tables, occupancy),
-    );
+    page.append(renderDesktopList(tables, occupancy), renderResponsiveList(tables, occupancy));
   }
 
   root.append(page);

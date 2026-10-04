@@ -19,3 +19,12 @@ export function tableGsiPk(tableId: string): string {
 export function connGsiSk(connectionId: string): string {
   return `CONN#${connectionId}`;
 }
+
+export function groupPk(groupId: string): string {
+  return `GROUP#${groupId}`;
+}
+
+/** ISO timestamps sort oldest-first, so the anchor (created first) leads the group. */
+export function groupTableSk(createdAt: string, tableId: string): string {
+  return `TABLE#${createdAt}#${tableId}`;
+}

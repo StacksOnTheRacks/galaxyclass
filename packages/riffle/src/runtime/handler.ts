@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { createPostToConnection, fanOutSeatScopedSnapshots } from './fanout.js';
+import { isGroupId, loadGroupTables, pickGroupTable, summarizeGroup } from './groups.js';
 import {
   hasClientSuppliedState,
   isUnsupportedGameplayAction,
@@ -39,6 +41,8 @@ export interface RuntimeDeps {
   resolvePlayer?: ResolvePlayer | null;
   /** Picks guest names and avatars. Defaults to Math.random. */
   random?: () => number;
+  /** Mints overflow table ids. Defaults to randomUUID. */
+  randomTableId?: () => string;
 }
 
 function errorMessage(code: string): ErrorMessage {
@@ -87,21 +91,21 @@ function describeError(error: unknown): { error: string; detail: string } {
     : { error: 'unknown', detail: String(error) };
 }
 
-const MAX_LIST_TABLE_IDS = 32;
+const MAX_LIST_GROUP_IDS = 32;
 
-function parseRequestedTableIds(value: unknown): string[] {
+function parseRequestedGroupIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const entry of value) {
-    if (typeof entry !== 'string' || !entry || seen.has(entry)) {
+    if (typeof entry !== 'string' || !isGroupId(entry) || seen.has(entry)) {
       continue;
     }
     seen.add(entry);
     ids.push(entry);
-    if (ids.length >= MAX_LIST_TABLE_IDS) {
+    if (ids.length >= MAX_LIST_GROUP_IDS) {
       break;
     }
   }
@@ -111,6 +115,7 @@ function parseRequestedTableIds(value: unknown): string[] {
 export function createRuntimeHandler(deps: RuntimeDeps) {
   const nextHandDelayMs =
     deps.nextHandDelayMs === undefined ? NEXT_HAND_DELAY_MS : deps.nextHandDelayMs;
+  const randomTableId = deps.randomTableId ?? (() => randomUUID());
 
   const afterUpdate = async (table: TableRecord, seats: SeatRecord[]): Promise<void> => {
     await fanOutSeatScopedSnapshots(deps, table, seats);
@@ -165,21 +170,49 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       return { statusCode: 200 };
     }
 
-    if (message.action === 'list_tables') {
-      const tables = [];
-      for (const tableId of parseRequestedTableIds(message.tableIds)) {
-        const table = await deps.store.getTable(tableId);
-        if (!table) {
+    if (message.action === 'list_groups') {
+      const nowMs = Date.parse(deps.now());
+      const groups = [];
+      for (const groupId of parseRequestedGroupIds(message.groupIds)) {
+        const views = await loadGroupTables(deps.store, groupId);
+        if (views.length === 0) {
           continue;
         }
-        const seats = await deps.store.listSeats(tableId);
-        tables.push({
+        groups.push(summarizeGroup(groupId, views, nowMs));
+      }
+      await deps.postToConnection(connectionId, { type: 'group_list', groups });
+      return { statusCode: 200 };
+    }
+
+    if (message.action === 'join_group') {
+      const groupId = message.groupId ?? '';
+      if (!isGroupId(groupId)) {
+        await deps.postToConnection(connectionId, errorMessage('group_not_found'));
+        return { statusCode: 200 };
+      }
+      const views = await loadGroupTables(deps.store, groupId);
+      if (views.length === 0) {
+        await deps.postToConnection(connectionId, errorMessage('group_not_found'));
+        return { statusCode: 200 };
+      }
+      const nowMs = Date.parse(deps.now());
+      const picked = pickGroupTable(views, nowMs);
+      let tableId = picked?.table.tableId;
+      if (!tableId) {
+        const template = views.find((view) => view.membership.anchor)?.table ?? views[0]!.table;
+        tableId = randomTableId();
+        await deps.store.createGroupTable({
           tableId,
-          seatedCount: seats.filter((seat) => seat.displayName).length,
-          maxSeats: table.maxSeats,
+          groupId,
+          tableName: template.tableName ?? 'Riffle Poker table',
+          createdAt: deps.now(),
+          defaultStack: template.defaultStack,
+          maxSeats: template.maxSeats,
+          blinds: template.blinds,
+          anchor: false,
         });
       }
-      await deps.postToConnection(connectionId, { type: 'table_list', tables });
+      await deps.postToConnection(connectionId, { type: 'group_table', groupId, tableId });
       return { statusCode: 200 };
     }
 

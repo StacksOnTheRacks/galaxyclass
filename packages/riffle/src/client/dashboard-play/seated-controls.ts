@@ -68,15 +68,6 @@ function statusLine(text: string): HTMLElement {
   return line;
 }
 
-function button(className: string, field: string, label: string): HTMLButtonElement {
-  const element = document.createElement('button');
-  element.type = 'button';
-  element.className = className;
-  element.dataset.field = field;
-  element.textContent = label;
-  return element;
-}
-
 function completeSummary(snapshot: TableSnapshotMessage): HTMLElement {
   const winners = snapshot.seats.filter((seat) => (seat.wonAmount ?? 0) > 0);
   const line = document.createElement('p');
@@ -148,18 +139,18 @@ export function renderSeatedControls(
     const enough = ready >= 2;
 
     const idle = busted
-      ? 'Out of chips. Leave your seat and sit again to rebuy.'
+      ? 'Out of chips. Leave the table and rejoin to rebuy.'
       : complete && enough
         ? 'Next hand starts in a moment.'
         : enough
           ? 'Dealing…'
           : 'Waiting for another player to sit.';
-    region.append(leaveButton(state, send), statusLine(state.notice ?? idle));
+    region.append(statusLine(state.notice ?? idle));
     return;
   }
 
   if (local.waitingForNextHand) {
-    region.append(leaveButton(state, send), statusLine(state.notice ?? WAITING_FOR_NEXT_HAND));
+    region.append(statusLine(state.notice ?? WAITING_FOR_NEXT_HAND));
     return;
   }
 
@@ -174,7 +165,6 @@ export function renderSeatedControls(
         }
       },
     });
-    region.append(leaveButton(state, send));
     if (state.notice) {
       region.append(statusLine(state.notice));
     }
@@ -182,21 +172,7 @@ export function renderSeatedControls(
   }
 
   const acting = snapshot.seats.find((seat) => seat.acting);
-  region.append(
-    leaveButton(state, send),
-    statusLine(state.notice ?? (acting ? `Waiting for ${acting.displayName}` : 'Waiting…')),
-  );
+  region.append(statusLine(state.notice ?? (acting ? `Waiting for ${acting.displayName}` : 'Waiting…')));
 }
 
 export const WAITING_FOR_NEXT_HAND = 'Waiting for the next hand';
-
-function leaveButton(state: SeatedControlsState, send: (action: SeatAction) => void): HTMLButtonElement {
-  const leave = button('seated-leave-button', 'leave-seat', 'Leave seat');
-  leave.disabled = state.pending;
-  leave.addEventListener('click', () => {
-    if (!leave.disabled) {
-      send({ action: 'leave' });
-    }
-  });
-  return leave;
-}

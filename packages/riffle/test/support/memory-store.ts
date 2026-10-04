@@ -1,10 +1,12 @@
-import type { MatchStore } from '../../src/runtime/store.js';
+import type { GroupTableMembership, MatchStore, NewGroupTable } from '../../src/runtime/store.js';
+import { groupTableSk } from '../../src/runtime/keys.js';
 import type { ConnectionRecord, SeatRecord, TableRecord } from '../../src/runtime/types.js';
 
 export class MemoryMatchStore implements MatchStore {
   private connections = new Map<string, ConnectionRecord>();
   private tables = new Map<string, TableRecord>();
   private seats = new Map<string, SeatRecord>();
+  private memberships: GroupTableMembership[] = [];
 
   private seatKey(tableId: string, seatId: string): string {
     return `${tableId}:${seatId}`;
@@ -114,10 +116,63 @@ export class MemoryMatchStore implements MatchStore {
     if (!current || current.version !== expectedVersion) {
       return null;
     }
-    this.tables.set(tableId, { ...table });
+    this.tables.set(tableId, {
+      ...table,
+      groupId: table.groupId ?? current.groupId,
+      tableName: table.tableName ?? current.tableName,
+    });
     for (const seat of seats) {
       await this.putSeat(tableId, seat);
     }
+    return this.tables.get(tableId)!;
+  }
+
+  async listGroupTables(groupId: string): Promise<GroupTableMembership[]> {
+    return this.memberships
+      .filter((row) => row.groupId === groupId)
+      .sort((left, right) => (left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0));
+  }
+
+  async createGroupTable(input: NewGroupTable): Promise<TableRecord> {
+    if (this.tables.has(input.tableId)) {
+      throw new Error('table exists');
+    }
+    const table: TableRecord = {
+      tableId: input.tableId,
+      version: 1,
+      status: 'open',
+      createdAt: input.createdAt,
+      defaultStack: input.defaultStack,
+      maxSeats: input.maxSeats,
+      blinds: input.blinds,
+      groupId: input.groupId,
+      tableName: input.tableName,
+      handNumber: 0,
+      pot: 0,
+      board: [],
+      street: null,
+      currentSeatId: null,
+    };
+    this.tables.set(input.tableId, table);
+    this.memberships.push({
+      tableId: input.tableId,
+      groupId: input.groupId,
+      createdAt: input.createdAt,
+      anchor: input.anchor,
+      membershipSk: groupTableSk(input.createdAt, input.tableId),
+    });
     return table;
+  }
+
+  async deleteTable(tableId: string, groupId: string, membershipSk: string): Promise<void> {
+    this.tables.delete(tableId);
+    for (const key of [...this.seats.keys()]) {
+      if (key.startsWith(`${tableId}:`)) {
+        this.seats.delete(key);
+      }
+    }
+    this.memberships = this.memberships.filter(
+      (row) => !(row.groupId === groupId && row.membershipSk === membershipSk),
+    );
   }
 }

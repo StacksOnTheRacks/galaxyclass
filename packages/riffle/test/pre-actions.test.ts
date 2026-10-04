@@ -100,7 +100,7 @@ describe('waiting pre-actions', () => {
     expect(region.querySelector('[data-field="pre-actions-waiting"]')?.textContent).toBe('Waiting · Ana to act');
     expect(region.querySelector('[data-field="pre-actions-order"]')?.textContent).toBe('You act in 2');
     expect(labels(region)).toEqual(['Check / Fold', 'Check', 'Call any']);
-    expect(region.querySelector('[data-field="leave-seat"]')).not.toBeNull();
+    expect(region.querySelector('[data-field="leave-seat"]')).toBeNull();
     expect(region.querySelector('[data-field="action-controls"]')).toBeNull();
   });
 

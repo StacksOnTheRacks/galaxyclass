@@ -4,7 +4,7 @@ import { publicBase } from '../dashboard/public-base.js';
 import { renderLoading } from '../surfaces/loading.js';
 import { loadPlayConfig } from './config.js';
 import { buildMyHandViewModel } from './my-hand-view.js';
-import { isTableListPath, parseTableIdFromPath } from './route.js';
+import { isTableListPath, parseGroupIdFromPath, parseTableIdFromPath } from './route.js';
 import { createAmplifyAccessToken, guestAccessToken, type GetAccessToken } from './player-token.js';
 import { renderSeatedControls, type SeatAction, type SeatedControlsState } from './seated-controls.js';
 import {
@@ -44,6 +44,8 @@ export interface DashboardPlayDeps {
   getAccessToken?: GetAccessToken;
   /** Full-page navigation. Defaults to window.location.assign. */
   assignLocation?: (url: string) => void;
+  /** Rewrites the address bar when a group resolves to a table. Defaults to history.replaceState. */
+  replaceLocation?: (url: string) => void;
 }
 
 export interface DashboardPlaySession {
@@ -98,21 +100,24 @@ function defaultStorage(): SeatTokenStorage | null {
 
 export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<DashboardPlaySession> {
   const { root } = deps;
-  const tableId = parseTableIdFromPath(deps.pathname);
+  let tableId = parseTableIdFromPath(deps.pathname);
+  const routeGroupId = tableId ? null : parseGroupIdFromPath(deps.pathname);
   const storage = deps.storage === undefined ? defaultStorage() : deps.storage;
-  const storageKey = `riffle.seat.${tableId ?? ''}`;
+  let storageKey = `riffle.seat.${tableId ?? ''}`;
   const reconnectDelayMs = deps.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
   const keepAliveMs = deps.keepAliveMs ?? DEFAULT_KEEP_ALIVE_MS;
 
   let seatToken: string | null = null;
   let resuming = false;
   let leaving = false;
-  /** Leave table exits to the list; Leave seat stays on the table watching. */
+  /** Leave table always returns to the list, including mid-hand. */
   let leavingTable = false;
   let reconnectAttempts = 0;
   let disposed = false;
   let sitRetries = 0;
   const assignLocation = deps.assignLocation ?? ((url: string) => window.location.assign(url));
+  const replaceLocation =
+    deps.replaceLocation ?? ((url: string) => window.history.replaceState(null, '', url));
   const autoSit: AutoSitState = createAutoSitState();
   const seated: SeatedControlsState = { pending: false, notice: null };
   let socket: PlaySocket | null = null;
@@ -166,6 +171,27 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     }
   };
 
+  const rerouteToGroup = (): boolean => {
+    if (!routeGroupId || !socket || disposed) {
+      return false;
+    }
+    autoSit.submitting = false;
+    autoSit.rejected.clear();
+    sitRetries = 0;
+    socket.send(JSON.stringify({ action: 'join_group', groupId: routeGroupId }));
+    return true;
+  };
+
+  const adoptGroupTable = (nextTableId: string): void => {
+    if (tableId && tableId !== nextTableId) {
+      forgetSeat();
+    }
+    tableId = nextTableId;
+    session.tableId = nextTableId;
+    storageKey = `riffle.seat.${nextTableId}`;
+    replaceLocation(`${publicBase()}/${nextTableId}`);
+  };
+
   const failClosed = (): void => {
     if (session.phase === 'not_found' || session.phase === 'closed') {
       return;
@@ -196,17 +222,17 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       return;
     }
     const local = snapshot.seats.find((seat) => seat.isLocal);
-    const regions = renderSnapshotShell(
-      root,
-      snapshot,
-      local && seatToken
-        ? () => {
-            if (!seated.pending) {
-              sendSeatAction({ action: 'leave' }, true);
-            }
-          }
-        : undefined,
-    );
+    const regions = renderSnapshotShell(root, snapshot, () => {
+      if (local && seatToken) {
+        if (!seated.pending) {
+          sendSeatAction({ action: 'leave' }, true);
+        }
+        return;
+      }
+      disposed = true;
+      socket?.close();
+      assignLocation(`${publicBase()}/`);
+    });
 
     if (!local || !seatToken) {
       regions.myHand.replaceChildren();
@@ -242,6 +268,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     }
     const seatId = firstOpenSeat(snapshot, autoSit.rejected);
     if (!seatId) {
+      if (rerouteToGroup()) {
+        return;
+      }
       autoSit.notice = TABLE_FULL_MESSAGE;
       return;
     }
@@ -276,7 +305,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
   };
 
   const handleError = (code: string): void => {
-    if (session.phase === 'loading' || code === 'table_not_found') {
+    if (session.phase === 'loading' || code === 'table_not_found' || code === 'group_not_found') {
       failClosed();
       return;
     }
@@ -304,6 +333,9 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       } else if (code === 'seat_occupied' && autoSit.seatId) {
         autoSit.rejected.add(autoSit.seatId);
       } else if (code === 'table_full') {
+        if (rerouteToGroup()) {
+          return;
+        }
         autoSit.notice = TABLE_FULL_MESSAGE;
         render();
         return;
@@ -343,16 +375,20 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       autoSit.submitting = false;
       sitRetries = 0;
     }
+    if (leavingTable) {
+      leaving = false;
+      leavingTable = false;
+      autoSit.wantsSeat = false;
+      forgetSeat();
+      disposed = true;
+      socket?.close();
+      assignLocation(`${publicBase()}/`);
+      return;
+    }
     if (leaving && !isSeatedHere) {
       leaving = false;
       autoSit.wantsSeat = false;
       forgetSeat();
-      if (leavingTable) {
-        disposed = true;
-        socket?.close();
-        assignLocation(`${publicBase()}/`);
-        return;
-      }
     }
     if (seatToken && !isSeatedHere && !resuming && !autoSit.submitting) {
       // The seat went away without us (taken over after a long absence); sit again.
@@ -421,7 +457,11 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     };
 
     active.addEventListener('open', () => {
-      active.send(JSON.stringify({ action: 'join_table', tableId }));
+      if (routeGroupId && !tableId) {
+        active.send(JSON.stringify({ action: 'join_group', groupId: routeGroupId }));
+      } else {
+        active.send(JSON.stringify({ action: 'join_table', tableId }));
+      }
       keepAlive = setInterval(() => {
         if (!ended) {
           active.send(JSON.stringify({ action: 'ping' }));
@@ -444,6 +484,12 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
         return;
       }
 
+      if (message.type === 'group_table' && routeGroupId && message.groupId === routeGroupId) {
+        adoptGroupTable(message.tableId);
+        active.send(JSON.stringify({ action: 'join_table', tableId: message.tableId }));
+        return;
+      }
+
       if (message.type === 'sat') {
         if (!autoSit.submitting) {
           return;
@@ -463,7 +509,7 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
     });
   };
 
-  if (!tableId) {
+  if (!tableId && !routeGroupId) {
     if (!isTableListPath(deps.pathname)) {
       session.phase = 'not_found';
       renderTableNotFound(root);
@@ -481,13 +527,13 @@ export async function startDashboardPlay(deps: DashboardPlayDeps): Promise<Dashb
       if (disposed || session.phase !== 'list') {
         return;
       }
-      renderTableList(root, listConfig.tables, account, occupancy);
+      renderTableList(root, listConfig.groups, account, occupancy);
     };
     session.phase = 'list';
     paintList();
     const listOccupancy = startListOccupancy({
       webSocketUrl: listConfig.webSocketUrl,
-      tableIds: listConfig.tables.map((table) => table.id),
+      groupIds: listConfig.groups.map((group) => group.id),
       createSocket: deps.createSocket,
       keepAliveMs,
       reconnectDelayMs,

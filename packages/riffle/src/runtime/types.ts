@@ -25,6 +25,10 @@ export interface TableRecord {
   defaultStack: number;
   maxSeats: number;
   blinds: BlindsConfig;
+  /** Stakes group this table belongs to, e.g. `the-limp`. Absent on tables created before groups. */
+  groupId?: string;
+  /** Lobby name shared by every table in the group, e.g. "The Limp". */
+  tableName?: string;
   handNumber: number;
   buttonSeatId?: string;
   street?: Street | null;
@@ -78,6 +82,8 @@ export interface ClientMessage {
   action: string;
   tableId?: string;
   tableIds?: unknown;
+  groupId?: string;
+  groupIds?: unknown;
   seatId?: string;
   /** Cognito access token on `sit`; the seat's name and avatar come only from the verified account. */
   accessToken?: unknown;
@@ -139,6 +145,8 @@ export interface SnapshotStreetAction extends StreetActionRecord {
 export interface TableSnapshotMessage {
   type: 'table_snapshot';
   tableId: string;
+  /** Group name, when the table belongs to one. */
+  tableName?: string;
   version: number;
   status: TableStatus;
   createdAt: string;
@@ -167,22 +175,31 @@ export interface ErrorMessage {
   code: string;
 }
 
-export interface TableListEntry {
-  tableId: string;
+export interface GroupListEntry {
+  groupId: string;
   seatedCount: number;
-  maxSeats: number;
+  tableCount: number;
+  /** Seats taken at the table a new player would join. 0 when every table is full. */
+  nextTableSeated: number;
 }
 
-export interface TableListMessage {
-  type: 'table_list';
-  tables: TableListEntry[];
+export interface GroupListMessage {
+  type: 'group_list';
+  groups: GroupListEntry[];
+}
+
+export interface GroupTableMessage {
+  type: 'group_table';
+  groupId: string;
+  tableId: string;
 }
 
 export type OutboundMessage =
   | TableCreatedMessage
   | SatMessage
   | TableSnapshotMessage
-  | TableListMessage
+  | GroupListMessage
+  | GroupTableMessage
   | ErrorMessage;
 
 export interface WebSocketEvent {
