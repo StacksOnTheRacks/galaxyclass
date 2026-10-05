@@ -174,14 +174,11 @@ describe("auth screens", () => {
     ["sign-in", () => <SignInForm />],
     ["sign-up", () => <SignUpForm />],
     ["forgot password", () => <ForgotPasswordForm />],
-  ])("%s sends players to the library instead of straight to Riffle Poker", (_, form) => {
+  ])("%s sends players to the rooms instead of straight to Riffle Poker", (_, form) => {
     const { container } = render(form());
 
     expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
-    expect(screen.getByRole("link", { name: "Browse the library" })).toHaveAttribute(
-      "href",
-      "/#library",
-    );
+    expect(screen.getByRole("link", { name: "Browse rooms" })).toHaveAttribute("href", "/");
   });
 
   it("names the game Riffle Poker in sign-up copy", () => {
@@ -574,10 +571,13 @@ describe("account", () => {
     expect(await screen.findByLabelText("Gamer tag")).toHaveValue(GAMER_TAG);
     expect(screen.queryByText(PROFILE_COPY.missingTagTitle)).not.toBeInTheDocument();
     const navBar = screen.getByRole("navigation", { name: "Main" });
-    expect(navBar).toHaveTextContent("Account");
+    expect(
+      within(navBar).getByRole("link", { name: `Signed in as ${GAMER_TAG}` }),
+    ).toHaveAttribute("href", "/account");
     expect(navBar).toHaveTextContent("Sign out");
-    expect(navBar).toHaveTextContent(`Signed in as ${GAMER_TAG}`);
     expect(navBar).not.toHaveTextContent(EMAIL);
+    const tabs = within(screen.getByRole("navigation", { name: "App" }));
+    expect(tabs.getByRole("link", { name: "Account" })).toHaveAttribute("aria-current", "page");
     expect(screen.getAllByRole("button", { name: "Sign out" }).length).toBeGreaterThan(0);
     expect(api.calls[0]).toMatchObject({
       method: "GET",
@@ -594,10 +594,7 @@ describe("account", () => {
     expect(await screen.findByLabelText("Gamer tag")).toHaveValue(GAMER_TAG);
     expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
     expect(screen.queryByRole("link", { name: /riffle/i })).toBeNull();
-    expect(screen.getByRole("link", { name: "Browse the library" })).toHaveAttribute(
-      "href",
-      "/#library",
-    );
+    expect(screen.getByRole("link", { name: "Browse rooms" })).toHaveAttribute("href", "/");
   });
 
   it("prompts an existing player without a gamer tag and saves one", async () => {
@@ -775,7 +772,7 @@ describe("nav session", () => {
       </SessionProvider>,
     );
 
-    expect(await screen.findByRole("link", { name: "Account" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: /^Signed in as / })).toHaveAttribute(
       "href",
       "/account",
     );
@@ -796,6 +793,6 @@ describe("nav session", () => {
       "/sign-in",
     );
     expect(screen.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/sign-up");
-    expect(screen.queryByRole("link", { name: "Account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Signed in as / })).not.toBeInTheDocument();
   });
 });

@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MemberCard } from "@/components/PlayerCard";
 import { HudLabel } from "@/components/primitives";
 import { Avatar } from "@/components/profile/Avatar";
+import { MemberCard } from "@/components/profile/MemberCard";
 import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { GamerTagForm } from "@/components/profile/GamerTagForm";
 import { useSession } from "@/lib/auth/session";
@@ -123,7 +123,7 @@ export function AccountPanel() {
             aria-labelledby="account-gamer-tag-heading"
             className="flex flex-col gap-5 border-t border-bezel pt-5"
           >
-            <SectionHeading id="account-gamer-tag-heading" kicker="Shown at every table">
+            <SectionHeading id="account-gamer-tag-heading" kicker="Shown in every room">
               Your gamer tag
             </SectionHeading>
             <GamerTagForm profile={profile} onSaved={session.setProfile} />

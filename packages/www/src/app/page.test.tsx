@@ -1,17 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FeaturedMarquee } from "@/components/FeaturedMarquee";
-import { GameLibrary } from "@/components/GameLibrary";
+import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import About from "./about/page";
 import Home from "./page";
-
-const motion = vi.hoisted(() => ({ reduced: false }));
-
-vi.mock("framer-motion", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("framer-motion")>()),
-  useReducedMotion: () => motion.reduced,
-}));
 
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "" });
@@ -30,39 +22,52 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-beforeEach(() => {
-  motion.reduced = false;
-});
-
-describe("studio home", () => {
-  it("links every Play Riffle Poker control to same-origin /riffle", () => {
+describe("rooms home", () => {
+  it("opens the Riffle Poker room at same-origin /riffle", () => {
     render(<Home />);
 
-    const play = screen.getAllByRole("link", { name: "Play Riffle Poker" });
-    expect(play.length).toBeGreaterThan(0);
-    for (const link of play) {
-      expect(link).toHaveAttribute("href", "/riffle");
-    }
+    const heading = screen.getByRole("heading", { level: 3, name: "Riffle Poker" });
+    const room = within(heading.closest("article") as HTMLElement);
+    expect(room.getByRole("link", { name: "Enter Riffle Poker room" })).toHaveAttribute(
+      "href",
+      "/riffle",
+    );
   });
 
-  it("only links to Riffle Poker from the featured marquee and game library", () => {
+  it("opens the Scribble room at same-origin /scribble", () => {
+    render(<Home />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Scribble" });
+    const room = within(heading.closest("article") as HTMLElement);
+    expect(room.getByText(/crossword word game/i)).toBeInTheDocument();
+    expect(room.getByRole("link", { name: "Enter Scribble room" })).toHaveAttribute(
+      "href",
+      "/scribble",
+    );
+  });
+
+  it("links into each game exactly once, from the room list", () => {
     const { container } = render(<Home />);
 
-    const riffleLinks = Array.from(container.querySelectorAll('a[href^="/riffle"]'));
-    expect(riffleLinks).toHaveLength(2);
-    for (const link of riffleLinks) {
-      expect(link.closest("#featured, #library")).not.toBeNull();
+    for (const prefix of ["/riffle", "/scribble"]) {
+      const links = Array.from(container.querySelectorAll(`a[href^="${prefix}"]`));
+      expect(links, prefix).toHaveLength(1);
+      expect(links[0]!.closest("#rooms"), prefix).not.toBeNull();
     }
     expect(
-      within(container.querySelector("#player-card") as HTMLElement).queryByRole("link", {
-        name: /riffle/i,
-      }),
-    ).toBeNull();
-    expect(
       within(screen.getByRole("navigation", { name: "Footer" })).queryByRole("link", {
-        name: /riffle/i,
+        name: /riffle|scribble/i,
       }),
     ).toBeNull();
+  });
+
+  it("teases more rooms without anything to enter", () => {
+    render(<Home />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "More rooms coming" });
+    const teaser = within(heading.closest("article") as HTMLElement);
+    expect(teaser.getByText("Coming soon")).toBeInTheDocument();
+    expect(teaser.queryByRole("link")).toBeNull();
   });
 
   it("calls the game Riffle Poker everywhere users can see or hear it", () => {
@@ -92,131 +97,74 @@ describe("studio home", () => {
     expect(container.querySelectorAll("iframe")).toHaveLength(0);
     expect(container.querySelector('a[href="#hosts"]')).toBeNull();
     expect(screen.queryByText(/for hosts/i)).toBeNull();
-    expect(readFileSync(path.join(root, "src/app/page.tsx"), "utf8")).not.toMatch(
-      /HostEmbedSection/,
-    );
-    expect(existsSync(path.join(root, "src/components/HostEmbedSection.tsx"))).toBe(
-      false,
-    );
+    expect(existsSync(path.join(root, "src/components/HostEmbedSection.tsx"))).toBe(false);
   });
 
   it("shows signed-out Sign in and Sign up in the main nav", () => {
     render(<Home />);
 
     const nav = within(screen.getByRole("navigation", { name: "Main" }));
-    expect(nav.getByRole("link", { name: "Sign in" })).toHaveAttribute(
-      "href",
-      "/sign-in",
-    );
-    expect(nav.getByRole("link", { name: "Sign up" })).toHaveAttribute(
-      "href",
-      "/sign-up",
-    );
-    expect(nav.queryByRole("link", { name: /for hosts/i })).toBeNull();
+    expect(nav.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/sign-in");
+    expect(nav.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/sign-up");
+    expect(nav.getByRole("link", { name: "Rooms" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("keeps the story and CTA with no animated layers under reduced motion", () => {
-    motion.reduced = true;
-    const { container } = render(<Home />);
+  it("gives phones a bottom tab bar with Rooms, About, and Sign in", () => {
+    render(<Home />);
 
-    expect(container.querySelectorAll("[data-motion]")).toHaveLength(0);
+    const tabs = within(screen.getByRole("navigation", { name: "App" }));
+    expect(tabs.getByRole("link", { name: "Rooms" })).toHaveAttribute("href", "/");
+    expect(tabs.getByRole("link", { name: "Rooms" })).toHaveAttribute("aria-current", "page");
+    expect(tabs.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
+    expect(tabs.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/sign-in");
+  });
+
+  it("invites guests to sign up without requiring it", () => {
+    render(<Home />);
+
+    const prompt = within(
+      screen.getByRole("heading", { name: "Playing as a guest" }).closest("section") as HTMLElement,
+    );
+    expect(prompt.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/sign-up");
+    expect(prompt.getByText(/no account needed/i)).toBeInTheDocument();
+  });
+});
+
+describe("about page", () => {
+  it("explains how the rooms work and who runs the studio", () => {
+    render(<About />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Galaxy Class Gaming" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How the rooms work" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Social chips only" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /browse rooms/i })).toHaveAttribute("href", "/");
     expect(
-      screen.getByRole("heading", { level: 1, name: /welcome to\s+the arcade/i }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Play Riffle Poker" })[0]).toHaveAttribute(
-      "href",
-      "/riffle",
-    );
+      within(screen.getByRole("navigation", { name: "App" })).getByRole("link", { name: "About" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not link into a game directly", () => {
+    const { container } = render(<About />);
+
+    expect(container.querySelector('a[href^="/riffle"], a[href^="/scribble"]')).toBeNull();
   });
 });
 
-describe("featured marquee", () => {
-  it("chases marquee bulbs and deals the attract screen by default", () => {
-    const { container } = render(<FeaturedMarquee />);
-
-    expect(container.querySelectorAll('[data-motion="chase"]').length).toBeGreaterThan(0);
-    expect(container.querySelector('[data-motion="power-on"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-motion="deal"]')).toHaveLength(5);
-  });
-
-  it("renders a still attract screen when reduced motion is preferred", () => {
-    motion.reduced = true;
-    const { container } = render(<FeaturedMarquee />);
-
-    expect(container.querySelectorAll("[data-motion]")).toHaveLength(0);
-    expect(
-      screen.getByRole("img", { name: /^Riffle Poker attract screen/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Riffle Poker" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Play Riffle Poker" })).toHaveAttribute(
-      "href",
-      "/riffle",
-    );
-  });
-});
-
-describe("game library", () => {
-  it("lists a playable Riffle Poker cabinet that opens /riffle", () => {
-    render(<GameLibrary />);
-
-    const heading = screen.getByRole("heading", { level: 3, name: "Riffle Poker" });
-    const cabinet = within(heading.closest("article") as HTMLElement);
-    expect(cabinet.getByText("Playable now")).toBeInTheDocument();
-    expect(cabinet.getByRole("link", { name: "Play Riffle Poker" })).toHaveAttribute(
-      "href",
-      "/riffle",
-    );
-  });
-
-  it("lists a playable Scribble cabinet that opens same-origin /scribble", () => {
-    render(<GameLibrary />);
-
-    const heading = screen.getByRole("heading", { level: 3, name: "Scribble" });
-    const cabinet = within(heading.closest("article") as HTMLElement);
-    expect(cabinet.getByText("Playable now")).toBeInTheDocument();
-    expect(cabinet.getByText(/Word game/)).toBeInTheDocument();
-    expect(cabinet.getByRole("link", { name: "Play Scribble" })).toHaveAttribute("href", "/scribble");
-    expect(screen.getByText(/2 games playable now/)).toBeInTheDocument();
-  });
-
-  it("marks placeholder cabinets as coming soon with nothing to play", () => {
-    render(<GameLibrary />);
-
-    const placeholders = screen.getAllByRole("heading", { level: 3, name: /^slot \d+$/i });
-    expect(placeholders).toHaveLength(2);
-    for (const heading of placeholders) {
-      const cabinet = within(heading.closest("article") as HTMLElement);
-      expect(cabinet.getByText("Coming soon")).toBeInTheDocument();
-      expect(cabinet.queryByRole("link")).toBeNull();
-    }
-  });
-
-  it("filters the shelf by status", () => {
-    render(<GameLibrary />);
-
-    fireEvent.click(screen.getByRole("button", { name: /playable now/i }));
-    expect(screen.getByRole("button", { name: /playable now/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.queryAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(0);
-    expect(screen.getByRole("heading", { level: 3, name: "Riffle Poker" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: "Scribble" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /coming soon/i }));
-    expect(screen.queryByRole("heading", { level: 3, name: "Riffle Poker" })).toBeNull();
-    expect(screen.queryByRole("heading", { level: 3, name: "Scribble" })).toBeNull();
-    expect(screen.getAllByRole("heading", { level: 3, name: /^slot/i })).toHaveLength(2);
-  });
-});
-
-describe("home boundaries", () => {
+describe("site boundaries", () => {
   it("does not capture /riffle or /scribble in Next", () => {
     expect(existsSync(path.join(root, "src/app/riffle"))).toBe(false);
     expect(existsSync(path.join(root, "src/app/scribble"))).toBe(false);
     const nextConfig = readFileSync(path.join(root, "next.config.ts"), "utf8");
     expect(nextConfig).toMatch(/output:\s*"export"/);
     expect(nextConfig).not.toMatch(/rewrites|redirects/);
+  });
+
+  it("leaves tables and presence to each game room", () => {
+    for (const file of sourceFiles(path.join(root, "src"))) {
+      const source = readFileSync(file, "utf8");
+      expect(source, file).not.toMatch(/WebSocket|config\.json|list_groups|seatedCount/);
+    }
   });
 
   it("ships no inline HTML injection, scripts, or Hosted UI", () => {

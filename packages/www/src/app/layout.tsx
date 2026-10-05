@@ -25,19 +25,20 @@ const silkscreen = Silkscreen({
 });
 
 export const metadata: Metadata = {
-  title: "Galaxy Class Gaming — Games worth sitting down for",
+  title: "Galaxy Class Gaming — Pick a room and play",
   description:
-    "Galaxy Class Gaming makes online games for strangers, friends, and family. Play in the browser with social chips — nothing to buy. Featured game: Riffle Poker.",
+    "Galaxy Class Gaming makes online game rooms for strangers, friends, and family. Play Riffle Poker or Scribble in your browser with social chips — nothing to buy.",
   openGraph: {
     title: "Galaxy Class Gaming",
     description:
-      "An arcade of online games for strangers, friends, and family. Featured: Riffle Poker. Social chips only — nothing to buy.",
+      "Game rooms for strangers, friends, and family: Riffle Poker and Scribble. Social chips only — nothing to buy.",
     type: "website",
   },
 };
 
 export const viewport: Viewport = {
   themeColor: "#09080d",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
