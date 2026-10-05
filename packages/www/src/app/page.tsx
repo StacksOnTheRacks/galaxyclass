@@ -1,42 +1,23 @@
-import { FeaturedMarquee } from "@/components/FeaturedMarquee";
-import { GameLibrary } from "@/components/GameLibrary";
-import { HouseRules } from "@/components/HouseRules";
-import { LibraryRail } from "@/components/LibraryRail";
-import { PlayerCard } from "@/components/PlayerCard";
 import { Frame, HudLabel } from "@/components/primitives";
+import { AccountPrompt } from "@/components/rooms/AccountPrompt";
+import { RoomList } from "@/components/rooms/RoomList";
 import { SiteShell } from "@/components/SiteShell";
-import { StudioStory } from "@/components/StudioStory";
 
 export default function Home() {
   return (
-    <SiteShell current="library">
-      <Frame className="grid gap-6 pt-6 lg:grid-cols-[theme(spacing.rail)_minmax(0,1fr)] lg:gap-10 lg:pt-10">
-        <LibraryRail />
+    <SiteShell current="rooms">
+      <Frame className="flex flex-col gap-6 pt-6 md:gap-8 md:pt-10">
+        <header className="flex flex-col gap-2">
+          <HudLabel tone="cyan">Galaxy Class · Game rooms</HudLabel>
+          <h1 className="font-display text-display-l uppercase">Pick a room</h1>
+          <p className="max-w-[56ch] text-ink-muted md:text-body-l">
+            Every room is a different game. Step inside, choose a table, and play
+            in your browser.
+          </p>
+        </header>
 
-        <div className="flex min-w-0 flex-col gap-section">
-          <div className="flex flex-col gap-6">
-            <header className="flex flex-col gap-3">
-              <HudLabel tone="cyan">Galaxy Class Gaming · Arcade</HudLabel>
-              <h1 className="text-balance font-display text-marquee uppercase">
-                Welcome to{" "}
-                <span className="block text-pink [text-shadow:0_0_24px_rgb(var(--c-pink)/0.45)]">
-                  the arcade
-                </span>
-              </h1>
-              <p className="max-w-[60ch] text-body-l text-ink-muted">
-                Online games for strangers, friends, and family. Pick a
-                cabinet and play in your browser — no account needed.
-              </p>
-            </header>
-
-            <FeaturedMarquee />
-          </div>
-
-          <GameLibrary />
-          <HouseRules />
-          <StudioStory />
-          <PlayerCard />
-        </div>
+        <RoomList />
+        <AccountPrompt />
       </Frame>
     </SiteShell>
   );

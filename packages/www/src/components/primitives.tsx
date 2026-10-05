@@ -5,8 +5,8 @@ export const PLAY_SCRIBBLE_HREF = "/scribble";
 export const SIGN_IN_HREF = "/sign-in";
 export const SIGN_UP_HREF = "/sign-up";
 export const ACCOUNT_HREF = "/account";
-export const LIBRARY_HREF = "/#library";
-export const STUDIO_HREF = "/#studio";
+export const ROOMS_HREF = "/";
+export const ABOUT_HREF = "/about";
 
 export function Frame({
   children,
@@ -70,21 +70,10 @@ export function HudLabel({
   );
 }
 
-export type GameStatus = "live" | "soon";
-
-export function StatusTag({ status }: { status: GameStatus }) {
-  const live = status === "live";
-
+export function Chip({ children }: { children: ReactNode }) {
   return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-sm border px-2 py-1 font-hud text-hud uppercase ${
-        live
-          ? "border-success/70 bg-success/10 text-success"
-          : "border-dashed border-bezel-hi bg-void/60 text-ink-muted"
-      }`}
-    >
-      <span aria-hidden="true">{live ? "▶" : "◌"}</span>
-      {live ? "Playable now" : "Coming soon"}
+    <span className="inline-flex items-center rounded-sm border border-bezel bg-void/60 px-2 py-1 font-hud text-hud uppercase text-ink-muted">
+      {children}
     </span>
   );
 }

@@ -12,7 +12,6 @@
   "dependencies": {
     "@galaxyclass/accounts": "*",
     "aws-amplify": "^6.22.1",
-    "framer-motion": "^11.18.2",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -51,10 +51,6 @@ const config: Config = {
         hud: ["var(--font-silkscreen)", "ui-monospace", "monospace"],
       },
       fontSize: {
-        marquee: [
-          "clamp(2.25rem, 1.3rem + 3.6vw, 4.25rem)",
-          { lineHeight: "0.95", letterSpacing: "0.01em" },
-        ],
         "display-l": [
           "clamp(2rem, 1.3rem + 2.6vw, 3.25rem)",
           { lineHeight: "1", letterSpacing: "0.01em" },
@@ -70,7 +66,7 @@ const config: Config = {
       spacing: {
         gutter: "var(--space-gutter)",
         section: "var(--space-section)",
-        rail: "var(--size-rail)",
+        tabbar: "var(--size-tabbar)",
       },
       borderRadius: {
         sm: "var(--radius-sm)",
@@ -79,7 +75,7 @@ const config: Config = {
         screen: "var(--radius-screen)",
       },
       boxShadow: {
-        cabinet: "var(--shadow-cabinet)",
+        panel: "var(--shadow-panel)",
         raised: "var(--shadow-raised)",
         press: "var(--shadow-press)",
         "press-down": "var(--shadow-press-down)",

@@ -1,13 +1,12 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
-import { MarqueeStrip } from "@/components/Marquee";
+import type { ReactNode } from "react";
 import {
   ButtonLink,
   buttonClass,
   Frame,
   HudLabel,
-  LIBRARY_HREF,
+  ROOMS_HREF,
 } from "@/components/primitives";
 import { SiteShell } from "@/components/SiteShell";
 
@@ -27,13 +26,13 @@ const RESET_FLOW = ["Request code", "Set new password", "Sign in"];
 const screens: Record<
   AuthScreenKind,
   {
-    marquee: string;
+    eyebrow: string;
     flow?: Flow;
     aside: { kicker: string; headline: string; points: string[] };
   }
 > = {
   "sign-in": {
-    marquee: "Continue",
+    eyebrow: "Galaxy Class account",
     aside: {
       kicker: "Player 1 ready",
       headline: "Welcome back, player.",
@@ -45,7 +44,7 @@ const screens: Record<
     },
   },
   "sign-up": {
-    marquee: "New player",
+    eyebrow: "New player",
     flow: { label: "Account setup", steps: SIGN_UP_FLOW, current: 0 },
     aside: {
       kicker: "Player card",
@@ -59,7 +58,7 @@ const screens: Record<
     },
   },
   confirm: {
-    marquee: "New player",
+    eyebrow: "New player",
     flow: { label: "Account setup", steps: SIGN_UP_FLOW, current: 1 },
     aside: {
       kicker: "Almost in",
@@ -71,7 +70,7 @@ const screens: Record<
     },
   },
   forgot: {
-    marquee: "Password reset",
+    eyebrow: "Password reset",
     flow: { label: "Password reset", steps: RESET_FLOW, current: 0 },
     aside: {
       kicker: "Locked out?",
@@ -83,7 +82,7 @@ const screens: Record<
     },
   },
   reset: {
-    marquee: "Password reset",
+    eyebrow: "Password reset",
     flow: { label: "Password reset", steps: RESET_FLOW, current: 1 },
     aside: {
       kicker: "Last step",
@@ -95,12 +94,12 @@ const screens: Record<
     },
   },
   account: {
-    marquee: "Player card",
+    eyebrow: "Your account",
     aside: {
-      kicker: "Your account",
-      headline: "One sign-in, every game.",
+      kicker: "Player card",
+      headline: "One sign-in, every room.",
       points: [
-        "Your gamer tag and avatar follow you to every table.",
+        "Your gamer tag and avatar follow you into every room.",
         "Private, invite-only tables in supported games.",
         "Social chips only — nothing to buy.",
       ],
@@ -145,16 +144,16 @@ function Steps({ flow, done }: { flow: Flow; done: boolean }) {
   );
 }
 
-function AttractScreen({ kind }: { kind: AuthScreenKind }) {
+function AuthAside({ kind }: { kind: AuthScreenKind }) {
   const { aside } = screens[kind];
 
   return (
     <aside
       aria-labelledby="auth-aside-heading"
-      className="cabinet flex flex-col p-3 sm:p-4"
+      className="flex flex-col lg:panel lg:p-4"
     >
-      <div className="crt flex flex-1 flex-col justify-between gap-8 bg-[radial-gradient(ellipse_at_20%_0%,rgb(var(--c-pink)/0.18),transparent_60%),radial-gradient(ellipse_at_100%_100%,rgb(var(--c-cyan)/0.14),transparent_60%)] p-6 sm:p-8">
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-1 flex-col justify-between gap-8 lg:crt lg:bg-[radial-gradient(ellipse_at_20%_0%,rgb(var(--c-pink)/0.18),transparent_60%),radial-gradient(ellipse_at_100%_100%,rgb(var(--c-cyan)/0.14),transparent_60%)] lg:p-8">
+        <div className="flex flex-col gap-4 max-lg:hidden">
           <HudLabel tone="cyan">{aside.kicker}</HudLabel>
           <h2
             id="auth-aside-heading"
@@ -174,15 +173,15 @@ function AttractScreen({ kind }: { kind: AuthScreenKind }) {
           </ul>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-bezel/70 pt-5">
+        <div className="flex flex-col gap-3 border-bezel/70 max-lg:px-1 lg:border-t lg:pt-5">
           <p className="text-small text-ink-muted">
             Just here to play? No account needed.
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <ButtonLink href={LIBRARY_HREF} variant="secondary" arrow>
-              Browse the library
+            <ButtonLink href={ROOMS_HREF} variant="secondary" arrow className="max-sm:w-full">
+              Browse rooms
             </ButtonLink>
-            <HudLabel tone="amber" as="span">
+            <HudLabel tone="amber" as="span" className="max-lg:hidden">
               Free play
             </HudLabel>
           </div>
@@ -212,22 +211,16 @@ export function AuthScreen({
     width === "account" ? "lg:grid-cols-[minmax(0,38rem)_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,32rem)_minmax(0,1fr)]";
 
   return (
-    <SiteShell>
-      <Frame className="py-8 lg:py-14">
+    <SiteShell current="account">
+      <Frame className="pt-6 lg:pt-14">
         <div className={`grid gap-6 lg:gap-8 ${panelWidth}`}>
           <section
             aria-labelledby="auth-heading"
-            className="cabinet t-molding flex flex-col gap-6 p-4 sm:p-7"
-            style={{ "--molding": "rgb(var(--c-pink))" } as CSSProperties}
+            className="panel flex flex-col gap-6 p-4 sm:p-7"
           >
-            <MarqueeStrip>
-              <HudLabel tone="amber" as="span">
-                Player 1
-              </HudLabel>
-              <HudLabel tone="muted" as="span">
-                {config.marquee}
-              </HudLabel>
-            </MarqueeStrip>
+            <HudLabel tone="pink" as="span">
+              {config.eyebrow}
+            </HudLabel>
 
             {config.flow ? <Steps flow={config.flow} done={Boolean(success)} /> : null}
 
@@ -252,7 +245,7 @@ export function AuthScreen({
             {children}
           </section>
 
-          <AttractScreen kind={kind} />
+          <AuthAside kind={kind} />
         </div>
       </Frame>
     </SiteShell>

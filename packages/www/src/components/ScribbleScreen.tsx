@@ -20,12 +20,12 @@ const CROSS_ROW = 2;
 function Tile({ letter, lit = false }: { letter: string; lit?: boolean }) {
   return (
     <span
-      className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[3px] bg-scribble-tile font-display text-[clamp(8px,1.5vw,15px)] leading-none text-scribble-ink shadow-[inset_0_-2px_0_rgb(var(--c-scribble-ink)/0.25)] ${
+      className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[3px] bg-scribble-tile font-display text-[clamp(10px,2.6vw,15px)] leading-none text-scribble-ink shadow-[inset_0_-2px_0_rgb(var(--c-scribble-ink)/0.25)] ${
         lit ? "ring-2 ring-scribble" : ""
       }`}
     >
       {letter}
-      <span className="absolute bottom-[6%] right-[8%] font-hud text-[clamp(4px,0.7vw,7px)] leading-none">
+      <span className="absolute bottom-[6%] right-[8%] font-hud text-[clamp(5px,1.2vw,7px)] leading-none">
         {LETTER_VALUES[letter]}
       </span>
     </span>
@@ -43,8 +43,8 @@ export function ScribbleWordmark({ className = "" }: { className?: string }) {
   );
 }
 
-/** Attract screen: the wordmark laid as a scored word with WORD crossing it. */
-export function ScribbleTileScreen({ className = "" }: { className?: string }) {
+/** The wordmark laid as a scored word with WORD crossing it. */
+export function ScribbleRoomArt({ className = "" }: { className?: string }) {
   const cells = Array.from({ length: DOWN.length * ACROSS.length }, (_, index) => {
     const row = Math.floor(index / ACROSS.length);
     const col = index % ACROSS.length;
@@ -54,12 +54,14 @@ export function ScribbleTileScreen({ className = "" }: { className?: string }) {
     if (col === CROSS_COL) {
       return <Tile key={index} letter={DOWN[row]!} />;
     }
-    return <span key={index} className="aspect-square w-full" />;
+    return <span key={index} className="aspect-square w-full rounded-[3px] bg-void/15" />;
   });
   return (
-    <div aria-hidden="true" className={`crt flex flex-col p-3 ${className}`}>
-      <ScribbleWordmark className="text-[16px]" />
-      <div className="mx-auto mt-2 flex w-[88%] flex-1 items-center justify-center rounded-md border-[5px] border-scribble-ink bg-scribble-board px-2">
+    <div
+      aria-hidden="true"
+      className={`crt flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_30%,rgb(var(--c-scribble)/0.12),transparent_70%)] p-4 ${className}`}
+    >
+      <div className="flex w-[90%] max-w-[22rem] items-center justify-center rounded-md border-[5px] border-scribble-ink bg-scribble-board p-2">
         <div className="grid w-full grid-cols-8 gap-[3px]">{cells}</div>
       </div>
     </div>
