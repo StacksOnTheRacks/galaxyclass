@@ -14,6 +14,7 @@ import {
   type StartOptions,
   type TurnResult,
 } from '../rules/game.js';
+import { AWAY_REMOVE_AFTER_MS } from '../rules/limits.js';
 import type { Placement } from '../rules/types.js';
 import { isThemeId } from '../themes/ids.js';
 import { fromGameState, toGameState } from './game-state.js';
@@ -25,7 +26,13 @@ import type { ConnectionRecord, ErrorMessage, OutboundMessage, SeatRecord, Table
 export type Change = Omit<TableCommit, 'expectedVersion'>;
 
 export type ActionResult =
-  | { ok: true; change: Change; reply?: OutboundMessage }
+  | {
+      ok: true;
+      change: Change;
+      reply?: OutboundMessage;
+      /** Sent to other connections after the commit lands. */
+      notify?: Array<{ connectionId: string; message: OutboundMessage }>;
+    }
   | { ok: false; error: ErrorMessage };
 
 export interface ActionContext {
@@ -33,6 +40,8 @@ export interface ActionContext {
   seats: SeatRecord[];
   connection: ConnectionRecord;
   random: Random;
+  /** Epoch milliseconds. */
+  now: number;
   startOptions?: (tableId: string) => StartOptions | undefined;
 }
 
@@ -66,17 +75,59 @@ export function authorizeSeat(
   return { ok: true, seat };
 }
 
+function seatOf(ctx: ActionContext): SeatRecord | undefined {
+  const { connection } = ctx;
+  return ctx.seats.find((seat) => seat.seatId === connection.seatId && seat.connectionId === connection.connectionId);
+}
+
+/**
+ * Binds an existing seat to this connection. Rack, score, and place in the turn order are untouched.
+ * Whatever connection held the seat before loses it and is told so.
+ */
+function bindSeat(ctx: ActionContext, seat: SeatRecord, seatToken: string, seatTokenHash: string): ActionResult {
+  const { connectionId } = ctx.connection;
+  const { awaySince: _away, ...held } = seat;
+  const previous = seat.connectionId && seat.connectionId !== connectionId ? seat.connectionId : null;
+  return {
+    ok: true,
+    change: {
+      table: bump(ctx.table),
+      putSeats: [{ ...held, connectionId, seatTokenHash }],
+      deleteSeatIds: [],
+      connectionSeats: [{ connectionId, seatId: seat.seatId }],
+    },
+    reply: { type: 'sat', seatId: seat.seatId, seatToken },
+    notify: previous ? [{ connectionId: previous, message: { type: 'left', seatId: seat.seatId, reason: 'taken_over' } }] : [],
+  };
+}
+
+/** Takes a held seat back with the seat token it was issued, from a new connection. */
+export function resume(ctx: ActionContext, seatToken: unknown): ActionResult {
+  const seat = ctx.seats.find((candidate) => verifySeatToken(seatToken, candidate.seatTokenHash));
+  if (!seat) {
+    return fail('invalid_seat_token');
+  }
+  const mine = seatOf(ctx);
+  if (mine && mine.seatId !== seat.seatId) {
+    return fail('already_seated');
+  }
+  return bindSeat(ctx, seat, seatToken as string, seat.seatTokenHash);
+}
+
 export function sit(
   ctx: ActionContext,
   requestedSeatId: unknown,
   player: VerifiedPlayer | null,
 ): ActionResult {
   const { table, seats, connection } = ctx;
-  if (connection.seatId && seats.some((seat) => seat.seatId === connection.seatId)) {
+  if (seatOf(ctx)) {
     return fail('already_seated');
   }
-  if (player && seats.some((seat) => seat.playerSub === player.sub)) {
-    return fail('account_already_seated');
+  const held = player ? seats.find((seat) => seat.playerSub === player.sub) : undefined;
+  if (held) {
+    // The account proves the seat is theirs, so a new device gets a fresh token and the old one dies.
+    const token = mintSeatToken();
+    return bindSeat(ctx, held, token, hashSeatToken(token));
   }
 
   let seatId: string;
@@ -134,8 +185,9 @@ export function sit(
 }
 
 /**
- * Leave and disconnect share this. Between turns the seat drops at once; on your turn the
- * rules engine auto-passes first. Rack tiles go back in the bag.
+ * Frees a seat: an explicit leave, removing an away player, or a disconnect outside a game.
+ * Between turns the seat drops at once; on your turn the rules engine auto-passes first.
+ * Rack tiles go back in the bag.
  */
 export function dropSeat(
   table: TableRecord,
@@ -161,6 +213,50 @@ export function dropSeat(
   };
 }
 
+/**
+ * A closed connection never costs a player their place in a game: the seat, rack, and turn are
+ * held until they come back. Outside a game there is nothing to hold, so the seat frees up.
+ */
+export function disconnectSeat(
+  table: TableRecord,
+  seats: SeatRecord[],
+  seatId: string,
+  random: Random,
+  now: number,
+): Change {
+  const seat = seats.find((candidate) => candidate.seatId === seatId);
+  if (!seat || table.game.status !== 'playing' || !table.game.turnOrder.includes(seatId)) {
+    return dropSeat(table, seats, seatId, random);
+  }
+  const { connectionId: _closed, ...held } = seat;
+  return {
+    table: bump(table),
+    putSeats: [{ ...held, awaySince: new Date(now).toISOString() }],
+    deleteSeatIds: [],
+    connectionSeats: [],
+  };
+}
+
+/** Any seated player may free the seat of someone who has been away past the grace period. */
+export function removeAway(ctx: ActionContext, seatToken: unknown, targetSeatId: unknown): ActionResult {
+  const auth = authorizeSeat(ctx, seatToken);
+  if (!auth.ok) {
+    return auth;
+  }
+  const target = ctx.seats.find((seat) => seat.seatId === targetSeatId);
+  if (!target || target.seatId === auth.seat.seatId) {
+    return fail('invalid_seat');
+  }
+  if (target.connectionId) {
+    return fail('player_not_away');
+  }
+  const since = target.awaySince ? Date.parse(target.awaySince) : Number.NaN;
+  if (Number.isFinite(since) && ctx.now - since < AWAY_REMOVE_AFTER_MS) {
+    return fail('away_too_recent');
+  }
+  return { ok: true, change: dropSeat(ctx.table, ctx.seats, target.seatId, ctx.random) };
+}
+
 export function leave(ctx: ActionContext, seatToken: unknown): ActionResult {
   const auth = authorizeSeat(ctx, seatToken);
   if (!auth.ok) {
@@ -181,15 +277,26 @@ export function start(ctx: ActionContext, seatToken: unknown): ActionResult {
   if (ctx.table.game.status === 'playing') {
     return fail('game_in_progress');
   }
-  if (ctx.seats.length < MIN_PLAYERS) {
+  // Seats still held from the last game for someone who is away are not dealt in; they free up.
+  const present = ctx.seats.filter((seat) => seat.connectionId);
+  if (present.length < MIN_PLAYERS) {
     return fail('insufficient_players');
   }
   const state = startGame(
-    ctx.seats.map((seat) => seat.seatId),
+    present.map((seat) => seat.seatId),
     ctx.random,
     ctx.startOptions?.(ctx.table.tableId),
   )!;
-  return commitGame(ctx, state);
+  const split = fromGameState(ctx.table, present, state);
+  return {
+    ok: true,
+    change: {
+      table: bump({ ...split.table, gameNumber: ctx.table.gameNumber + 1 }),
+      putSeats: split.changedSeats,
+      deleteSeatIds: ctx.seats.filter((seat) => !seat.connectionId).map((seat) => seat.seatId),
+      connectionSeats: [],
+    },
+  };
 }
 
 function commitGame(ctx: ActionContext, state: GameState): ActionResult {

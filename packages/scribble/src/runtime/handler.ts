@@ -8,11 +8,13 @@ import {
 import { cryptoRandom, type Random } from '../rules/bag.js';
 import { loadDictionary, type Dictionary } from '../rules/dictionary.js';
 import {
-  dropSeat,
+  disconnectSeat,
   exchange,
   leave,
   pass,
   play,
+  removeAway,
+  resume,
   setTheme,
   sit,
   start,
@@ -22,7 +24,7 @@ import {
 } from './actions.js';
 import { createDynamoStore } from './dynamo-store.js';
 import { createPostToConnection, fanOutSnapshots, isGoneError } from './fanout.js';
-import { hasClientSuppliedState, parseClientMessage, parsePlacements, parseTileIds } from './messages.js';
+import { hasClientSuppliedState, parseClientMessage, parsePlacements, parseTileIds, parseWords } from './messages.js';
 import { buildSeatScopedSnapshot } from './snapshot.js';
 import type { ScribbleStore } from './store.js';
 import type { ConnectionRecord, ErrorMessage, OutboundMessage, PostToConnection, SeatRecord, WebSocketEvent } from './types.js';
@@ -34,6 +36,8 @@ export interface RuntimeDeps {
   /** Verifies Cognito access tokens on sit. Without it every sit is a guest sit. */
   resolvePlayer?: ResolvePlayer | null;
   random?: Random;
+  /** Epoch milliseconds; tests pin it to cross the away grace period. */
+  now?: () => number;
   startOptions?: ActionContext['startOptions'];
 }
 
@@ -56,6 +60,7 @@ function applyChange(seats: SeatRecord[], change: Change): SeatRecord[] {
 
 export function createRuntimeHandler(deps: RuntimeDeps) {
   const random = deps.random ?? cryptoRandom;
+  const now = deps.now ?? Date.now;
 
   const send = async (connectionId: string, message: OutboundMessage): Promise<void> => {
     try {
@@ -87,7 +92,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       }
       const seats = await deps.store.listSeats(tableId);
       const connection = connectionId ? await deps.store.getConnection(connectionId) : null;
-      const result = build({ table, seats, connection, random, startOptions: deps.startOptions });
+      const result = build({ table, seats, connection, random, now: now(), startOptions: deps.startOptions });
       if (!result) {
         return;
       }
@@ -103,6 +108,9 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       }
       if (connectionId && result.reply) {
         await send(connectionId, result.reply);
+      }
+      for (const { connectionId: other, message } of result.notify ?? []) {
+        await send(other, message);
       }
       await fanOutSnapshots(
         { store: deps.store, postToConnection: send },
@@ -134,12 +142,12 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       await deps.store.deleteConnection(connectionId);
       if (closing?.tableId && closing.seatId) {
         const seatId = closing.seatId;
-        await mutate(closing.tableId, null, ({ table, seats }) => {
+        await mutate(closing.tableId, null, ({ table, seats, now: at }) => {
           const seat = seats.find((s) => s.seatId === seatId);
           if (!seat || seat.connectionId !== connectionId) {
             return null;
           }
-          return { ok: true, change: dropSeat(table, seats, seatId, random) };
+          return { ok: true, change: disconnectSeat(table, seats, seatId, random, at) };
         });
       }
       return { statusCode: 200 };
@@ -152,6 +160,8 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
     }
 
     if (message.action === 'ping') {
+      // The client treats a missing pong as a dead socket (a laptop that slept) and reconnects.
+      await send(connectionId, { type: 'pong' });
       return { statusCode: 200 };
     }
 
@@ -199,9 +209,9 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       }
       if (connection?.tableId && connection.seatId) {
         const previous = { tableId: connection.tableId, seatId: connection.seatId };
-        await mutate(previous.tableId, connectionId, ({ table: prior, seats }) =>
+        await mutate(previous.tableId, connectionId, ({ table: prior, seats, now: at }) =>
           seats.some((s) => s.seatId === previous.seatId && s.connectionId === connectionId)
-            ? { ok: true, change: dropSeat(prior, seats, previous.seatId, random, connectionId) }
+            ? { ok: true, change: disconnectSeat(prior, seats, previous.seatId, random, at) }
             : null,
         );
       }
@@ -226,6 +236,28 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
           return { statusCode: 200 };
         }
         await mutate(tableId, connectionId, seatedAction(connection, (ctx) => sit(ctx, message.seatId, identity.player)));
+        break;
+      }
+      case 'resume':
+        await mutate(tableId, connectionId, seatedAction(connection, (ctx) => resume(ctx, message.seatToken)));
+        break;
+      case 'remove_player':
+        await mutate(
+          tableId,
+          connectionId,
+          seatedAction(connection, (ctx) => removeAway(ctx, message.seatToken, message.seatId)),
+        );
+        break;
+      case 'check_words': {
+        const words = parseWords(message.words);
+        if (!words) {
+          await send(connectionId, error('invalid_words'));
+          break;
+        }
+        await send(connectionId, {
+          type: 'word_check',
+          words: words.map((text) => ({ text, valid: deps.dictionary.has(text) })),
+        });
         break;
       }
       case 'leave':

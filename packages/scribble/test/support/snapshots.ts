@@ -12,6 +12,8 @@ export function seat(seatId: string, overrides: Partial<PublicSeat> = {}): Publi
     rackCount: 7,
     inGame: true,
     isLocal: false,
+    connected: true,
+    awaySince: null,
     ...overrides,
   };
 }
@@ -25,8 +27,9 @@ export function snapshot(overrides: Partial<TableSnapshot> & { rack?: Tile[] } =
     tableName: 'Inkwell',
     themeId: 'default',
     maxSeats: 4,
+    gameNumber: 1,
     status: 'playing',
-    seats: [seat('1', { isLocal: true }), seat('2'), seat('3', { occupied: false, displayName: null, avatarId: null, inGame: false, rackCount: 0 }), seat('4', { occupied: false, displayName: null, avatarId: null, inGame: false, rackCount: 0 })],
+    seats: [seat('1', { isLocal: true }), seat('2'), seat('3', { occupied: false, displayName: null, avatarId: null, inGame: false, rackCount: 0, connected: false }), seat('4', { occupied: false, displayName: null, avatarId: null, inGame: false, rackCount: 0, connected: false })],
     board: [],
     bagCount: 86,
     currentSeatId: '1',

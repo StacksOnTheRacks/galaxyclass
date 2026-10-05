@@ -18,6 +18,7 @@ import {
 import { IDLE, stepGesture, type GestureEffect, type GestureState, type GestureTarget } from './gestures.js';
 import { cellAt, contains, nearestRackSlot, rackSlotAt } from './layout.js';
 import type { TableModel } from './model.js';
+import { NO_PREVIEW, previewDraft } from './preview.js';
 import { buildTimeline } from './score-timeline.js';
 
 export interface SessionPort {
@@ -29,7 +30,12 @@ export interface SessionPort {
   setTheme(themeId: ThemeId): void;
   leave(): void;
   sit(): void;
+  removePlayer(seatId: string): void;
+  checkWords(words: string[]): void;
 }
+
+/** A lookup that got no answer (say, the socket dropped) is asked again after this long. */
+const RECHECK_MS = 5000;
 
 export interface ControllerUi {
   /** Resolves with the chosen letter, or null when the player backs out. */
@@ -51,7 +57,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   off_turn: "It's not your turn.",
   exchange_unavailable: `Exchanging needs at least ${EXCHANGE_MIN_BAG} tiles in the bag.`,
   table_full: "The table is full. You're watching.",
-  account_already_seated: 'Your account is already seated at this table.',
   invalid_access_token: "Your sign-in couldn't be verified. Refresh to try again.",
   identity_unavailable: 'Sign-in checks are unavailable right now. Try again shortly.',
   insufficient_players: 'Two players are needed to start.',
@@ -60,7 +65,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   not_seated: "You're not seated.",
   invalid_seat_token: "You're not seated.",
   game_not_in_progress: 'No game is running.',
+  player_not_away: 'That player is back at the table.',
+  away_too_recent: 'A player can be removed after 24 hours away.',
+  invalid_seat: 'That seat is not available.',
 };
+
+/** Errors the player did not cause and cannot act on. */
+const SILENT_ERRORS = new Set(['invalid_words']);
 
 export function describeError(error: ErrorMessage): string {
   if (error.code === 'invalid_word') {
@@ -81,8 +92,12 @@ type Schedule = (fn: () => void, ms: number) => unknown;
  */
 export class TableController {
   private gesture: GestureState = IDLE;
-  private lastTurnSeen: number | null = null;
+  /** The newest turn already counted or skipped. `turnNumber` restarts at 0 every game. */
+  private seen: { gameNumber: number; turnNumber: number } | null = null;
+  /** A play that landed while the page was hidden, counted once the player can see it. */
+  private hiddenPlay: TableSnapshot | null = null;
   private timelineToken = 0;
+  private asked = new Map<string, number>();
 
   constructor(
     private readonly model: TableModel,
@@ -92,14 +107,31 @@ export class TableController {
       random?: { int(max: number): number };
       schedule?: Schedule;
       reducedMotion?: () => boolean;
+      /** True while the page is not visible; Phaser stops drawing then, so the count waits. */
+      hidden?: () => boolean;
+      now?: () => number;
     } = {},
-  ) {}
+  ) {
+    model.on((kind) => {
+      if (kind === 'draft') {
+        this.refreshPreview();
+      }
+    });
+  }
 
   onSnapshot(snapshot: TableSnapshot): void {
     const previous = this.model.snapshot;
+    const sameTable = previous?.tableId === snapshot.tableId;
+    // Frames from concurrent Lambdas can arrive out of order; an older table state never wins.
+    if (previous && sameTable && snapshot.version < previous.version) {
+      return;
+    }
     this.model.setSnapshot(snapshot);
     const before = this.model.draft;
-    this.model.draft = syncDraft(before, this.model.rack, this.model.occupied);
+    // While reconnecting there is briefly no seat; keep the draft so it is still there on resume.
+    if (snapshot.you || !previous?.you) {
+      this.model.draft = syncDraft(before, this.model.rack, this.model.occupied);
+    }
     if (this.model.selectedTileId && !this.model.rackTiles.some((t) => t.id === this.model.selectedTileId)) {
       this.model.selectedTileId = null;
     }
@@ -113,18 +145,71 @@ export class TableController {
     this.model.emit('draft');
 
     const turn = snapshot.lastTurn;
-    if (this.lastTurnSeen === null || (previous && previous.tableId !== snapshot.tableId)) {
-      this.lastTurnSeen = turn?.turnNumber ?? 0;
+    const latest = { gameNumber: snapshot.gameNumber, turnNumber: turn?.turnNumber ?? 0 };
+    if (!this.seen || !sameTable) {
+      this.seen = latest;
       return;
     }
-    if (turn && turn.turnNumber > this.lastTurnSeen) {
-      this.lastTurnSeen = turn.turnNumber;
-      this.announce(snapshot);
+    const fresh = !!turn && (latest.gameNumber !== this.seen.gameNumber || latest.turnNumber > this.seen.turnNumber);
+    this.seen = latest;
+    if (!fresh) {
+      return;
+    }
+    if (this.options.hidden?.()) {
+      this.hiddenPlay = snapshot;
+      return;
+    }
+    this.hiddenPlay = null;
+    this.announce(snapshot);
+  }
+
+  /** The page is visible again: count the play that landed while it was hidden. */
+  onVisible(): void {
+    const pending = this.hiddenPlay;
+    const current = this.model.snapshot;
+    this.hiddenPlay = null;
+    if (
+      pending &&
+      current &&
+      pending.gameNumber === current.gameNumber &&
+      pending.lastTurn?.turnNumber === current.lastTurn?.turnNumber
+    ) {
+      this.announce(current);
     }
   }
 
   onError(error: ErrorMessage): void {
+    if (SILENT_ERRORS.has(error.code)) {
+      return;
+    }
     this.ui.toast(describeError(error), 'error');
+  }
+
+  onWordCheck(words: ReadonlyArray<{ text: string; valid: boolean }>): void {
+    for (const { text, valid } of words) {
+      this.model.wordValidity.set(text, valid);
+      this.asked.delete(text);
+    }
+    this.model.emit('preview');
+  }
+
+  private refreshPreview(): void {
+    const { snapshot } = this.model;
+    const preview = snapshot && this.model.canDraft ? previewDraft(snapshot.board, this.model.rack, this.model.draft) : NO_PREVIEW;
+    this.model.preview = preview;
+    if (preview.kind === 'words') {
+      const now = (this.options.now ?? Date.now)();
+      const unknown = [...new Set(preview.words.map((word) => word.text))].filter(
+        (text) => !this.model.wordValidity.has(text) && now - (this.asked.get(text) ?? -Infinity) >= RECHECK_MS,
+      );
+      if (unknown.length > 0) {
+        for (const text of unknown) {
+          this.asked.set(text, now);
+        }
+        this.session.checkWords(unknown);
+      }
+    }
+    this.model.emit('preview');
   }
 
   private announce(snapshot: TableSnapshot): void {
@@ -449,5 +534,9 @@ export class TableController {
 
   sit(): void {
     this.session.sit();
+  }
+
+  removePlayer(seatId: string): void {
+    this.session.removePlayer(seatId);
   }
 }

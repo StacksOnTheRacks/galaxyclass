@@ -11,7 +11,7 @@ import { publicBase } from './route.js';
 import { BoardScene } from './scenes/board-scene.js';
 import { HudScene } from './scenes/hud-scene.js';
 import { RoomScene } from './scenes/room-scene.js';
-import { TableSession } from './session.js';
+import { TableSession, type SeatTokenStore } from './session.js';
 
 /** Test hooks for the dev server only; production config never sets `dev`. */
 export interface ScribbleDebug {
@@ -23,20 +23,58 @@ export interface ScribbleDebug {
   squarePoint(row: number, col: number): { x: number; y: number };
 }
 
+/** Per-table seat token in localStorage, so a reload or a new tab takes the held seat back. */
+function seatTokenStore(tableId: string): SeatTokenStore {
+  const key = `scribble.seat.${tableId}`;
+  return {
+    get: () => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    set: (token) => {
+      try {
+        window.localStorage.setItem(key, token);
+      } catch {
+        // Storage is off (private mode); the seat still resumes for a signed-in player.
+      }
+    },
+    clear: () => {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // As above.
+      }
+    },
+  };
+}
+
 export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: string): void {
   const listing = config.tables.find((table) => table.id === tableId);
   const unit = Math.min(window.devicePixelRatio || 1, 2);
   const model = new TableModel(window.innerWidth * unit, window.innerHeight * unit, unit);
   const overlay = new TableOverlay(host, model, listing?.name ?? 'Table');
+  let connected = false;
 
   const session = new TableSession({
     url: config.webSocketUrl,
     tableId,
     getAccessToken: accessTokenSource(config, window.sessionStorage),
+    seatStore: seatTokenStore(tableId),
     onEvent: (event) => {
       switch (event.type) {
         case 'snapshot':
           controller.onSnapshot(event.snapshot);
+          break;
+        case 'word_check':
+          controller.onWordCheck(event.words);
+          break;
+        case 'left':
+          if (event.reason === 'taken_over') {
+            overlay.toast('Your seat moved to another window or device.');
+          }
           break;
         case 'error':
           if (event.error.code === 'table_not_found') {
@@ -48,8 +86,12 @@ export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: s
           controller.onError(event.error);
           break;
         case 'status':
-          if (event.status === 'closed') {
-            overlay.toast('Connection lost. Reconnecting…', 'error');
+          if (event.status === 'open') {
+            connected = true;
+          } else if (event.status === 'closed' && connected) {
+            connected = false;
+            const held = model.snapshot?.status === 'playing' && model.snapshot.seats.some((s) => s.isLocal && s.inGame);
+            overlay.toast(held ? 'Connection lost. Your seat is held while we reconnect…' : 'Connection lost. Reconnecting…', 'error');
           }
           break;
         default:
@@ -59,7 +101,10 @@ export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: s
   });
 
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const controller = new TableController(model, session, overlay, { reducedMotion: () => reduced?.matches ?? false });
+  const controller = new TableController(model, session, overlay, {
+    reducedMotion: () => reduced?.matches ?? false,
+    hidden: () => document.visibilityState === 'hidden',
+  });
   overlay.bind(controller);
 
   const game = new Phaser.Game({
@@ -117,4 +162,16 @@ export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: s
 
   session.connect();
   window.addEventListener('pagehide', () => session.close());
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      session.connect();
+    }
+  });
+  window.addEventListener('online', () => session.wake());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      session.wake();
+      controller.onVisible();
+    }
+  });
 }

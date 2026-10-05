@@ -45,6 +45,7 @@ export function newTableRecord(input: NewTableInput): TableRecord {
     listed: visibility === 'public',
     createdBy: input.createdBy ?? null,
     ...(input.tableName ? { tableName: input.tableName } : {}),
+    gameNumber: 0,
     game: emptyStoredGame(),
   };
 }
@@ -72,6 +73,7 @@ export function parseTableItem(item: Record<string, unknown>): TableRecord {
     listed: item.listed !== false,
     createdBy: typeof item.createdBy === 'string' ? item.createdBy : null,
     ...(typeof item.tableName === 'string' && item.tableName ? { tableName: item.tableName } : {}),
+    gameNumber: Number(item.gameNumber ?? 0),
     game: {
       status: game.status === 'playing' || game.status === 'ended' ? game.status : 'waiting',
       board: Array.isArray(game.board) ? game.board : empty.board,

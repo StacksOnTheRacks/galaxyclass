@@ -174,16 +174,6 @@ describe('leaving', () => {
     expect(snapshot.bagCount).toBe(bagBefore + 7);
   });
 
-  it('treats a disconnect the same way', async () => {
-    await startRigged();
-    await h.seat('c');
-    await h.disconnect('a');
-    const snapshot = h.snapshot('b');
-    expect(snapshot.lastTurn).toMatchObject({ kind: 'auto_pass', seatId: '1' });
-    expect(snapshot.seats[0]!.occupied).toBe(false);
-    expect(h.store.connections.has('a')).toBe(false);
-  });
-
   it('lets a player who left sit again with a fresh token while the old one is dead', async () => {
     tokenA = await h.seat('a', { accessToken: signAccessToken() });
     await h.send('a', { action: 'leave', seatToken: tokenA });
@@ -201,5 +191,141 @@ describe('leaving', () => {
     await h.seat('c');
     expect(h.snapshot('c').you!.rack).toHaveLength(7);
     expect(h.snapshot('a').seats[2]).toMatchObject({ inGame: true, rackCount: 7 });
+  });
+});
+
+describe('away players', () => {
+  it('holds a seat, rack, and turn through a disconnect instead of ending the game', async () => {
+    await startRigged();
+    const rackBefore = h.rackIds('1');
+    await h.disconnect('a');
+    const seen = h.snapshot('b');
+    expect(seen.status).toBe('playing');
+    expect(seen.lastTurn).toBeNull();
+    expect(seen.currentSeatId).toBe('1');
+    expect(seen.seats[0]).toMatchObject({ occupied: true, connected: false, awaySince: '2026-10-04T12:00:00.000Z', rackCount: 7 });
+    expect(h.rackIds('1')).toEqual(rackBefore);
+    expect(h.store.connections.has('a')).toBe(false);
+  });
+
+  it('resumes the held seat from a new connection with the same seat token', async () => {
+    await startRigged();
+    await h.disconnect('b');
+    h.advance(3 * 60 * 60 * 1000);
+    await h.connect('b2');
+    await h.send('b2', { action: 'join_table', tableId: TABLE_ID });
+    expect(h.snapshot('b2').you).toBeNull();
+    await h.send('b2', { action: 'resume', seatToken: tokenB });
+    expect(h.last('b2', 'sat')).toEqual({ type: 'sat', seatId: '2', seatToken: tokenB });
+    expect(h.snapshot('b2').you!.rack.map((t) => t.letter).join('')).toBe('SHEEPIE');
+    expect(h.snapshot('a').seats[1]).toMatchObject({ connected: true, awaySince: null });
+
+    await h.send('a', { action: 'pass', seatToken: tokenA });
+    await h.send('b2', { action: 'pass', seatToken: tokenB });
+    expect(h.snapshot('a').lastTurn).toMatchObject({ kind: 'pass', seatId: '2' });
+  });
+
+  it('refuses to resume with a token that matches no seat', async () => {
+    await startRigged();
+    await h.connect('x');
+    await h.send('x', { action: 'join_table', tableId: TABLE_ID });
+    await h.send('x', { action: 'resume', seatToken: 'forged' });
+    expect(h.lastError('x')).toEqual({ type: 'error', code: 'invalid_seat_token' });
+  });
+
+  it('gives a signed-in player their seat back on another device without the old token', async () => {
+    await startRigged();
+    await h.disconnect('a');
+    const fresh = await h.seat('a-phone', { accessToken: signAccessToken() });
+    expect(h.last('a-phone', 'sat').seatId).toBe('1');
+    expect(h.snapshot('a-phone').you!.rack.map((t) => t.letter).join('')).toBe('CATDOGS');
+    await h.send('a-phone', { action: 'play', seatToken: fresh, placements: playMove([['C', 7, 6], ['A', 7, 7], ['T', 7, 8]]) });
+    expect(h.snapshot('b').lastTurn).toMatchObject({ kind: 'play', seatId: '1', total: 10 });
+  });
+
+  it('frees the seat on disconnect when no game is running', async () => {
+    await h.seat('a');
+    await h.seat('b');
+    await h.disconnect('b');
+    expect(h.snapshot('a').seats[1]!.occupied).toBe(false);
+  });
+
+  it('lets the others remove an away player only after 24 hours', async () => {
+    await startRigged();
+    const tokenC = await h.seat('c');
+    await h.disconnect('c');
+    await h.send('a', { action: 'remove_player', seatToken: tokenA, seatId: '3' });
+    expect(h.lastError('a')).toEqual({ type: 'error', code: 'away_too_recent' });
+    await h.send('a', { action: 'remove_player', seatToken: tokenA, seatId: '2' });
+    expect(h.lastError('a')).toEqual({ type: 'error', code: 'player_not_away' });
+    await h.send('a', { action: 'remove_player', seatToken: tokenA, seatId: '1' });
+    expect(h.lastError('a')).toEqual({ type: 'error', code: 'invalid_seat' });
+
+    h.advance(24 * 60 * 60 * 1000);
+    const bagBefore = h.store.tables.get(TABLE_ID)!.game.bag.length;
+    await h.send('b', { action: 'remove_player', seatToken: tokenB, seatId: '3' });
+    const seen = h.snapshot('a');
+    expect(seen.status).toBe('playing');
+    expect(seen.seats[2]!.occupied).toBe(false);
+    expect(seen.bagCount).toBe(bagBefore + 7);
+
+    await h.connect('c2');
+    await h.send('c2', { action: 'join_table', tableId: TABLE_ID });
+    await h.send('c2', { action: 'resume', seatToken: tokenC });
+    expect(h.lastError('c2')).toEqual({ type: 'error', code: 'invalid_seat_token' });
+  });
+
+  it('ends a two-player game when the away player is removed', async () => {
+    await startRigged();
+    await h.disconnect('a');
+    h.advance(25 * 60 * 60 * 1000);
+    await h.send('b', { action: 'remove_player', seatToken: tokenB, seatId: '1' });
+    expect(h.snapshot('b')).toMatchObject({ status: 'ended', endReason: 'abandoned' });
+  });
+
+  it('frees seats still held for away players when the next game starts', async () => {
+    await startRigged();
+    await h.seat('c');
+    await h.disconnect('c');
+    h.rigGame((table) => {
+      table.game.status = 'ended';
+      table.game.currentSeatId = null;
+    });
+    await h.send('a', { action: 'start_game', seatToken: tokenA });
+    const seen = h.snapshot('a');
+    expect(seen.status).toBe('playing');
+    expect(seen.seats.map((s) => s.occupied)).toEqual([true, true, false, false]);
+    expect(h.store.tables.get(TABLE_ID)!.game.turnOrder).toEqual(['1', '2']);
+  });
+
+  it('numbers each game so a new game’s turns never look like old ones', async () => {
+    await startRigged();
+    expect(h.snapshot('a').gameNumber).toBe(1);
+    h.rigGame((table) => {
+      table.game.status = 'ended';
+    });
+    await h.send('b', { action: 'start_game', seatToken: tokenB });
+    expect(h.snapshot('a')).toMatchObject({ gameNumber: 2, turnNumber: 0, lastTurn: null });
+  });
+});
+
+describe('word check', () => {
+  it('answers which words are in the list without needing a seat', async () => {
+    await h.connect('w');
+    await h.send('w', { action: 'join_table', tableId: TABLE_ID });
+    await h.send('w', { action: 'check_words', words: ['cat', 'QZX'] });
+    expect(h.last('w', 'word_check').words).toEqual([
+      { text: 'CAT', valid: true },
+      { text: 'QZX', valid: false },
+    ]);
+  });
+
+  it('refuses lookups that are not plausible plays', async () => {
+    await h.connect('w');
+    await h.send('w', { action: 'join_table', tableId: TABLE_ID });
+    for (const words of [[], ['A'], ['C4T'], Array.from({ length: 9 }, () => 'CAT'), 'CAT']) {
+      await h.send('w', { action: 'check_words', words });
+      expect(h.lastError('w')).toEqual({ type: 'error', code: 'invalid_words' });
+    }
   });
 });

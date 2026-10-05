@@ -60,6 +60,24 @@ export function parsePlacements(value: unknown): Placement[] | null {
   return placements;
 }
 
+/** A play forms at most one main word and one cross word per placed tile. */
+const MAX_CHECK_WORDS = 8;
+
+/** Shape-checks a word lookup for the score preview. */
+export function parseWords(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CHECK_WORDS) {
+    return null;
+  }
+  const words: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !/^[A-Za-z]{2,15}$/.test(entry)) {
+      return null;
+    }
+    words.push(entry.toUpperCase());
+  }
+  return words;
+}
+
 export function parseTileIds(value: unknown): string[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 7 || !value.every((id) => typeof id === 'string')) {
     return null;

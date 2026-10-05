@@ -10,7 +10,8 @@ export type SessionEvent =
   | { type: 'snapshot'; snapshot: TableSnapshot }
   | { type: 'error'; error: ErrorMessage }
   | { type: 'sat'; seatId: string }
-  | { type: 'left' };
+  | { type: 'left'; reason?: 'taken_over' }
+  | { type: 'word_check'; words: Array<{ text: string; valid: boolean }> };
 
 type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
   onopen: ((event: Event) => void) | null;
@@ -21,8 +22,18 @@ type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
 
 export type SocketFactory = (url: string) => SocketLike;
 
+/** Where this table's seat token survives a reload, a closed tab, or a sleeping laptop. */
+export interface SeatTokenStore {
+  get(): string | null;
+  set(token: string): void;
+  clear(): void;
+}
+
 const OPEN = 1;
 const PING_MS = 4 * 60 * 1000;
+/** A socket that has not answered a ping by now is treated as dead (common after sleep). */
+const PONG_TIMEOUT_MS = 8000;
+/** Retries never stop; the last delay repeats. */
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000];
 
 function parseMessage(data: unknown): OutboundMessage | null {
@@ -40,17 +51,21 @@ function parseMessage(data: unknown): OutboundMessage | null {
 }
 
 /**
- * One table connection. The seat token lives only in this object's memory: a reload or a
- * dropped socket loses it, and the server has already freed the seat by then.
+ * One table connection. The server holds an in-game seat while its player is away; the seat
+ * token kept in `seatStore` takes it back from any later connection, and a signed-in player can
+ * also take it back by signing in. Only an explicit leave gives the seat up.
  */
 export class TableSession {
   private socket: SocketLike | null = null;
   private seatToken: string | null = null;
   private wantsSeat: boolean;
   private sitPending = false;
+  private resumePending = false;
   private closedByUser = false;
   private attempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private latest: TableSnapshot | null = null;
 
   constructor(
@@ -58,6 +73,7 @@ export class TableSession {
       url: string;
       tableId: string;
       getAccessToken: GetAccessToken;
+      seatStore?: SeatTokenStore;
       socketFactory?: SocketFactory;
       autoSit?: boolean;
       onEvent: (event: SessionEvent) => void;
@@ -72,19 +88,35 @@ export class TableSession {
 
   connect(): void {
     this.closedByUser = false;
-    this.open();
+    if (!this.socket) {
+      this.open();
+    }
   }
 
   close(): void {
     this.closedByUser = true;
-    this.stopPing();
-    this.socket?.close();
+    this.stopTimers();
+    const socket = this.socket;
     this.socket = null;
+    socket?.close();
+  }
+
+  /** The page became visible or the network came back: reconnect now, or prove the socket is alive. */
+  wake(): void {
+    if (this.closedByUser) {
+      return;
+    }
+    if (!this.socket) {
+      this.attempts = 0;
+      this.open();
+    } else if (this.socket.readyState === OPEN) {
+      this.probe();
+    }
   }
 
   sit(): void {
     this.wantsSeat = true;
-    void this.trySit();
+    this.claimSeat();
   }
 
   leave(): void {
@@ -112,39 +144,73 @@ export class TableSession {
     this.sendSeated({ action: 'set_theme', themeId });
   }
 
+  removePlayer(seatId: string): void {
+    this.sendSeated({ action: 'remove_player', seatId });
+  }
+
+  /** Word-list lookups for the score preview. Needs no seat. */
+  checkWords(words: string[]): void {
+    this.send({ action: 'check_words', words });
+  }
+
   private open(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     const factory = this.options.socketFactory ?? ((url: string) => new WebSocket(url) as unknown as SocketLike);
     const socket = factory(this.options.url);
     this.socket = socket;
     this.seatToken = null;
     this.sitPending = false;
+    this.resumePending = false;
     this.options.onEvent({ type: 'status', status: 'connecting' });
 
     socket.onopen = () => {
+      if (this.socket !== socket) {
+        return;
+      }
       this.attempts = 0;
       this.options.onEvent({ type: 'status', status: 'open' });
       this.send({ action: 'join_table', tableId: this.options.tableId });
       this.startPing();
     };
-    socket.onmessage = (event) => this.receive(parseMessage(event.data));
-    socket.onerror = () => {};
-    socket.onclose = () => {
+    socket.onmessage = (event) => {
       if (this.socket !== socket) {
         return;
       }
-      this.stopPing();
-      this.socket = null;
-      this.seatToken = null;
-      this.options.onEvent({ type: 'status', status: 'closed' });
-      if (!this.closedByUser && this.attempts < RECONNECT_DELAYS.length) {
-        const delay = RECONNECT_DELAYS[this.attempts++]!;
-        setTimeout(() => {
-          if (!this.closedByUser) {
-            this.open();
-          }
-        }, delay);
-      }
+      this.clearPong();
+      this.receive(parseMessage(event.data));
     };
+    socket.onerror = () => {};
+    socket.onclose = () => this.lost(socket);
+  }
+
+  /** The socket is gone, whether it said so or stopped answering. Reconnect with backoff. */
+  private lost(socket: SocketLike): void {
+    if (this.socket !== socket) {
+      return;
+    }
+    this.stopTimers();
+    this.socket = null;
+    this.seatToken = null;
+    this.options.onEvent({ type: 'status', status: 'closed' });
+    try {
+      socket.close();
+    } catch {
+      // Already closed.
+    }
+    if (this.closedByUser) {
+      return;
+    }
+    const delay = RECONNECT_DELAYS[Math.min(this.attempts, RECONNECT_DELAYS.length - 1)]!;
+    this.attempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.closedByUser && !this.socket) {
+        this.open();
+      }
+    }, delay);
   }
 
   private receive(message: OutboundMessage | null): void {
@@ -155,24 +221,42 @@ export class TableSession {
       case 'table_snapshot':
         this.latest = message;
         this.options.onEvent({ type: 'snapshot', snapshot: message });
-        if (this.wantsSeat && !this.seatToken && !message.you) {
-          void this.trySit();
+        if (!this.seatToken && !message.you) {
+          this.claimSeat();
         }
         break;
       case 'sat':
         this.sitPending = false;
+        this.resumePending = false;
         this.seatToken = message.seatToken;
+        this.options.seatStore?.set(message.seatToken);
         this.options.onEvent({ type: 'sat', seatId: message.seatId });
         break;
       case 'left':
         this.seatToken = null;
-        this.options.onEvent({ type: 'left' });
+        if (message.reason === 'taken_over') {
+          // Another window has the seat now; trying to take it back would bounce it between them.
+          this.wantsSeat = false;
+        } else {
+          this.options.seatStore?.clear();
+        }
+        this.options.onEvent({ type: 'left', ...(message.reason ? { reason: message.reason } : {}) });
+        break;
+      case 'word_check':
+        this.options.onEvent({ type: 'word_check', words: message.words });
         break;
       case 'error':
+        if (this.resumePending && (message.code === 'invalid_seat_token' || message.code === 'already_seated')) {
+          // The held seat is gone (removed, or freed when a new game started). Sit fresh instead.
+          this.resumePending = false;
+          this.options.seatStore?.clear();
+          this.claimSeat();
+          return;
+        }
         if (message.code === 'invalid_seat_token' || message.code === 'not_seated') {
           this.seatToken = null;
         }
-        if (['table_full', 'seat_occupied', 'account_already_seated', 'already_seated', 'invalid_access_token', 'identity_unavailable'].includes(message.code)) {
+        if (['table_full', 'seat_occupied', 'already_seated', 'invalid_access_token', 'identity_unavailable'].includes(message.code)) {
           this.sitPending = false;
           if (message.code !== 'already_seated') {
             this.wantsSeat = false;
@@ -185,15 +269,31 @@ export class TableSession {
     }
   }
 
+  /** Takes back a held seat when there is a token for it; otherwise sits in an open one. */
+  private claimSeat(): void {
+    if (!this.wantsSeat || this.sitPending || this.resumePending || this.seatToken || this.socket?.readyState !== OPEN) {
+      return;
+    }
+    const stored = this.options.seatStore?.get() ?? null;
+    if (stored) {
+      this.resumePending = true;
+      this.send({ action: 'resume', seatToken: stored });
+      return;
+    }
+    void this.trySit();
+  }
+
   private async trySit(): Promise<void> {
     if (this.sitPending || this.seatToken || !this.latest) {
       return;
     }
-    if (!this.latest.seats.some((seat) => !seat.occupied)) {
-      return;
-    }
     this.sitPending = true;
     const accessToken = await this.options.getAccessToken();
+    // A signed-in player may already hold a seat at a full table; the server hands it back.
+    if (!accessToken && !this.latest.seats.some((seat) => !seat.occupied)) {
+      this.sitPending = false;
+      return;
+    }
     this.send(accessToken ? { action: 'sit', accessToken } : { action: 'sit' });
   }
 
@@ -211,15 +311,41 @@ export class TableSession {
     }
   }
 
-  private startPing(): void {
-    this.stopPing();
-    this.pingTimer = setInterval(() => this.send({ action: 'ping' }), PING_MS);
+  private probe(): void {
+    const socket = this.socket;
+    if (!socket || this.pongTimer) {
+      return;
+    }
+    this.send({ action: 'ping' });
+    this.pongTimer = setTimeout(() => {
+      this.pongTimer = null;
+      this.lost(socket);
+    }, PONG_TIMEOUT_MS);
   }
 
-  private stopPing(): void {
+  private clearPong(): void {
+    if (this.pongTimer) {
+      clearTimeout(this.pongTimer);
+      this.pongTimer = null;
+    }
+  }
+
+  private startPing(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+    }
+    this.pingTimer = setInterval(() => this.probe(), PING_MS);
+  }
+
+  private stopTimers(): void {
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
       this.pingTimer = null;
+    }
+    this.clearPong();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
   }
 }

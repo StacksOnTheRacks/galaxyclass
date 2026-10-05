@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchTableList, TableSession, type SessionEvent, type SocketFactory } from '../../src/client/session.js';
+import { fetchTableList, TableSession, type SeatTokenStore, type SessionEvent, type SocketFactory } from '../../src/client/session.js';
 import { snapshot } from '../support/snapshots.js';
 
 class FakeSocket {
@@ -27,7 +27,22 @@ class FakeSocket {
 
 const STATE_KEYS = ['board', 'rack', 'racks', 'score', 'scores', 'bag', 'bagCount', 'players', 'seats', 'game'];
 
-function setup(token: string | null = null) {
+function memoryStore(initial: string | null = null): SeatTokenStore & { value: string | null } {
+  return {
+    value: initial,
+    get() {
+      return this.value;
+    },
+    set(token) {
+      this.value = token;
+    },
+    clear() {
+      this.value = null;
+    },
+  };
+}
+
+function setup(token: string | null = null, seatStore?: SeatTokenStore) {
   const sockets: FakeSocket[] = [];
   const factory: SocketFactory = () => {
     const socket = new FakeSocket();
@@ -40,11 +55,14 @@ function setup(token: string | null = null) {
     tableId: 'table-1',
     getAccessToken: async () => token,
     socketFactory: factory,
+    seatStore,
     onEvent: (event) => events.push(event),
   });
   session.connect();
   return { session, sockets, events, socket: () => sockets.at(-1)! };
 }
+
+const playingWithoutYou = () => snapshot({ status: 'playing', you: null });
 
 const waiting = (you: boolean) =>
   snapshot({
@@ -125,6 +143,95 @@ describe('table session', () => {
     expect(sockets).toHaveLength(2);
     socket().open();
     expect(socket().sent).toEqual([{ action: 'join_table', tableId: 'table-1' }]);
+  });
+
+  it('takes the held seat back with the stored token after a reconnect', async () => {
+    const store = memoryStore();
+    const { session, socket } = setup(null, store);
+    socket().open();
+    socket().receive(waiting(false));
+    await vi.waitFor(() => expect(socket().sent.at(-1)).toEqual({ action: 'sit' }));
+    socket().receive({ type: 'sat', seatId: '1', seatToken: 'seat-secret' });
+    expect(store.value).toBe('seat-secret');
+
+    socket().readyState = 3;
+    socket().onclose?.({} as CloseEvent);
+    await vi.advanceTimersByTimeAsync(1000);
+    socket().open();
+    socket().receive(playingWithoutYou());
+    expect(socket().sent.at(-1)).toEqual({ action: 'resume', seatToken: 'seat-secret' });
+    socket().receive({ type: 'sat', seatId: '1', seatToken: 'seat-secret-2' });
+    expect(session.seated).toBe(true);
+    expect(store.value).toBe('seat-secret-2');
+  });
+
+  it('sits fresh when the stored seat is no longer held', async () => {
+    const store = memoryStore('stale');
+    const { socket } = setup(null, store);
+    socket().open();
+    socket().receive(waiting(false));
+    expect(socket().sent.at(-1)).toEqual({ action: 'resume', seatToken: 'stale' });
+    socket().receive({ type: 'error', code: 'invalid_seat_token' });
+    expect(store.value).toBeNull();
+    await vi.waitFor(() => expect(socket().sent.at(-1)).toEqual({ action: 'sit' }));
+  });
+
+  it('stops reclaiming once the seat moves to another window, but keeps the token', async () => {
+    const store = memoryStore();
+    const { session, socket, events } = setup('access', store);
+    socket().open();
+    socket().receive(waiting(false));
+    await vi.waitFor(() => expect(socket().sent.at(-1)).toEqual({ action: 'sit', accessToken: 'access' }));
+    socket().receive({ type: 'sat', seatId: '1', seatToken: 'tok' });
+    socket().receive({ type: 'left', seatId: '1', reason: 'taken_over' });
+    expect(events.at(-1)).toEqual({ type: 'left', reason: 'taken_over' });
+    expect(session.seated).toBe(false);
+    const before = socket().sent.length;
+    socket().receive(playingWithoutYou());
+    await vi.advanceTimersByTimeAsync(10);
+    expect(socket().sent).toHaveLength(before);
+    expect(store.value).toBe('tok');
+  });
+
+  it('gives the stored token up on an explicit leave', async () => {
+    const store = memoryStore();
+    const { session, socket } = setup(null, store);
+    socket().open();
+    socket().receive(waiting(false));
+    await vi.waitFor(() => expect(socket().sent.at(-1)).toEqual({ action: 'sit' }));
+    socket().receive({ type: 'sat', seatId: '1', seatToken: 'tok' });
+    session.leave();
+    socket().receive({ type: 'left', seatId: '1' });
+    expect(store.value).toBeNull();
+  });
+
+  it('replaces a socket that went quiet while the computer slept', async () => {
+    const { session, sockets, socket } = setup(null);
+    socket().open();
+    session.wake();
+    expect(socket().sent.at(-1)).toEqual({ action: 'ping' });
+    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('keeps a socket that answers the wake-up ping', async () => {
+    const { session, sockets, socket } = setup(null);
+    socket().open();
+    session.wake();
+    socket().receive({ type: 'pong' });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('never stops trying to reconnect', async () => {
+    const { sockets, socket } = setup(null);
+    for (let i = 0; i < 12; i++) {
+      socket().readyState = 3;
+      socket().onclose?.({} as CloseEvent);
+      await vi.advanceTimersByTimeAsync(15_000);
+    }
+    expect(sockets).toHaveLength(13);
   });
 });
 
