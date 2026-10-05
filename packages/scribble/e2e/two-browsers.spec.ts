@@ -93,7 +93,13 @@ test('a signed-in player and a guest finish a game with hidden racks, the count,
   await dragToSquare(alice.page, 'C', 7, 7);
   await dragToSquare(alice.page, 'A', 7, 8);
   await dragToSquare(alice.page, 'T', 7, 9);
+  const preview = alice.page.locator('.preview');
+  await expect(preview).toHaveAttribute('data-tone', 'ok');
+  await expect(preview).toContainText('CAT');
+  await expect(preview.locator('.preview-total')).toContainText('10 points');
+  await alice.page.screenshot({ path: testInfo.outputPath('turn-1-preview.png') });
   await alice.page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(preview).toBeHidden();
   await waitTurn(guest.page, 1);
   for (const page of [alice.page, guest.page]) {
     await waitForCount(page, '+10');
@@ -129,6 +135,21 @@ test('a signed-in player and a guest finish a game with hidden racks, the count,
     '+10',
   ]);
   await alice.page.screenshot({ path: testInfo.outputPath('turn-2-alice.png') });
+  await expect(alice.page.locator('.bag-count')).toContainText('HEART +10');
+
+  // Closing the tab mid-game keeps the seat; a new tab takes it back with the same rack.
+  const heldRack = await state(guest.page, (d) => d.model.rack.map((t) => t.id).join(','));
+  const guestContext = guest.page.context();
+  await guest.page.close();
+  await alice.page.waitForFunction(() => window.__scribble!.model.snapshot!.seats.find((s) => s.seatId === '2')?.connected === false);
+  await expect(alice.page.locator('.seat.away')).toContainText('Away');
+  expect(await state(alice.page, (d) => d.model.snapshot!.status)).toBe('playing');
+  guest.page = await guestContext.newPage();
+  guest.page.on('websocket', (socket) => socket.on('framereceived', (frame) => guest.frames.push(String(frame.payload))));
+  await guest.page.goto(TABLE_URL);
+  await guest.page.waitForFunction(() => window.__scribble?.model.snapshot?.you?.seatId === '2');
+  expect(await state(guest.page, (d) => d.model.rack.map((t) => t.id).join(','))).toBe(heldRack);
+  await alice.page.waitForFunction(() => window.__scribble!.model.snapshot!.seats.find((s) => s.seatId === '2')?.connected === true);
 
   // A rejected word comes back as a message, and the tiles stay in the draft.
   await dragToSquare(alice.page, 'D', 8, 8);

@@ -30,6 +30,9 @@ function parseSeatItem(item: Record<string, unknown>): SeatRecord {
   if (typeof item.connectionId === 'string' && item.connectionId) {
     seat.connectionId = item.connectionId;
   }
+  if (typeof item.awaySince === 'string' && item.awaySince) {
+    seat.awaySince = item.awaySince;
+  }
   return seat;
 }
 

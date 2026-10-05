@@ -21,6 +21,8 @@ export class Harness {
   /** Every frame sent to each connection, serialized exactly as it would go over the wire. */
   readonly wire = new Map<string, string[]>();
   readonly handler;
+  /** Epoch ms the runtime sees; move it with `advance`. */
+  now = Date.parse('2026-10-04T12:00:00.000Z');
 
   constructor(options: { failCommits?: number } = {}) {
     const resolvePlayer = createPlayerResolver(testAccessTokenVerifier(), async (sub) => ({
@@ -44,6 +46,7 @@ export class Harness {
       dictionary: loadDictionary(),
       resolvePlayer,
       random: seededRandom(42),
+      now: () => this.now,
       postToConnection: async (connectionId, message) => {
         if (!store.connections.has(connectionId)) {
           throw Object.assign(new Error('gone'), { name: 'GoneException' });
@@ -55,6 +58,10 @@ export class Harness {
     });
     vi.spyOn(console, 'info').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
+  }
+
+  advance(ms: number) {
+    this.now += ms;
   }
 
   async seed(overrides: Partial<TableRecord> = {}, tableId = TABLE_ID): Promise<TableRecord> {

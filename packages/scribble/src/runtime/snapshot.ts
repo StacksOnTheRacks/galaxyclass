@@ -33,6 +33,8 @@ export function buildSeatScopedSnapshot(
             rackCount: seat.rack.length,
             inGame: inGame.has(seatId),
             isLocal: seat === viewerSeat,
+            connected: Boolean(seat.connectionId),
+            awaySince: seat.connectionId ? null : (seat.awaySince ?? null),
           }
         : {
             seatId,
@@ -44,6 +46,8 @@ export function buildSeatScopedSnapshot(
             rackCount: 0,
             inGame: false,
             isLocal: false,
+            connected: false,
+            awaySince: null,
           },
     );
   }
@@ -55,6 +59,7 @@ export function buildSeatScopedSnapshot(
     tableName: table.tableName ?? null,
     themeId: table.themeId,
     maxSeats: table.maxSeats,
+    gameNumber: table.gameNumber,
     status: game.status,
     seats: publicSeats,
     board: game.board.map(({ row, col, letter, blank }) => ({ row, col, letter, blank })),

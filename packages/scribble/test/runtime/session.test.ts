@@ -86,21 +86,33 @@ describe('sit', () => {
     expect(h.store.seats.get(TABLE_ID)!.size).toBe(0);
   });
 
-  it('enforces one seat per connection and per account, and open seats only', async () => {
+  it('enforces one seat per connection and open seats only', async () => {
     await h.seat('a', { accessToken: signAccessToken(), seatId: '2' });
     await h.send('a', { action: 'sit' });
     expect(h.lastError('a')).toEqual({ type: 'error', code: 'already_seated' });
 
     await h.connect('b');
     await h.send('b', { action: 'join_table', tableId: TABLE_ID });
-    await h.send('b', { action: 'sit', accessToken: signAccessToken() });
-    expect(h.lastError('b')).toEqual({ type: 'error', code: 'account_already_seated' });
     await h.send('b', { action: 'sit', seatId: '2' });
     expect(h.lastError('b')).toEqual({ type: 'error', code: 'seat_occupied' });
     await h.send('b', { action: 'sit', seatId: '5' });
     expect(h.lastError('b')).toEqual({ type: 'error', code: 'invalid_seat' });
     await h.send('b', { action: 'sit' });
     expect(h.last('b', 'sat').seatId).toBe('1');
+  });
+
+  it('moves a signed-in seat to the account’s newest window and cuts off the old one', async () => {
+    const oldToken = await h.seat('a', { accessToken: signAccessToken(), seatId: '2' });
+    const freshToken = await h.seat('a2', { accessToken: signAccessToken() });
+    expect(h.last('a2', 'sat').seatId).toBe('2');
+    expect(freshToken).not.toBe(oldToken);
+    expect(h.last('a', 'left')).toEqual({ type: 'left', seatId: '2', reason: 'taken_over' });
+    expect(h.snapshot('a').you).toBeNull();
+    expect(h.snapshot('a2').you?.seatId).toBe('2');
+    expect(h.store.seats.get(TABLE_ID)!.size).toBe(1);
+
+    await h.send('a', { action: 'set_theme', seatToken: oldToken, themeId: 'christmas' });
+    expect(h.lastError('a')).toEqual({ type: 'error', code: 'invalid_seat_token' });
   });
 
   it('fills to four and then reports table_full', async () => {

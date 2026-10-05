@@ -14,11 +14,18 @@ const RACK: Tile[] = [
   { id: 'q', letter: null },
 ];
 
-function setup(options: { blank?: string | null } = {}) {
+function setup(options: { blank?: string | null; hidden?: () => boolean } = {}) {
   const model = new TableModel(1280, 900);
-  const session: SessionPort & { calls: unknown[][] } = {
+  const session: SessionPort & { calls: unknown[][]; checks: string[][] } = {
     seated: true,
     calls: [],
+    checks: [],
+    checkWords(words) {
+      this.checks.push(words);
+    },
+    removePlayer(seatId) {
+      this.calls.push(['remove', seatId]);
+    },
     play(placements) {
       this.calls.push(['play', placements]);
     },
@@ -50,9 +57,27 @@ function setup(options: { blank?: string | null } = {}) {
   const controller = new TableController(model, session, ui, {
     schedule: (fn, at) => scheduled.push({ fn, at }),
     random: { int: () => 0 },
+    hidden: options.hidden,
   });
   controller.onSnapshot(snapshot({ rack: RACK }));
   return { model, session, ui, toasts, scheduled, controller };
+}
+
+function playTurn(turnNumber: number): LastTurn {
+  return {
+    turnNumber,
+    seatId: '2',
+    kind: 'play',
+    placed: [{ row: 7, col: 7, letter: 'A', blank: false }],
+    words: [{ text: 'AT', cells: [{ row: 7, col: 7 }, { row: 7, col: 8 }], score: 2 }],
+    beats: [
+      { kind: 'word', word: 0, text: 'AT', score: 2, running: 2 },
+      { kind: 'total', total: 2, score: 2 },
+    ],
+    total: 2,
+    bingo: false,
+    exchanged: 0,
+  };
 }
 
 function rackPoint(model: TableModel, tileId: string) {
@@ -184,6 +209,80 @@ describe('table controller', () => {
     });
     controller.onSnapshot(snapshot({ turnNumber: 5, lastTurn: { kind: 'play', turnNumber: 5, beats: [], words: [] } as unknown as LastTurn }));
     expect(scheduled).toEqual([]);
+  });
+
+  it('counts the first plays of a new game even though turn numbers start over', () => {
+    const { controller, scheduled } = setup();
+    controller.onSnapshot(snapshot({ version: 2, rack: RACK, gameNumber: 1, turnNumber: 9, lastTurn: playTurn(9) }));
+    const afterGameOne = scheduled.length;
+    expect(afterGameOne).toBeGreaterThan(0);
+
+    controller.onSnapshot(snapshot({ version: 3, rack: RACK, gameNumber: 2, turnNumber: 0, lastTurn: null }));
+    controller.onSnapshot(snapshot({ version: 4, rack: RACK, gameNumber: 2, turnNumber: 1, lastTurn: playTurn(1) }));
+    expect(scheduled.length).toBeGreaterThan(afterGameOne);
+  });
+
+  it('ignores an older snapshot that arrives after a newer one', () => {
+    const { model, controller } = setup();
+    const board = [{ row: 7, col: 7, letter: 'S', blank: false }];
+    controller.onSnapshot(snapshot({ version: 5, rack: RACK, board }));
+    controller.onSnapshot(snapshot({ version: 4, rack: RACK, board: [] }));
+    expect(model.snapshot!.version).toBe(5);
+    expect(model.occupied(7, 7)).toBe(true);
+  });
+
+  it('holds the count while the page is hidden and plays it when the player looks again', () => {
+    let hidden = true;
+    const { controller, scheduled } = setup({ hidden: () => hidden });
+    controller.onSnapshot(snapshot({ version: 2, rack: RACK, turnNumber: 1, lastTurn: playTurn(1) }));
+    expect(scheduled).toEqual([]);
+    hidden = false;
+    controller.onVisible();
+    expect(scheduled.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the draft on the board while a reconnect briefly has no seat', () => {
+    const { model, controller } = setup();
+    drag(controller, rackPoint(model, 'c'), squarePoint(model, 7, 7));
+    controller.onSnapshot(snapshot({ version: 2, you: null }));
+    controller.onSnapshot(snapshot({ version: 3, rack: RACK }));
+    expect(model.draft.placed.c).toEqual({ row: 7, col: 7, letter: null });
+  });
+
+  it('previews the words and score as tiles land, asking the server only about new words', () => {
+    const { model, session, controller } = setup();
+    drag(controller, rackPoint(model, 'c'), squarePoint(model, 7, 7));
+    expect(model.verdict).toEqual({ state: 'placement', reason: 'too_short' });
+    drag(controller, rackPoint(model, 'a'), squarePoint(model, 7, 8));
+    drag(controller, rackPoint(model, 't'), squarePoint(model, 7, 9));
+    expect(model.preview).toEqual({ kind: 'words', words: [{ text: 'CAT', score: 10 }], total: 10, bingo: false });
+    expect(model.verdict.state).toBe('checking');
+    expect(session.checks).toEqual([['CA'], ['CAT']]);
+
+    controller.onWordCheck([{ text: 'CAT', valid: true }]);
+    expect(model.verdict.state).toBe('valid');
+
+    controller.recall();
+    drag(controller, rackPoint(model, 'c'), squarePoint(model, 7, 7));
+    drag(controller, rackPoint(model, 'a'), squarePoint(model, 7, 8));
+    drag(controller, rackPoint(model, 't'), squarePoint(model, 7, 9));
+    expect(session.checks).toEqual([['CA'], ['CAT']]);
+    expect(model.verdict.state).toBe('valid');
+  });
+
+  it('flags a word the server says is not in the list', () => {
+    const { model, controller } = setup();
+    drag(controller, rackPoint(model, 't'), squarePoint(model, 7, 7));
+    drag(controller, rackPoint(model, 'c'), squarePoint(model, 7, 8));
+    controller.onWordCheck([{ text: 'TC', valid: false }]);
+    expect(model.verdict).toEqual({ state: 'rejected', words: ['TC'] });
+  });
+
+  it('explains a placement that cannot be played before Play is pressed', () => {
+    const { model, controller } = setup();
+    drag(controller, rackPoint(model, 'c'), squarePoint(model, 7, 7));
+    drag(controller, rackPoint(model, 'a'), squarePoint(model, 9, 9));
+    expect(model.verdict).toEqual({ state: 'placement', reason: 'not_in_line' });
   });
 
   it('explains rejected words and placements in plain language', () => {

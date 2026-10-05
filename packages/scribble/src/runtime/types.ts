@@ -34,6 +34,8 @@ export interface TableRecord {
   listed: boolean;
   createdBy: string | null;
   tableName?: string;
+  /** Counts games started at this table, so clients can tell a new game's turn 1 from the last one's. */
+  gameNumber: number;
   game: StoredGame;
 }
 
@@ -44,7 +46,10 @@ export interface SeatRecord {
   /** Cognito sub for signed-in players. Never sent to clients. */
   playerSub?: string;
   seatTokenHash: string;
+  /** Absent while the player is away; the seat stays theirs until they resume, leave, or are removed. */
   connectionId?: string;
+  /** ISO time the seat's last connection closed. Cleared on resume. */
+  awaySince?: string;
   rack: Tile[];
   score: number;
 }
@@ -70,6 +75,9 @@ export interface PublicSeat {
   rackCount: number;
   inGame: boolean;
   isLocal: boolean;
+  /** False while the seated player has no open connection. */
+  connected: boolean;
+  awaySince: string | null;
 }
 
 export interface TableSnapshot {
@@ -79,6 +87,7 @@ export interface TableSnapshot {
   tableName: string | null;
   themeId: ThemeId;
   maxSeats: number;
+  gameNumber: number;
   status: GameStatus;
   seats: PublicSeat[];
   board: Array<{ row: number; col: number; letter: string; blank: boolean }>;
@@ -105,7 +114,10 @@ export type OutboundMessage =
   | TableSnapshot
   | ErrorMessage
   | { type: 'sat'; seatId: string; seatToken: string }
-  | { type: 'left'; seatId: string }
+  /** `taken_over` goes to a connection whose seat was resumed from another window or device. */
+  | { type: 'left'; seatId: string; reason?: 'taken_over' }
+  | { type: 'word_check'; words: Array<{ text: string; valid: boolean }> }
+  | { type: 'pong' }
   | { type: 'table_list'; tables: Array<{ tableId: string; seatedCount: number; maxSeats: number; status: GameStatus }> };
 
 export interface WebSocketEvent {

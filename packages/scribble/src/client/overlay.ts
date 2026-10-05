@@ -1,13 +1,43 @@
 import { avatarUrl } from '@galaxyclass/accounts/avatars';
-import { EXCHANGE_MIN_BAG, MIN_PLAYERS } from '../rules/limits.js';
+import { AWAY_REMOVE_AFTER_MS, EXCHANGE_MIN_BAG, MIN_PLAYERS } from '../rules/limits.js';
+import type { PublicSeat, TableSnapshot } from '../runtime/types.js';
 import { THEME_IDS, type ThemeId } from '../themes/ids.js';
 import { THEMES } from '../themes/index.js';
-import type { ControllerUi, TableController } from './controller.js';
+import { describeError, type ControllerUi, type TableController } from './controller.js';
 import { placedCount } from './draft.js';
 import type { TableModel } from './model.js';
 import { publicBase } from './route.js';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+/** Away times and the Remove button age without new snapshots, so the bar redraws on its own. */
+const CLOCK_MS = 30_000;
+
+function awayFor(ms: number): string {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 60) {
+    return `${Math.max(1, minutes)}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
+}
+
+function awayMs(seat: PublicSeat, now: number): number | null {
+  if (!seat.occupied || seat.connected) {
+    return null;
+  }
+  const since = seat.awaySince ? Date.parse(seat.awaySince) : Number.NaN;
+  return Number.isFinite(since) ? Math.max(0, now - since) : AWAY_REMOVE_AFTER_MS;
+}
+
+function describeLastPlay(snapshot: TableSnapshot): string {
+  const turn = snapshot.lastTurn;
+  if (!turn || turn.kind !== 'play' || turn.words.length === 0) {
+    return '';
+  }
+  const who = snapshot.seats.find((seat) => seat.seatId === turn.seatId);
+  const name = who?.isLocal ? 'You' : (who?.displayName ?? 'A player');
+  return `${name}: ${turn.words[0]!.text} +${turn.total}`;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -46,6 +76,7 @@ export class TableOverlay implements ControllerUi {
   private readonly toastEl: HTMLElement;
   private readonly picker: HTMLElement;
   private readonly endPanel: HTMLElement;
+  private readonly previewEl: HTMLElement;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pickerResolve: ((letter: string | null) => void) | null = null;
   private controller: TableController | null = null;
@@ -98,6 +129,7 @@ export class TableOverlay implements ControllerUi {
       ),
     );
     this.toastEl = el('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
+    this.previewEl = el('div', { class: 'preview', role: 'status', 'aria-live': 'polite', 'aria-label': 'Play preview', hidden: '' });
     this.picker = el(
       'div',
       { class: 'blank-picker', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'blank-picker-title', hidden: '' },
@@ -110,7 +142,17 @@ export class TableOverlay implements ControllerUi {
       ),
     );
     this.endPanel = el('section', { class: 'end-panel', 'aria-live': 'polite', hidden: '' });
-    this.root = el('div', { class: 'table-screen' }, this.stage, topbar, this.controls, this.toastEl, this.picker, this.endPanel);
+    this.root = el(
+      'div',
+      { class: 'table-screen' },
+      this.stage,
+      topbar,
+      this.controls,
+      this.previewEl,
+      this.toastEl,
+      this.picker,
+      this.endPanel,
+    );
     host.replaceChildren(this.root);
 
     this.root.addEventListener('click', (event) => this.onClick(event));
@@ -125,9 +167,20 @@ export class TableOverlay implements ControllerUi {
     model.on((kind) => {
       if (kind === 'snapshot' || kind === 'draft' || kind === 'selection' || kind === 'theme') {
         this.render();
+      } else if (kind === 'preview') {
+        this.renderPreview();
+      } else if (kind === 'layout') {
+        this.placeFloaters();
       }
     });
+    this.placeFloaters();
     this.render();
+    setInterval(() => this.render(), CLOCK_MS);
+  }
+
+  /** The preview and toasts float just above the rack, whose height follows the tile size. */
+  private placeFloaters(): void {
+    this.root.style.setProperty('--rack-height', `${Math.round(this.model.layout.rack.height / this.model.unit)}px`);
   }
 
   bind(controller: TableController): void {
@@ -194,13 +247,30 @@ export class TableOverlay implements ControllerUi {
       case 'pass':
         controller.pass();
         break;
-      case 'seat':
-        if (this.model.snapshot?.you) {
-          controller.leave();
-        } else {
+      case 'seat': {
+        const snapshot = this.model.snapshot;
+        if (!snapshot?.you) {
           controller.sit();
+          break;
+        }
+        const inGame = snapshot.status === 'playing' && snapshot.seats.some((seat) => seat.isLocal && seat.inGame);
+        // Closing the tab keeps the seat; this button gives it up, so check first mid-game.
+        if (
+          !inGame ||
+          window.confirm('Leave this game for good? Your tiles go back in the bag. Closing the tab instead keeps your seat.')
+        ) {
+          controller.leave();
         }
         break;
+      }
+      case 'remove-player': {
+        const seatId = target!.dataset.seat ?? '';
+        const name = this.model.snapshot?.seats.find((seat) => seat.seatId === seatId)?.displayName ?? 'this player';
+        if (window.confirm(`Remove ${name} from the table? Their tiles go back in the bag.`)) {
+          controller.removePlayer(seatId);
+        }
+        break;
+      }
       case 'zoom-in':
         controller.zoomBy(1.25);
         break;
@@ -238,6 +308,8 @@ export class TableOverlay implements ControllerUi {
     this.seatButton.textContent = seated ? 'Leave seat' : 'Sit down';
     this.seatButton.disabled = !seated && occupied.length >= snapshot.maxSeats;
 
+    const now = Date.now();
+    const canRemove = seated && snapshot.seats.some((seat) => seat.isLocal && seat.connected);
     this.seats.replaceChildren(
       ...snapshot.seats.map((seat) => {
         if (!seat.occupied) {
@@ -249,6 +321,10 @@ export class TableOverlay implements ControllerUi {
         }
         if (seat.isLocal) {
           classes.push('local');
+        }
+        const away = awayMs(seat, now);
+        if (away !== null) {
+          classes.push('away');
         }
         const avatar = el('img', {
           class: 'avatar',
@@ -267,19 +343,37 @@ export class TableOverlay implements ControllerUi {
           { class: 'seat-meta' },
           el('span', { class: 'score', 'data-score': String(seat.score) }, String(model.displayScore(seat.seatId, seat.score))),
           seat.inGame ? el('span', { class: 'rack-count', title: 'Tiles on rack' }, `${seat.rackCount} tiles`) : '',
-          seat.signedIn ? el('span', { class: 'badge', title: 'Signed in to Galaxy Class' }, 'Member') : el('span', { class: 'badge guest' }, 'Guest'),
+          away !== null
+            ? el('span', { class: 'badge away', title: 'Their seat is held until they come back' }, `Away ${awayFor(away)}`)
+            : seat.signedIn
+              ? el('span', { class: 'badge', title: 'Signed in to Galaxy Class' }, 'Member')
+              : el('span', { class: 'badge guest' }, 'Guest'),
         );
-        return el('li', { class: classes.join(' '), 'data-seat': seat.seatId }, avatar, el('span', { class: 'seat-body' }, name, meta));
+        const body = el('span', { class: 'seat-body' }, name, meta);
+        const item = el('li', { class: classes.join(' '), 'data-seat': seat.seatId }, avatar, body);
+        if (canRemove && away !== null && away >= AWAY_REMOVE_AFTER_MS) {
+          item.append(
+            button('Remove', 'remove-player', {
+              class: 'seat-remove',
+              'data-seat': seat.seatId,
+              'aria-label': `Remove ${seat.displayName ?? 'player'} from the table`,
+            }),
+          );
+        }
+        return item;
       }),
     );
 
-    this.bag.textContent = snapshot.status === 'waiting' ? '' : `${snapshot.bagCount} in bag`;
+    const lastPlay = describeLastPlay(snapshot);
+    const bagCount = snapshot.status === 'waiting' ? '' : `${snapshot.bagCount} in bag`;
+    this.bag.textContent = [lastPlay, bagCount].filter(Boolean).join(' · ');
     const current = snapshot.seats.find((seat) => seat.seatId === snapshot.currentSeatId);
     if (snapshot.status === 'waiting') {
       this.status.textContent =
         occupied.length < MIN_PLAYERS ? `Waiting for players (${occupied.length}/${MIN_PLAYERS})` : 'Ready to start';
     } else if (snapshot.status === 'playing') {
-      this.status.textContent = model.isMyTurn ? 'Your turn' : `${current?.displayName ?? 'Someone'}'s turn`;
+      const awaySuffix = current && !current.connected ? ' (away)' : '';
+      this.status.textContent = model.isMyTurn ? 'Your turn' : `${current?.displayName ?? 'Someone'}'s turn${awaySuffix}`;
     } else {
       this.status.textContent = 'Game over';
     }
@@ -302,7 +396,51 @@ export class TableOverlay implements ControllerUi {
     const swap = this.controls.querySelector<HTMLButtonElement>('[data-action="confirm-exchange"]')!;
     swap.textContent = `Swap ${model.exchange?.size ?? 0}`;
 
+    this.renderPreview();
     this.renderEnd();
+  }
+
+  private renderPreview(): void {
+    const { preview, verdict } = this.model;
+    if (this.model.exchange || preview.kind === 'none' || preview.kind === 'blank') {
+      this.previewEl.hidden = true;
+      return;
+    }
+    this.previewEl.hidden = false;
+    if (verdict.state === 'placement') {
+      this.previewEl.dataset.tone = 'error';
+      this.previewEl.replaceChildren(
+        el('span', {}, describeError({ type: 'error', code: 'invalid_placement', reason: verdict.reason })),
+      );
+      return;
+    }
+    if (preview.kind !== 'words') {
+      return;
+    }
+    this.previewEl.dataset.tone = verdict.state === 'rejected' ? 'error' : verdict.state === 'valid' ? 'ok' : 'pending';
+    const words = preview.words.map((word) => {
+      const known = this.model.wordValidity.get(word.text);
+      const mark = known === undefined ? '…' : known ? '✓' : '✗';
+      return el(
+        'span',
+        { class: 'preview-word', 'data-valid': known === undefined ? 'unknown' : String(known) },
+        word.text,
+        ' ',
+        el('b', {}, String(word.score)),
+        el('span', { class: 'preview-mark' }, mark),
+      );
+    });
+    const tail =
+      verdict.state === 'rejected'
+        ? el('span', { class: 'preview-note' }, `${verdict.words.join(', ')} ${verdict.words.length === 1 ? 'is' : 'are'} not in the word list`)
+        : el(
+            'span',
+            { class: 'preview-total' },
+            preview.bingo ? 'with +50 bingo ' : '',
+            el('strong', {}, `${preview.total}`),
+            ` point${preview.total === 1 ? '' : 's'}`,
+          );
+    this.previewEl.replaceChildren(...words, tail);
   }
 
   private renderEnd(): void {

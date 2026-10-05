@@ -5,9 +5,10 @@ import { themeFor, type Theme } from '../themes/index.js';
 import { fitCamera, resizeCamera, type CameraState } from './camera.js';
 import { EMPTY_DRAFT, rackView, type Draft } from './draft.js';
 import { layoutFor, type Layout } from './layout.js';
+import { NO_PREVIEW, verdictFor, type Preview, type Verdict } from './preview.js';
 import type { TimelineStep } from './score-timeline.js';
 
-export type ChangeKind = 'snapshot' | 'draft' | 'theme' | 'drag' | 'camera' | 'layout' | 'selection';
+export type ChangeKind = 'snapshot' | 'draft' | 'theme' | 'drag' | 'camera' | 'layout' | 'selection' | 'preview';
 
 export interface DragState {
   tileId: string;
@@ -37,6 +38,10 @@ export class TableModel {
   pendingScore: { seatId: string; hold: number } | null = null;
   /** Labels of the last count, in order. Read by the dev test hooks. */
   timelineLog: string[] = [];
+  /** What the current draft would score. */
+  preview: Preview = NO_PREVIEW;
+  /** Server answers about word-list membership, kept for the session. */
+  readonly wordValidity = new Map<string, boolean>();
 
   private occupiedSquares = new Set<string>();
   private listeners = new Set<(kind: ChangeKind) => void>();
@@ -108,6 +113,10 @@ export class TableModel {
 
   get canDraft(): boolean {
     return !!this.snapshot?.you && this.snapshot.status === 'playing' && this.rack.length > 0;
+  }
+
+  get verdict(): Verdict {
+    return verdictFor(this.preview, this.wordValidity);
   }
 
   readonly occupied = (row: number, col: number): boolean => this.occupiedSquares.has(squareKey(row, col));

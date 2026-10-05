@@ -10,6 +10,8 @@ import { tileTexture } from './tile-textures.js';
 
 const TILE_DISPLAY = CELL - 4;
 const DRAFT_RING = 0x3b82f6;
+const DRAFT_RING_VALID = 0x22c55e;
+const DRAFT_RING_INVALID = 0xef4444;
 
 /** The board under its own zoomable camera: squares, committed tiles, the draft, and count effects. */
 export class BoardScene extends Phaser.Scene {
@@ -18,6 +20,8 @@ export class BoardScene extends Phaser.Scene {
   private draftLayer!: Phaser.GameObjects.Container;
   private target!: Phaser.GameObjects.Graphics;
   private highlight!: Phaser.GameObjects.Graphics;
+  /** Sits under the tiles of the most recent play, so it is easy to spot after the count fades. */
+  private lastPlay!: Phaser.GameObjects.Graphics;
   private highlightCells: Array<{ row: number; col: number }> = [];
   private highlightFade: Phaser.Time.TimerEvent | null = null;
   private unsubscribe: Array<() => void> = [];
@@ -28,11 +32,13 @@ export class BoardScene extends Phaser.Scene {
 
   create(): void {
     this.drawBoard();
+    this.lastPlay = this.add.graphics().setDepth(0.5);
     this.highlight = this.add.graphics().setDepth(2);
     this.draftLayer = this.add.container(0, 0).setDepth(3);
     this.target = this.add.graphics().setDepth(4);
     this.syncCamera();
     this.drawCommitted();
+    this.drawLastPlay();
     this.drawDraft();
 
     this.unsubscribe.push(
@@ -40,11 +46,13 @@ export class BoardScene extends Phaser.Scene {
         if (kind === 'theme') {
           this.drawBoard();
           this.paintHighlight();
+          this.drawLastPlay();
         } else if (kind === 'layout' || kind === 'camera') {
           this.syncCamera();
         } else if (kind === 'snapshot') {
           this.drawCommitted();
-        } else if (kind === 'draft') {
+          this.drawLastPlay();
+        } else if (kind === 'draft' || kind === 'preview') {
           this.drawDraft();
         } else if (kind === 'drag') {
           this.drawTarget();
@@ -105,9 +113,32 @@ export class BoardScene extends Phaser.Scene {
     }
   }
 
+  private drawLastPlay(): void {
+    this.lastPlay.clear();
+    const turn = this.model.snapshot?.lastTurn;
+    if (!turn || turn.kind !== 'play') {
+      return;
+    }
+    const { emphasis } = this.model.theme;
+    this.lastPlay.fillStyle(hexToNumber(emphasis.highlight), 0.95);
+    for (const cell of turn.placed) {
+      const origin = cellOrigin(cell.row, cell.col);
+      this.lastPlay.fillRoundedRect(origin.x, origin.y, CELL, CELL, 8);
+    }
+  }
+
+  private draftRingColor(): number {
+    const { state } = this.model.verdict;
+    if (state === 'valid') {
+      return DRAFT_RING_VALID;
+    }
+    return state === 'rejected' || state === 'placement' ? DRAFT_RING_INVALID : DRAFT_RING;
+  }
+
   private drawDraft(): void {
     this.draftLayer.removeAll(true);
     const byId = new Map(this.model.rack.map((tile) => [tile.id, tile]));
+    const ringColor = this.draftRingColor();
     for (const [tileId, spot] of Object.entries(this.model.draft.placed)) {
       const tile = byId.get(tileId);
       if (!tile) {
@@ -116,7 +147,7 @@ export class BoardScene extends Phaser.Scene {
       const letter = tile.letter ?? spot.letter;
       const center = cellCenter(spot.row, spot.col);
       const ring = this.add.graphics();
-      ring.lineStyle(3, DRAFT_RING, 1);
+      ring.lineStyle(3, ringColor, 1);
       const origin = cellOrigin(spot.row, spot.col);
       ring.strokeRoundedRect(origin.x + 1, origin.y + 1, CELL - 2, CELL - 2, 7);
       const image = this.add
