@@ -18,6 +18,24 @@ export function tableGsiPk(tableId: string): string {
   return `TABLE#${tableId}`;
 }
 
+export function memberPk(playerSub: string): string {
+  return `MEMBER#${playerSub}`;
+}
+
+export const MEMBERSHIP_SK_PREFIX = 'TABLE#';
+
+export function membershipSk(tableId: string): string {
+  return `${MEMBERSHIP_SK_PREFIX}${tableId}`;
+}
+
+export const CONN_GSI_SK_PREFIX = 'CONN#';
+export const MEMBER_GSI_SK_PREFIX = 'MEMBER#';
+
 export function connGsiSk(connectionId: string): string {
-  return `CONN#${connectionId}`;
+  return `${CONN_GSI_SK_PREFIX}${connectionId}`;
+}
+
+/** Memberships sit on the byTable index too, so deleting a table can find every member's list entry. */
+export function memberGsiSk(playerSub: string): string {
+  return `${MEMBER_GSI_SK_PREFIX}${playerSub}`;
 }

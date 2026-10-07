@@ -3,11 +3,12 @@ import type { ScribbleConfig } from './config.js';
 import { TableController } from './controller.js';
 import { worldToScreen } from './camera.js';
 import { cellCenter, rackSlots } from './layout.js';
-import { renderMessage } from './lobby.js';
+import { galaxyClassSignInUrl, galaxyClassSignUpUrl } from '@galaxyclass/accounts/game-header';
+import { renderNotice } from './lobby.js';
 import { TableModel } from './model.js';
 import { TableOverlay } from './overlay.js';
 import { accessTokenSource } from './player-token.js';
-import { publicBase } from './route.js';
+import { publicBase, tablePath } from './route.js';
 import { BoardScene } from './scenes/board-scene.js';
 import { HudScene } from './scenes/hud-scene.js';
 import { RoomScene } from './scenes/room-scene.js';
@@ -51,12 +52,65 @@ function seatTokenStore(tableId: string): SeatTokenStore {
   };
 }
 
+/** Shown instead of the table when the server will not let this visitor in. */
+const ENTRY_REFUSALS: Record<string, { title: string; body: string; signIn: boolean }> = {
+  sign_in_required: {
+    title: 'Members only',
+    body: 'Scribble tables are for Galaxy Class members. Sign in, or create a free account, to join this table.',
+    signIn: true,
+  },
+  invalid_access_token: {
+    title: 'Sign in again',
+    body: 'Your sign-in has expired. Sign in again to join this table.',
+    signIn: true,
+  },
+  identity_unavailable: {
+    title: 'Sign-in checks are down',
+    body: 'Scribble cannot check sign-ins right now. Try this link again in a moment.',
+    signIn: false,
+  },
+};
+
 export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: string): void {
-  const listing = config.tables.find((table) => table.id === tableId);
   const unit = Math.min(window.devicePixelRatio || 1, 2);
   const model = new TableModel(window.innerWidth * unit, window.innerHeight * unit, unit);
-  const overlay = new TableOverlay(host, model, listing?.name ?? 'Table');
+  const overlay = new TableOverlay(host, model, 'Table');
   let connected = false;
+  let named: string | null = null;
+
+  const showName = (tableName: string | null) => {
+    const name = tableName ?? 'Table';
+    if (name === named) {
+      return;
+    }
+    named = name;
+    document.title = `${name} · Scribble`;
+    const label = host.querySelector('.brand-text small');
+    if (label) {
+      label.textContent = name;
+    }
+  };
+
+  const refuse = (title: string, body: string, signIn: boolean) => {
+    session.close();
+    game.destroy(true);
+    const here = tablePath(tableId);
+    renderNotice(host, {
+      title,
+      body,
+      returnTo: here,
+      ...(signIn ? { account: null } : {}),
+      actions: signIn
+        ? [
+            { label: 'Sign in', href: galaxyClassSignInUrl(here), primary: true },
+            { label: 'Create an account', href: galaxyClassSignUpUrl(here) },
+          ]
+        : [
+            { label: 'Try again', href: here, primary: true },
+            { label: 'Back to your tables', href: publicBase() },
+          ],
+    });
+  };
 
   const session = new TableSession({
     url: config.webSocketUrl,
@@ -66,11 +120,21 @@ export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: s
     onEvent: (event) => {
       switch (event.type) {
         case 'snapshot':
+          showName(event.snapshot.tableName);
           controller.onSnapshot(event.snapshot);
           break;
         case 'word_check':
           controller.onWordCheck(event.words);
           break;
+        case 'deleted':
+          game.destroy(true);
+          renderNotice(host, {
+            title: 'Table deleted',
+            body: 'The host deleted this table, so its game and seats are gone.',
+            returnTo: tablePath(tableId),
+            actions: [{ label: 'Back to your tables', href: publicBase(), primary: true }],
+          });
+          return;
         case 'left':
           if (event.reason === 'taken_over') {
             overlay.toast('Your seat moved to another window or device.');
@@ -78,9 +142,12 @@ export function startTable(host: HTMLElement, config: ScribbleConfig, tableId: s
           break;
         case 'error':
           if (event.error.code === 'table_not_found') {
-            session.close();
-            game.destroy(true);
-            renderMessage(host, 'Table not found', 'That table does not exist or is no longer open.', 'See open tables', publicBase());
+            refuse('Table not found', 'That table does not exist, or its link was mistyped.', false);
+            return;
+          }
+          if (!model.snapshot && ENTRY_REFUSALS[event.error.code]) {
+            const { title, body, signIn } = ENTRY_REFUSALS[event.error.code]!;
+            refuse(title, body, signIn);
             return;
           }
           controller.onError(event.error);

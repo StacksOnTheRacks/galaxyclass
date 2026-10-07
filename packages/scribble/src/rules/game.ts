@@ -3,7 +3,7 @@ import type { Dictionary } from './dictionary.js';
 import { checkPlacement } from './placement.js';
 import { scorePlay } from './score.js';
 import { RACK_SIZE, rackValue } from './tiles.js';
-import type { BoardTile, Placement, PlacementError, ScoreBeat, Tile } from './types.js';
+import type { BoardTile, Placement, PlacementError, Premium, ScoreBeat, Tile } from './types.js';
 
 import { EXCHANGE_MIN_BAG, MAX_PLAYERS, MIN_PLAYERS, SCORELESS_TURN_LIMIT } from './limits.js';
 
@@ -30,6 +30,23 @@ export interface LastTurn {
   exchanged: number;
 }
 
+/** A compact, public record of one committed turn, kept for the end-of-game report. */
+export interface TurnRecord {
+  turnNumber: number;
+  seatId: string;
+  kind: LastTurn['kind'];
+  words: Array<{ text: string; score: number }>;
+  tiles: number;
+  blanks: number;
+  /** Premium squares this play scored through, one entry per square. */
+  premiums: Premium[];
+  total: number;
+  bingo: boolean;
+  exchanged: number;
+  /** The seat's score after this turn. */
+  score: number;
+}
+
 export interface GameState {
   status: GameStatus;
   board: BoardTile[];
@@ -44,6 +61,10 @@ export interface GameState {
   /** Per-seat end-of-game rack adjustment (negative for leftovers, positive for the player who went out). */
   finalAdjustments: Record<string, number> | null;
   wentOutSeatId: string | null;
+  /** Every committed turn of this game, oldest first. */
+  history: TurnRecord[];
+  /** Scores of the players still in the game when it ended, after rack adjustments. */
+  finalScores: Record<string, number> | null;
 }
 
 export type TurnError =
@@ -70,6 +91,8 @@ export function emptyGame(): GameState {
     endReason: null,
     finalAdjustments: null,
     wentOutSeatId: null,
+    history: [],
+    finalScores: null,
   };
 }
 
@@ -142,6 +165,28 @@ function emptyTurn(state: GameState, seatId: string, kind: LastTurn['kind']): La
   };
 }
 
+function recordTurn(turn: LastTurn, score: number): TurnRecord {
+  const premiums = new Map<string, Premium>();
+  for (const beat of turn.beats) {
+    if (beat.kind === 'letter_premium' || beat.kind === 'word_premium') {
+      premiums.set(`${beat.row},${beat.col}`, beat.premium);
+    }
+  }
+  return {
+    turnNumber: turn.turnNumber,
+    seatId: turn.seatId,
+    kind: turn.kind,
+    words: turn.words.map(({ text, score: wordScore }) => ({ text, score: wordScore })),
+    tiles: turn.placed.length,
+    blanks: turn.placed.filter((tile) => tile.blank).length,
+    premiums: [...premiums.values()],
+    total: turn.total,
+    bingo: turn.bingo,
+    exchanged: turn.exchanged,
+    score,
+  };
+}
+
 /** Records a scoreless turn and ends the game when the limit is reached. */
 function finishScorelessTurn(state: GameState, seatId: string, turn: LastTurn): GameState {
   const scorelessTurns = state.scorelessTurns + 1;
@@ -150,6 +195,7 @@ function finishScorelessTurn(state: GameState, seatId: string, turn: LastTurn): 
     scorelessTurns,
     turnNumber: turn.turnNumber,
     lastTurn: turn,
+    history: [...state.history, recordTurn(turn, state.players[seatId]?.score ?? 0)],
     currentSeatId: nextSeat(state, seatId),
   };
   return scorelessTurns >= SCORELESS_TURN_LIMIT ? endGame(next, 'scoreless_turns', null) : next;
@@ -200,6 +246,7 @@ export function applyPlay(
     scorelessTurns: score.total > 0 ? 0 : state.scorelessTurns + 1,
     turnNumber: turn.turnNumber,
     lastTurn: turn,
+    history: [...state.history, recordTurn(turn, newScore)],
     currentSeatId: nextSeat(state, seatId),
   };
 
@@ -255,8 +302,18 @@ export function applyExchange(
  * Abandoned games end without adjustment.
  */
 export function endGame(state: GameState, reason: EndReason, wentOutSeatId: string | null): GameState {
+  const scoresOf = (players: Record<string, PlayerState>) =>
+    Object.fromEntries(state.turnOrder.filter((seatId) => players[seatId]).map((seatId) => [seatId, players[seatId]!.score]));
   if (reason === 'abandoned') {
-    return { ...state, status: 'ended', endReason: reason, currentSeatId: null, finalAdjustments: null, wentOutSeatId: null };
+    return {
+      ...state,
+      status: 'ended',
+      endReason: reason,
+      currentSeatId: null,
+      finalAdjustments: null,
+      wentOutSeatId: null,
+      finalScores: scoresOf(state.players),
+    };
   }
   const adjustments: Record<string, number> = {};
   let leftovers = 0;
@@ -280,6 +337,7 @@ export function endGame(state: GameState, reason: EndReason, wentOutSeatId: stri
     players,
     finalAdjustments: adjustments,
     wentOutSeatId,
+    finalScores: scoresOf(players),
   };
 }
 

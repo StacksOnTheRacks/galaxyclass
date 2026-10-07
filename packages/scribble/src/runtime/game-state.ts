@@ -10,7 +10,7 @@ export function toGameState(table: TableRecord, seats: ReadonlyArray<SeatRecord>
       players[seatId] = { rack: seat.rack, score: seat.score };
     }
   }
-  return { ...table.game, players };
+  return { ...table.game, history: table.game.history ?? [], finalScores: table.game.finalScores ?? null, players };
 }
 
 /** Splits a rules-engine state back into the table record and the seats whose rack or score changed. */

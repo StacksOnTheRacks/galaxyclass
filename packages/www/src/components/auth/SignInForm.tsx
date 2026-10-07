@@ -9,7 +9,9 @@ import {
   isValidEmail,
   isValidPassword,
 } from "@/lib/auth/messages";
-import { readNextFromLocation } from "@/lib/auth/safe-next";
+import { hardNavigate } from "@/lib/auth/navigate";
+import { isGamePath, readNextFromLocation, withNext } from "@/lib/auth/safe-next";
+import { useNextParam } from "@/lib/auth/use-next";
 import { useSession } from "@/lib/auth/session";
 import { TextLink } from "@/components/primitives";
 import { AuthScreen, FormAlert, SubmitButton, TextField } from "./ui";
@@ -17,6 +19,7 @@ import { AuthScreen, FormAlert, SubmitButton, TextField } from "./ui";
 export function SignInForm() {
   const router = useRouter();
   const session = useSession();
+  const next = useNextParam();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -45,7 +48,12 @@ export function SignInForm() {
       );
       if (result.isSignedIn) {
         await session.refresh();
-        router.push(readNextFromLocation());
+        const destination = readNextFromLocation();
+        if (isGamePath(destination)) {
+          hardNavigate(destination);
+        } else {
+          router.push(destination);
+        }
         return;
       }
       if (result.nextStep.signInStep === "CONFIRM_SIGN_UP") {
@@ -110,7 +118,7 @@ export function SignInForm() {
       <div className="flex flex-col gap-3 border-t border-bezel pt-5 sm:flex-row sm:items-center sm:justify-between">
         <TextLink href="/forgot-password">Forgot password</TextLink>
         <p className="text-ink-muted">
-          New here? <TextLink href="/sign-up">Sign up</TextLink>
+          New here? <TextLink href={withNext("/sign-up", next)}>Sign up</TextLink>
         </p>
       </div>
     </AuthScreen>

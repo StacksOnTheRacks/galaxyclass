@@ -1,11 +1,50 @@
 import { sortSeats, type ScribbleStore } from './store.js';
-import type { ConnectionRecord, SeatRecord, TableRecord } from './types.js';
+import type { ConnectionRecord, MembershipRecord, SeatRecord, TableRecord } from './types.js';
 
 /** In-process store for tests and the local dev harness. Values are cloned like a real database round-trip. */
 export class MemoryScribbleStore implements ScribbleStore {
   readonly tables = new Map<string, TableRecord>();
   readonly seats = new Map<string, Map<string, SeatRecord>>();
   readonly connections = new Map<string, ConnectionRecord>();
+  /** Keyed by player sub, then table id. */
+  readonly memberships = new Map<string, Map<string, MembershipRecord>>();
+
+  async createTable(table: TableRecord, owner: MembershipRecord) {
+    if (this.tables.has(table.tableId)) {
+      throw new Error(`table ${table.tableId} already exists`);
+    }
+    await this.putTable(table);
+    await this.addMembership(owner);
+  }
+
+  async addMembership(membership: MembershipRecord) {
+    const mine = this.memberships.get(membership.playerSub) ?? new Map<string, MembershipRecord>();
+    if (!mine.has(membership.tableId)) {
+      mine.set(membership.tableId, structuredClone(membership));
+    }
+    this.memberships.set(membership.playerSub, mine);
+  }
+
+  async listMemberships(playerSub: string) {
+    return [...(this.memberships.get(playerSub)?.values() ?? [])].map((m) => structuredClone(m));
+  }
+
+  async deleteMembership(playerSub: string, tableId: string) {
+    this.memberships.get(playerSub)?.delete(tableId);
+  }
+
+  async listTableMembers(tableId: string) {
+    return [...this.memberships.entries()].filter(([, mine]) => mine.has(tableId)).map(([playerSub]) => playerSub);
+  }
+
+  async deleteTable(tableId: string, expectedVersion: number) {
+    if (this.tables.get(tableId)?.version !== expectedVersion) {
+      return false;
+    }
+    this.tables.delete(tableId);
+    this.seats.delete(tableId);
+    return true;
+  }
 
   async putConnection(connectionId: string) {
     this.connections.set(connectionId, { connectionId });

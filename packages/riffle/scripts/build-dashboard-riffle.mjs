@@ -20,7 +20,7 @@ const result = await build({
   format: 'esm',
   target: 'es2022',
   loader: { '.css': 'css' },
-  external: ['/assets/*'],
+  external: ['/assets/*', '/fonts/*'],
   define: { RIFFLE_PUBLIC_BASE: '"/riffle"' },
   metafile: true,
 });

@@ -6,11 +6,18 @@ import { Harness, TABLE_ID } from '../support/runtime-harness.js';
 let h: Harness;
 let tokenA: string;
 let tokenB: string;
+let tokenC: string;
 
-/** A signed in on seat 1, B as a guest on seat 2, game started with A to move and known racks. */
-async function startRigged(rackA = 'CATDOGS', rackB = 'SHEEPIE') {
+/**
+ * WordSmith on seat 1, a member without a gamer tag on seat 2, game started with A to move and
+ * known racks. Seats lock once the game starts, so any third player sits first.
+ */
+async function startRigged(rackA = 'CATDOGS', rackB = 'SHEEPIE', options: { third?: boolean } = {}) {
   tokenA = await h.seat('a', { accessToken: signAccessToken() });
   tokenB = await h.seat('b');
+  if (options.third) {
+    tokenC = await h.seat('c');
+  }
   await h.send('a', { action: 'start_game', seatToken: tokenA });
   h.rigRack('1', rackA);
   h.rigRack('2', rackB);
@@ -36,7 +43,7 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe('a game between a signed-in player and a guest', () => {
+describe('a game between two members', () => {
   it('needs two seated players to start', async () => {
     const token = await h.seat('a');
     await h.send('a', { action: 'start_game', seatToken: token });
@@ -162,8 +169,7 @@ describe('leaving', () => {
   });
 
   it('auto-passes on your turn, then drops the seat and returns the rack to the bag', async () => {
-    await startRigged();
-    await h.seat('c');
+    await startRigged('CATDOGS', 'SHEEPIE', { third: true });
     const bagBefore = h.store.tables.get(TABLE_ID)!.game.bag.length;
     await h.send('a', { action: 'leave', seatToken: tokenA });
     const snapshot = h.snapshot('b');
@@ -186,11 +192,35 @@ describe('leaving', () => {
     expect(h.snapshot('a').themeId).toBe('christmas');
   });
 
-  it('deals a late sitter into a game in progress', async () => {
+  it('locks seats once a game starts, and opens them again when it ends', async () => {
     await startRigged();
-    await h.seat('c');
-    expect(h.snapshot('c').you!.rack).toHaveLength(7);
-    expect(h.snapshot('a').seats[2]).toMatchObject({ inGame: true, rackCount: 7 });
+    await h.connect('c');
+    await h.join('c');
+    expect(h.snapshot('c')).toMatchObject({ status: 'playing', you: null });
+    await h.send('c', { action: 'sit', accessToken: h.tokenFor('c') });
+    expect(h.lastError('c')).toEqual({ type: 'error', code: 'table_locked' });
+    await h.send('c', { action: 'sit', seatId: '3', accessToken: h.tokenFor('c') });
+    expect(h.lastError('c')).toEqual({ type: 'error', code: 'table_locked' });
+    expect(h.store.seats.get(TABLE_ID)!.size).toBe(2);
+    expect(h.snapshot('a').seats[2]).toMatchObject({ occupied: false });
+
+    h.rigGame((table) => {
+      table.game.status = 'ended';
+      table.game.currentSeatId = null;
+    });
+    await h.send('c', { action: 'sit', accessToken: h.tokenFor('c') });
+    expect(h.last('c', 'sat').seatId).toBe('3');
+  });
+
+  it('keeps a seat freed mid-game locked to newcomers', async () => {
+    await startRigged('CATDOGS', 'SHEEPIE', { third: true });
+    await h.send('c', { action: 'leave', seatToken: tokenC });
+    expect(h.snapshot('a')).toMatchObject({ status: 'playing' });
+    expect(h.snapshot('a').seats[2]!.occupied).toBe(false);
+    await h.connect('d');
+    await h.join('d');
+    await h.send('d', { action: 'sit', seatId: '3', accessToken: h.tokenFor('d') });
+    expect(h.lastError('d')).toEqual({ type: 'error', code: 'table_locked' });
   });
 });
 
@@ -213,7 +243,7 @@ describe('away players', () => {
     await h.disconnect('b');
     h.advance(3 * 60 * 60 * 1000);
     await h.connect('b2');
-    await h.send('b2', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('b2');
     expect(h.snapshot('b2').you).toBeNull();
     await h.send('b2', { action: 'resume', seatToken: tokenB });
     expect(h.last('b2', 'sat')).toEqual({ type: 'sat', seatId: '2', seatToken: tokenB });
@@ -228,7 +258,7 @@ describe('away players', () => {
   it('refuses to resume with a token that matches no seat', async () => {
     await startRigged();
     await h.connect('x');
-    await h.send('x', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('x');
     await h.send('x', { action: 'resume', seatToken: 'forged' });
     expect(h.lastError('x')).toEqual({ type: 'error', code: 'invalid_seat_token' });
   });
@@ -251,8 +281,7 @@ describe('away players', () => {
   });
 
   it('lets the others remove an away player only after 24 hours', async () => {
-    await startRigged();
-    const tokenC = await h.seat('c');
+    await startRigged('CATDOGS', 'SHEEPIE', { third: true });
     await h.disconnect('c');
     await h.send('a', { action: 'remove_player', seatToken: tokenA, seatId: '3' });
     expect(h.lastError('a')).toEqual({ type: 'error', code: 'away_too_recent' });
@@ -270,7 +299,7 @@ describe('away players', () => {
     expect(seen.bagCount).toBe(bagBefore + 7);
 
     await h.connect('c2');
-    await h.send('c2', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('c2');
     await h.send('c2', { action: 'resume', seatToken: tokenC });
     expect(h.lastError('c2')).toEqual({ type: 'error', code: 'invalid_seat_token' });
   });
@@ -284,8 +313,7 @@ describe('away players', () => {
   });
 
   it('frees seats still held for away players when the next game starts', async () => {
-    await startRigged();
-    await h.seat('c');
+    await startRigged('CATDOGS', 'SHEEPIE', { third: true });
     await h.disconnect('c');
     h.rigGame((table) => {
       table.game.status = 'ended';
@@ -312,7 +340,7 @@ describe('away players', () => {
 describe('word check', () => {
   it('answers which words are in the list without needing a seat', async () => {
     await h.connect('w');
-    await h.send('w', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('w');
     await h.send('w', { action: 'check_words', words: ['cat', 'QZX'] });
     expect(h.last('w', 'word_check').words).toEqual([
       { text: 'CAT', valid: true },
@@ -322,7 +350,7 @@ describe('word check', () => {
 
   it('refuses lookups that are not plausible plays', async () => {
     await h.connect('w');
-    await h.send('w', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('w');
     for (const words of [[], ['A'], ['C4T'], Array.from({ length: 9 }, () => 'CAT'), 'CAT']) {
       await h.send('w', { action: 'check_words', words });
       expect(h.lastError('w')).toEqual({ type: 'error', code: 'invalid_words' });

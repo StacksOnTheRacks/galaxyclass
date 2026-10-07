@@ -6,10 +6,52 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { BY_TABLE_INDEX, connGsiSk, connPk, META_SK, SEAT_SK_PREFIX, seatSk, tableGsiPk, tablePk } from './keys.js';
+import {
+  BY_TABLE_INDEX,
+  CONN_GSI_SK_PREFIX,
+  connGsiSk,
+  connPk,
+  memberGsiSk,
+  MEMBER_GSI_SK_PREFIX,
+  memberPk,
+  MEMBERSHIP_SK_PREFIX,
+  membershipSk,
+  META_SK,
+  SEAT_SK_PREFIX,
+  seatSk,
+  tableGsiPk,
+  tablePk,
+} from './keys.js';
 import { sortSeats, type ScribbleStore, type TableCommit } from './store.js';
 import { parseTableItem, tableMetaItem as tableItem } from './table-record.js';
-import type { SeatRecord, TableRecord } from './types.js';
+import type { MembershipRecord, SeatRecord, TableRecord } from './types.js';
+
+/** A member can belong to plenty of tables, but a runaway list should not cost an unbounded query. */
+const MAX_MEMBERSHIP_PAGES = 5;
+/** Deleting a table clears member list entries page by page; anything past this is pruned when listed. */
+const MAX_TABLE_MEMBER_PAGES = 10;
+
+function membershipItem(membership: MembershipRecord): Record<string, unknown> {
+  return {
+    PK: memberPk(membership.playerSub),
+    SK: membershipSk(membership.tableId),
+    GSI1PK: tableGsiPk(membership.tableId),
+    GSI1SK: memberGsiSk(membership.playerSub),
+    ...membership,
+  };
+}
+
+function parseMembershipItem(item: Record<string, unknown>): MembershipRecord | null {
+  if (typeof item.playerSub !== 'string' || typeof item.tableId !== 'string') {
+    return null;
+  }
+  return {
+    playerSub: item.playerSub,
+    tableId: item.tableId,
+    role: item.role === 'owner' ? 'owner' : 'member',
+    joinedAt: String(item.joinedAt ?? ''),
+  };
+}
 
 export interface DocumentClientLike {
   send(command: unknown): Promise<unknown>;
@@ -90,8 +132,8 @@ export function createDynamoStore(client: DocumentClientLike, tableName: string)
         new QueryCommand({
           TableName: tableName,
           IndexName: BY_TABLE_INDEX,
-          KeyConditionExpression: 'GSI1PK = :gsiPk',
-          ExpressionAttributeValues: { ':gsiPk': tableGsiPk(tableId) },
+          KeyConditionExpression: 'GSI1PK = :gsiPk AND begins_with(GSI1SK, :prefix)',
+          ExpressionAttributeValues: { ':gsiPk': tableGsiPk(tableId), ':prefix': CONN_GSI_SK_PREFIX },
         }),
       )) as { Items?: Array<Record<string, unknown>> };
       return (result.Items ?? []).map((item) => String(item.connectionId));
@@ -151,6 +193,121 @@ export function createDynamoStore(client: DocumentClientLike, tableName: string)
       ];
       try {
         await client.send(new TransactWriteCommand({ TransactItems: items as never }));
+        return true;
+      } catch (error) {
+        if (isConditionalFailure(error)) {
+          return false;
+        }
+        throw error;
+      }
+    },
+
+    async createTable(table, owner) {
+      await client.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            { Put: { TableName: tableName, Item: tableItem(table), ConditionExpression: 'attribute_not_exists(PK)' } },
+            { Put: { TableName: tableName, Item: membershipItem(owner) } },
+          ],
+        }),
+      );
+    },
+
+    async addMembership(membership) {
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: membershipItem(membership),
+            ConditionExpression: 'attribute_not_exists(PK)',
+          }),
+        );
+      } catch (error) {
+        if (!isConditionalFailure(error)) {
+          throw error;
+        }
+      }
+    },
+
+    async listMemberships(playerSub) {
+      const memberships: MembershipRecord[] = [];
+      let startKey: Record<string, unknown> | undefined;
+      for (let page = 0; page < MAX_MEMBERSHIP_PAGES; page++) {
+        const result = (await client.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+            ExpressionAttributeValues: { ':pk': memberPk(playerSub), ':prefix': MEMBERSHIP_SK_PREFIX },
+            ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+          }),
+        )) as { Items?: Array<Record<string, unknown>>; LastEvaluatedKey?: Record<string, unknown> };
+        for (const item of result.Items ?? []) {
+          const membership = parseMembershipItem(item);
+          if (membership) {
+            memberships.push(membership);
+          }
+        }
+        startKey = result.LastEvaluatedKey;
+        if (!startKey) {
+          break;
+        }
+      }
+      return memberships;
+    },
+
+    async deleteMembership(playerSub, tableId) {
+      await client.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: memberPk(playerSub), SK: membershipSk(tableId) } }),
+      );
+    },
+
+    async listTableMembers(tableId) {
+      const members: string[] = [];
+      let startKey: Record<string, unknown> | undefined;
+      for (let page = 0; page < MAX_TABLE_MEMBER_PAGES; page++) {
+        const result = (await client.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: BY_TABLE_INDEX,
+            KeyConditionExpression: 'GSI1PK = :gsiPk AND begins_with(GSI1SK, :prefix)',
+            ExpressionAttributeValues: { ':gsiPk': tableGsiPk(tableId), ':prefix': MEMBER_GSI_SK_PREFIX },
+            ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+          }),
+        )) as { Items?: Array<Record<string, unknown>>; LastEvaluatedKey?: Record<string, unknown> };
+        for (const item of result.Items ?? []) {
+          if (typeof item.playerSub === 'string') {
+            members.push(item.playerSub);
+          }
+        }
+        startKey = result.LastEvaluatedKey;
+        if (!startKey) {
+          break;
+        }
+      }
+      return members;
+    },
+
+    async deleteTable(tableId, expectedVersion) {
+      const seats = await this.listSeats(tableId);
+      try {
+        await client.send(
+          new TransactWriteCommand({
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: tableName,
+                  Key: { PK: tablePk(tableId), SK: META_SK },
+                  ConditionExpression: '#version = :expected',
+                  ExpressionAttributeNames: { '#version': 'version' },
+                  ExpressionAttributeValues: { ':expected': expectedVersion },
+                },
+              },
+              ...seats.map((seat) => ({
+                Delete: { TableName: tableName, Key: { PK: tablePk(tableId), SK: seatSk(seat.seatId) } },
+              })),
+            ] as never,
+          }),
+        );
         return true;
       } catch (error) {
         if (isConditionalFailure(error)) {

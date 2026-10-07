@@ -1,6 +1,8 @@
+import '@galaxyclass/accounts/game-header.css';
 import './styles.css';
+import './lobby.css';
 import { loadConfig } from './config.js';
-import { renderLobby, renderMessage } from './lobby.js';
+import { renderLobby, renderNotice } from './lobby.js';
 import { parseRoute, publicBase } from './route.js';
 
 async function fontsReady(): Promise<void> {
@@ -17,16 +19,20 @@ async function main(): Promise<void> {
   const host = document.getElementById('app')!;
   const route = parseRoute(window.location.pathname);
   if (route.kind === 'not_found') {
-    renderMessage(host, 'Table not found', 'That address is not a Scribble table.', 'See open tables', publicBase());
+    renderNotice(host, {
+      title: 'Table not found',
+      body: 'That address is not a Scribble table.',
+      actions: [{ label: 'Back to your tables', href: publicBase(), primary: true }],
+    });
     return;
   }
   const config = await loadConfig(fetch);
   if (!config) {
-    renderMessage(host, 'Scribble is unavailable', 'The tables could not be reached. Try again in a moment.');
+    renderNotice(host, { title: 'Scribble is unavailable', body: 'The tables could not be reached. Try again in a moment.' });
     return;
   }
   if (route.kind === 'lobby') {
-    renderLobby(host, config);
+    await renderLobby(host, config);
     return;
   }
   await fontsReady();

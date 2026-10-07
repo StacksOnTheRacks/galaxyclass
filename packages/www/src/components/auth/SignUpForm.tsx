@@ -12,11 +12,14 @@ import {
   verificationCodeSent,
 } from "@/lib/auth/messages";
 import { rememberConfirmEmail } from "@/lib/auth/pending-email";
+import { withNext } from "@/lib/auth/safe-next";
+import { useNextParam } from "@/lib/auth/use-next";
 import { ButtonLink, TextLink } from "@/components/primitives";
 import { GamerTagField } from "@/components/profile/GamerTagField";
 import { AuthScreen, FieldHint, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function SignUpForm() {
+  const next = useNextParam();
   const [email, setEmail] = useState("");
   const [gamerTag, setGamerTag] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +40,7 @@ export function SignUpForm() {
           <p role="status">{verificationCodeSent(email.trim())}</p>
         }
       >
-        <ButtonLink href="/confirm" size="lg" arrow className="w-full">
+        <ButtonLink href={withNext("/confirm", next)} size="lg" arrow className="w-full">
           Enter verification code
         </ButtonLink>
       </AuthScreen>
@@ -147,7 +150,7 @@ export function SignUpForm() {
         </SubmitButton>
       </form>
       <p className="border-t border-bezel pt-5 text-ink-muted">
-        Already have an account? <TextLink href="/sign-in">Sign in</TextLink>
+        Already have an account? <TextLink href={withNext("/sign-in", next)}>Sign in</TextLink>
       </p>
     </AuthScreen>
   );

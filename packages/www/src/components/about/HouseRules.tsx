@@ -4,7 +4,7 @@ const rules = [
   {
     glyph: "▶",
     title: "Walk in and play",
-    body: "No account needed to sit at a public table. Every room runs in your browser.",
+    body: "No account needed to sit at a Riffle Poker table. Every room runs in your browser.",
     tone: "text-cyan",
   },
   {

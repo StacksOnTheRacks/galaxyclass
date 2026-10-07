@@ -144,6 +144,35 @@ export async function resolveSitIdentity(
   }
 }
 
+export type MemberIdentity =
+  | { ok: true; player: VerifiedPlayer }
+  | { ok: false; code: 'sign_in_required' | 'invalid_access_token' | 'identity_unavailable' };
+
+/**
+ * For members-only games: a missing token is a refusal, never a guest. A runtime without a
+ * resolver cannot admit anyone.
+ */
+export async function resolveMemberIdentity(
+  accessToken: unknown,
+  resolvePlayer: ResolvePlayer | null | undefined,
+  options: VerifierLogOptions = {},
+): Promise<MemberIdentity> {
+  const tag = options.logTag ?? 'accounts';
+  if (accessToken === undefined || accessToken === null) {
+    console.info(`[${tag}] member identity`, { outcome: 'sign_in_required' });
+    return { ok: false, code: 'sign_in_required' };
+  }
+  if (!resolvePlayer) {
+    console.error(`[${tag}] member identity`, { outcome: 'unavailable', reason: 'resolver_not_configured' });
+    return { ok: false, code: 'identity_unavailable' };
+  }
+  const identity = await resolveSitIdentity(accessToken, resolvePlayer, options);
+  if (!identity.ok) {
+    return identity;
+  }
+  return identity.player ? { ok: true, player: identity.player } : { ok: false, code: 'sign_in_required' };
+}
+
 function describeError(error: unknown): { error: string; detail: string } {
   return error instanceof Error
     ? { error: error.name, detail: error.message }

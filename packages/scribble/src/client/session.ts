@@ -3,15 +3,14 @@ import type { ThemeId } from '../themes/ids.js';
 import type { ErrorMessage, OutboundMessage, TableSnapshot } from '../runtime/types.js';
 import type { GetAccessToken } from './player-token.js';
 
-export type TableList = Extract<OutboundMessage, { type: 'table_list' }>['tables'];
-
 export type SessionEvent =
   | { type: 'status'; status: 'connecting' | 'open' | 'closed' }
   | { type: 'snapshot'; snapshot: TableSnapshot }
   | { type: 'error'; error: ErrorMessage }
   | { type: 'sat'; seatId: string }
   | { type: 'left'; reason?: 'taken_over' }
-  | { type: 'word_check'; words: Array<{ text: string; valid: boolean }> };
+  | { type: 'word_check'; words: Array<{ text: string; valid: boolean }> }
+  | { type: 'deleted' };
 
 type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
   onopen: ((event: Event) => void) | null;
@@ -21,6 +20,19 @@ type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState'> & {
 };
 
 export type SocketFactory = (url: string) => SocketLike;
+
+export const defaultSocketFactory: SocketFactory = (url) => new WebSocket(url) as unknown as SocketLike;
+
+/** Errors after which auto-sit stops until the player asks again. */
+const STOP_SITTING = new Set([
+  'table_full',
+  'seat_occupied',
+  'already_seated',
+  'table_locked',
+  'sign_in_required',
+  'invalid_access_token',
+  'identity_unavailable',
+]);
 
 /** Where this table's seat token survives a reload, a closed tab, or a sleeping laptop. */
 export interface SeatTokenStore {
@@ -36,7 +48,7 @@ const PONG_TIMEOUT_MS = 8000;
 /** Retries never stop; the last delay repeats. */
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15000];
 
-function parseMessage(data: unknown): OutboundMessage | null {
+export function parseMessage(data: unknown): OutboundMessage | null {
   if (typeof data !== 'string') {
     return null;
   }
@@ -59,6 +71,7 @@ export class TableSession {
   private socket: SocketLike | null = null;
   private seatToken: string | null = null;
   private wantsSeat: boolean;
+  private lockedOut = false;
   private sitPending = false;
   private resumePending = false;
   private closedByUser = false;
@@ -121,6 +134,7 @@ export class TableSession {
 
   leave(): void {
     this.wantsSeat = false;
+    this.lockedOut = false;
     this.sendSeated({ action: 'leave' });
   }
 
@@ -158,7 +172,7 @@ export class TableSession {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    const factory = this.options.socketFactory ?? ((url: string) => new WebSocket(url) as unknown as SocketLike);
+    const factory = this.options.socketFactory ?? defaultSocketFactory;
     const socket = factory(this.options.url);
     this.socket = socket;
     this.seatToken = null;
@@ -172,7 +186,7 @@ export class TableSession {
       }
       this.attempts = 0;
       this.options.onEvent({ type: 'status', status: 'open' });
-      this.send({ action: 'join_table', tableId: this.options.tableId });
+      void this.join(socket);
       this.startPing();
     };
     socket.onmessage = (event) => {
@@ -184,6 +198,20 @@ export class TableSession {
     };
     socket.onerror = () => {};
     socket.onclose = () => this.lost(socket);
+  }
+
+  /** Tables are members-only: the server will not even show one without a verified sign-in. */
+  private async join(socket: SocketLike): Promise<void> {
+    const accessToken = await this.options.getAccessToken();
+    if (this.socket !== socket) {
+      return;
+    }
+    if (!accessToken) {
+      this.wantsSeat = false;
+      this.options.onEvent({ type: 'error', error: { type: 'error', code: 'sign_in_required' } });
+      return;
+    }
+    this.send({ action: 'join_table', tableId: this.options.tableId, accessToken });
   }
 
   /** The socket is gone, whether it said so or stopped answering. Reconnect with backoff. */
@@ -220,6 +248,10 @@ export class TableSession {
     switch (message.type) {
       case 'table_snapshot':
         this.latest = message;
+        if (this.lockedOut && message.status !== 'playing') {
+          this.lockedOut = false;
+          this.wantsSeat = true;
+        }
         this.options.onEvent({ type: 'snapshot', snapshot: message });
         if (!this.seatToken && !message.you) {
           this.claimSeat();
@@ -245,6 +277,16 @@ export class TableSession {
       case 'word_check':
         this.options.onEvent({ type: 'word_check', words: message.words });
         break;
+      case 'table_deleted':
+        if (message.tableId !== this.options.tableId) {
+          break;
+        }
+        this.seatToken = null;
+        this.wantsSeat = false;
+        this.options.seatStore?.clear();
+        this.close();
+        this.options.onEvent({ type: 'deleted' });
+        break;
       case 'error':
         if (this.resumePending && (message.code === 'invalid_seat_token' || message.code === 'already_seated')) {
           // The held seat is gone (removed, or freed when a new game started). Sit fresh instead.
@@ -256,11 +298,13 @@ export class TableSession {
         if (message.code === 'invalid_seat_token' || message.code === 'not_seated') {
           this.seatToken = null;
         }
-        if (['table_full', 'seat_occupied', 'already_seated', 'invalid_access_token', 'identity_unavailable'].includes(message.code)) {
+        if (STOP_SITTING.has(message.code)) {
           this.sitPending = false;
           if (message.code !== 'already_seated') {
             this.wantsSeat = false;
           }
+          // Arrived mid-game: watch now, and take a seat once that game is over.
+          this.lockedOut = message.code === 'table_locked';
         }
         this.options.onEvent({ type: 'error', error: message });
         break;
@@ -289,12 +333,14 @@ export class TableSession {
     }
     this.sitPending = true;
     const accessToken = await this.options.getAccessToken();
-    // A signed-in player may already hold a seat at a full table; the server hands it back.
-    if (!accessToken && !this.latest.seats.some((seat) => !seat.occupied)) {
+    if (!accessToken) {
       this.sitPending = false;
+      this.wantsSeat = false;
+      this.options.onEvent({ type: 'error', error: { type: 'error', code: 'sign_in_required' } });
       return;
     }
-    this.send(accessToken ? { action: 'sit', accessToken } : { action: 'sit' });
+    // Even at a full or locked table, the account may already hold a seat; the server hands it back.
+    this.send({ action: 'sit', accessToken });
   }
 
   private sendSeated(message: Record<string, unknown>): void {
@@ -350,17 +396,25 @@ export class TableSession {
   }
 }
 
-/** Asks the server which configured tables are open and how full they are. */
-export function fetchTableList(
+/** The lobby's replies; anything else on the socket is ignored until one of these arrives. */
+export type MemberReply = Extract<
+  OutboundMessage,
+  { type: 'my_tables' | 'table_created' | 'table_forgotten' | 'table_deleted' | 'error' }
+>;
+
+const MEMBER_REPLY_TYPES = new Set(['my_tables', 'table_created', 'table_forgotten', 'table_deleted', 'error']);
+
+/** Sends one member action on a short-lived socket and resolves with the reply, or null when it never comes. */
+export function memberRequest(
   url: string,
-  tableIds: string[],
-  socketFactory: SocketFactory = (u) => new WebSocket(u) as unknown as SocketLike,
-  timeoutMs = 6000,
-): Promise<TableList | null> {
+  message: Record<string, unknown>,
+  socketFactory: SocketFactory = defaultSocketFactory,
+  timeoutMs = 8000,
+): Promise<MemberReply | null> {
   return new Promise((resolve) => {
     let settled = false;
     const socket = socketFactory(url);
-    const finish = (value: TableList | null) => {
+    const finish = (value: MemberReply | null) => {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
@@ -369,11 +423,11 @@ export function fetchTableList(
       }
     };
     const timer = setTimeout(() => finish(null), timeoutMs);
-    socket.onopen = () => socket.send(JSON.stringify({ action: 'list_tables', tableIds }));
+    socket.onopen = () => socket.send(JSON.stringify(message));
     socket.onmessage = (event) => {
-      const message = parseMessage(event.data);
-      if (message?.type === 'table_list') {
-        finish(message.tables);
+      const reply = parseMessage(event.data);
+      if (reply && MEMBER_REPLY_TYPES.has(reply.type)) {
+        finish(reply as MemberReply);
       }
     };
     socket.onerror = () => finish(null);

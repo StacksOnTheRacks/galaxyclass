@@ -1,4 +1,5 @@
 import { GALAXY_CLASS_ORIGIN, avatarIdForSeed, avatarUrl } from '@galaxyclass/accounts/avatars';
+import { galaxyClassLibraryUrl as libraryUrl } from '@galaxyclass/accounts/game-header';
 import { publicBase } from './public-base.js';
 
 /**
@@ -18,13 +19,6 @@ export function seatAvatarUrl(avatarId: number | undefined, seed: string): strin
   return galaxyClassAvatarUrl(avatarId ?? avatarIdForSeed(seed));
 }
 
-export function galaxyClassAccountUrl(): string {
-  return `${galaxyClassOrigin()}/account`;
-}
-
-/** Mirrors the studio site's LIBRARY_HREF (packages/www primitives). */
-export const GALAXY_CLASS_LIBRARY_PATH = '/#library';
-
 export function galaxyClassLibraryUrl(): string {
-  return `${galaxyClassOrigin()}${GALAXY_CLASS_LIBRARY_PATH}`;
+  return libraryUrl(galaxyClassOrigin());
 }

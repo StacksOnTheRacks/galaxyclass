@@ -57,6 +57,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   off_turn: "It's not your turn.",
   exchange_unavailable: `Exchanging needs at least ${EXCHANGE_MIN_BAG} tiles in the bag.`,
   table_full: "The table is full. You're watching.",
+  table_locked: "A game is under way, so seats are locked. You're watching; you can sit when it ends.",
+  sign_in_required: 'Sign in to Galaxy Class to take a seat.',
   invalid_access_token: "Your sign-in couldn't be verified. Refresh to try again.",
   identity_unavailable: 'Sign-in checks are unavailable right now. Try again shortly.',
   insufficient_players: 'Two players are needed to start.',

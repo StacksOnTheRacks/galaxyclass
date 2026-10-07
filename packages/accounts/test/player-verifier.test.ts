@@ -3,6 +3,7 @@ import {
   createPlayerResolver,
   createProfileLookup,
   playerResolverFromEnv,
+  resolveMemberIdentity,
   resolveSitIdentity,
 } from '../src/player-verifier.js';
 import { accessClaims, attackerKey, signJwt, testAccessTokenVerifier } from './support/cognito-tokens.js';
@@ -94,6 +95,38 @@ describe('resolveSitIdentity', () => {
   it('returns the verified player', async () => {
     const result = await resolveSitIdentity(signJwt(accessClaims()), resolve);
     expect(result).toEqual({
+      ok: true,
+      player: { sub: 'sub-word-smith', gamerTag: 'WordSmith', avatarId: 4 },
+    });
+  });
+});
+
+describe('resolveMemberIdentity', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const resolve = createPlayerResolver(testAccessTokenVerifier(), profile);
+
+  it('refuses a missing token instead of making a guest', async () => {
+    await expect(resolveMemberIdentity(undefined, resolve)).resolves.toEqual({ ok: false, code: 'sign_in_required' });
+    await expect(resolveMemberIdentity(null, resolve)).resolves.toEqual({ ok: false, code: 'sign_in_required' });
+  });
+
+  it('rejects bad tokens and an unconfigured runtime', async () => {
+    await expect(resolveMemberIdentity('garbage', resolve)).resolves.toEqual({ ok: false, code: 'invalid_access_token' });
+    await expect(resolveMemberIdentity('', resolve)).resolves.toEqual({ ok: false, code: 'invalid_access_token' });
+    await expect(resolveMemberIdentity(signJwt(accessClaims()), null)).resolves.toEqual({
+      ok: false,
+      code: 'identity_unavailable',
+    });
+  });
+
+  it('returns the verified member', async () => {
+    await expect(resolveMemberIdentity(signJwt(accessClaims()), resolve)).resolves.toEqual({
       ok: true,
       player: { sub: 'sub-word-smith', gamerTag: 'WordSmith', avatarId: 4 },
     });

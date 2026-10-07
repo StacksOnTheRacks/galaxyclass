@@ -1,4 +1,4 @@
-import type { ConnectionRecord, SeatRecord, TableRecord } from './types.js';
+import type { ConnectionRecord, MembershipRecord, SeatRecord, TableRecord } from './types.js';
 
 export interface TableCommit {
   /** Written whole, conditioned on the stored version still being `expectedVersion`. */
@@ -21,6 +21,16 @@ export interface ScribbleStore {
   listSeats(tableId: string): Promise<SeatRecord[]>;
   /** Atomically applies a turn. Returns false when another write got there first. */
   commit(change: TableCommit): Promise<boolean>;
+  /** Writes a new table and its owner's membership together. */
+  createTable(table: TableRecord, owner: MembershipRecord): Promise<void>;
+  /** Keeps the first record when the member already belongs to the table. */
+  addMembership(membership: MembershipRecord): Promise<void>;
+  listMemberships(playerSub: string): Promise<MembershipRecord[]>;
+  deleteMembership(playerSub: string, tableId: string): Promise<void>;
+  /** Player subs with the table on their list. */
+  listTableMembers(tableId: string): Promise<string[]>;
+  /** Deletes the table and its seats, conditioned on `expectedVersion`. False when another write got there first. */
+  deleteTable(tableId: string, expectedVersion: number): Promise<boolean>;
 }
 
 export function sortSeats(seats: SeatRecord[]): SeatRecord[] {

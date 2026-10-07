@@ -1,9 +1,6 @@
+import { renderGameHeader } from '@galaxyclass/accounts/game-header';
 import { createBrandLockup, createCardImage } from '../dashboard/assets.js';
-import {
-  galaxyClassAccountUrl,
-  galaxyClassAvatarUrl,
-  galaxyClassLibraryUrl,
-} from '../dashboard/galaxy-class.js';
+import { galaxyClassLibraryUrl, galaxyClassOrigin } from '../dashboard/galaxy-class.js';
 import { publicBase } from '../dashboard/public-base.js';
 import type { TableListing } from './config.js';
 import type { OccupancyById } from './list-occupancy.js';
@@ -199,72 +196,13 @@ function renderTableCard(table: TableListing, occupancy: OccupancyById): HTMLEle
   return card;
 }
 
-function renderAvatar(account: StudioAccount | null): HTMLElement {
-  let avatar: HTMLElement;
-  if (account?.avatarId) {
-    const image = document.createElement('img');
-    image.className = 'table-list-guest-avatar table-list-account-avatar';
-    image.src = galaxyClassAvatarUrl(account.avatarId);
-    image.alt = '';
-    image.decoding = 'async';
-    avatar = image;
-  } else {
-    avatar = document.createElement('span');
-    avatar.className = 'table-list-guest-avatar';
-    avatar.textContent = account ? (account.gamerTag?.charAt(0).toUpperCase() ?? 'P') : 'G';
-  }
-  avatar.setAttribute('aria-hidden', 'true');
-  return avatar;
-}
-
-function renderPlayingAs(account: StudioAccount | null): HTMLElement {
-  const playingAs = document.createElement('div');
-  playingAs.className = 'table-list-playing-as';
-  playingAs.dataset.account = account ? 'signed-in' : 'guest';
-  const label = document.createElement('div');
-  label.className = 'table-list-playing-as-label';
-  const labelTop = document.createElement('p');
-  labelTop.textContent = 'Playing as';
-  const labelName = document.createElement('p');
-  labelName.className = 'table-list-playing-as-name';
-  if (account && !account.gamerTag) {
-    const setTag = document.createElement('a');
-    setTag.className = 'table-list-set-tag-link';
-    setTag.href = galaxyClassAccountUrl();
-    setTag.textContent = 'Set your gamer tag';
-    labelName.append(setTag);
-  } else {
-    labelName.textContent = account?.gamerTag ?? 'Guest';
-  }
-  label.append(labelTop, labelName);
-  playingAs.append(renderAvatar(account), label);
-  return playingAs;
-}
-
-function renderLibraryLink(): HTMLElement {
-  const nav = document.createElement('nav');
-  nav.className = 'table-list-breadcrumb';
-  nav.setAttribute('aria-label', 'Breadcrumb');
-  const link = document.createElement('a');
-  link.className = 'table-list-library-link';
-  link.href = galaxyClassLibraryUrl();
-  const arrow = textElement('span', 'table-list-library-arrow', '←');
-  arrow.setAttribute('aria-hidden', 'true');
-  link.append(arrow, 'Galaxy Class Library');
-  nav.append(link);
-  return nav;
-}
-
 function renderTopBar(account: StudioAccount | null): HTMLElement {
-  const topBar = document.createElement('header');
-  topBar.className = 'table-list-top-bar';
-
-  const controls = document.createElement('div');
-  controls.className = 'table-list-controls';
-  controls.append(renderPlayingAs(account));
-
-  topBar.append(renderLibraryLink(), controls);
-  return topBar;
+  return renderGameHeader({
+    account,
+    guests: true,
+    origin: galaxyClassOrigin(),
+    returnTo: publicBase() || '/riffle',
+  });
 }
 
 /** Two real cards fanned over a short chip stack; purely decorative. */

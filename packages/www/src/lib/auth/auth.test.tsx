@@ -35,6 +35,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, replace: nav.replace }),
 }));
 
+const hard = vi.hoisted(() => ({ navigate: vi.fn() }));
+
+vi.mock("@/lib/auth/navigate", () => ({ hardNavigate: hard.navigate }));
+
 vi.mock("aws-amplify", () => ({
   Amplify: { configure: vi.fn() },
 }));
@@ -383,6 +387,31 @@ describe("confirm", () => {
     expect(nav.push).toHaveBeenCalledWith("/sign-in");
   });
 
+  it("carries a game's next path from sign-up through confirm to sign-in", async () => {
+    setEnv();
+    window.history.pushState({}, "", "/sign-up?next=/scribble");
+    render(<SignUpForm />);
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/sign-in?next=%2Fscribble",
+    );
+    cleanup();
+
+    window.history.pushState({}, "", "/confirm?next=/scribble");
+    sessionStorage.setItem("galaxyclass.confirm.email", EMAIL);
+    vi.mocked(confirmSignUp).mockResolvedValue({
+      isSignUpComplete: true,
+      nextStep: { signUpStep: "DONE" },
+    });
+    render(<ConfirmForm />);
+    fill("Verification code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => {
+      expect(nav.push).toHaveBeenCalledWith("/sign-in?next=%2Fscribble");
+    });
+    window.history.pushState({}, "", "/");
+  });
+
   it("asks for email when sign-up did not store one", async () => {
     render(<ConfirmForm />);
     expect(await screen.findByLabelText("Email")).toBeInTheDocument();
@@ -436,11 +465,39 @@ describe("sign-in", () => {
       "href",
       "/forgot-password",
     );
-    expect(main.getByRole("link", { name: "Sign up" })).toHaveAttribute("href", "/sign-up");
     fill("Email", EMAIL);
     fill("Password", PASSWORD);
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
   }
+
+  it("links to sign-up, carrying the next path when there is one", () => {
+    window.history.pushState({}, "", "/sign-in");
+    render(<SignInForm />);
+    const signUp = () => within(screen.getByRole("main")).getByRole("link", { name: "Sign up" });
+    expect(signUp()).toHaveAttribute("href", "/sign-up");
+    cleanup();
+    window.history.pushState({}, "", "/sign-in?next=/scribble/abc");
+    render(<SignInForm />);
+    expect(signUp()).toHaveAttribute(
+      "href",
+      "/sign-up?next=%2Fscribble%2Fabc",
+    );
+  });
+
+  it("loads a game page in full after signing in, since games live outside the Next app", async () => {
+    setEnv();
+    vi.mocked(signIn).mockResolvedValue({
+      isSignedIn: true,
+      nextStep: { signInStep: "DONE" },
+    });
+    hard.navigate.mockClear();
+    window.history.pushState({}, "", "/sign-in?next=/scribble/abc");
+    await submitSignIn();
+    await waitFor(() => {
+      expect(hard.navigate).toHaveBeenCalledWith("/scribble/abc");
+    });
+    expect(nav.push).not.toHaveBeenCalled();
+  });
 
   it("follows a safe next path and otherwise goes to /account", async () => {
     setEnv();
@@ -449,10 +506,11 @@ describe("sign-in", () => {
       nextStep: { signInStep: "DONE" },
     });
 
-    window.history.pushState({}, "", "/sign-in?next=/riffle");
+    nav.push.mockClear();
+    window.history.pushState({}, "", "/sign-in?next=/about");
     await submitSignIn();
     await waitFor(() => {
-      expect(nav.push).toHaveBeenCalledWith("/riffle");
+      expect(nav.push).toHaveBeenCalledWith("/about");
     });
 
     nav.push.mockClear();

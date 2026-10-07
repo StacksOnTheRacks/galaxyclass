@@ -40,7 +40,7 @@ const result = await build({
   minify: process.env.SCRIBBLE_MINIFY !== '0',
   sourcemap: false,
   loader: { '.css': 'css' },
-  external: ['/scribble/*', '/avatars/*'],
+  external: ['/scribble/*', '/avatars/*', '/fonts/*'],
   define: { SCRIBBLE_PUBLIC_BASE: '"/scribble"' },
   metafile: true,
   logLevel: 'warning',
