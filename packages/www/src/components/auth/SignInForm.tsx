@@ -10,7 +10,8 @@ import {
   isValidPassword,
 } from "@/lib/auth/messages";
 import { hardNavigate } from "@/lib/auth/navigate";
-import { isGamePath, readNextFromLocation, withNext } from "@/lib/auth/safe-next";
+import { rememberConfirmEmail } from "@/lib/auth/pending-email";
+import { isGamePath, readNextFromLocation, readNextParam, withNext } from "@/lib/auth/safe-next";
 import { useNextParam } from "@/lib/auth/use-next";
 import { useSession } from "@/lib/auth/session";
 import { TextLink } from "@/components/primitives";
@@ -57,7 +58,8 @@ export function SignInForm() {
         return;
       }
       if (result.nextStep.signInStep === "CONFIRM_SIGN_UP") {
-        setFormError(COPY.unconfirmed);
+        rememberConfirmEmail(nextEmail);
+        router.push(withNext("/confirm", readNextParam()));
         return;
       }
       setFormError(COPY.signInGeneric);
@@ -67,7 +69,8 @@ export function SignInForm() {
         return;
       }
       if (cognitoName(error) === "UserNotConfirmedException") {
-        setFormError(COPY.unconfirmed);
+        rememberConfirmEmail(nextEmail);
+        router.push(withNext("/confirm", readNextParam()));
         return;
       }
       if (

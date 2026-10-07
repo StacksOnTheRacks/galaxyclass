@@ -9,7 +9,6 @@ export const COPY = {
   invalidEmail: "Enter a valid email address.",
   fixFields: "Fix the highlighted fields.",
   signInFailed: "Incorrect email or password.",
-  unconfirmed: "Confirm your email before signing in.",
   forgotSent: "If an account exists, a reset code was sent.",
   confirmError: "Invalid or expired code.",
   codeRequired: "Enter the verification code.",

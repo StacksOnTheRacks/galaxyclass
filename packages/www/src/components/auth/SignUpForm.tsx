@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { GAMER_TAG_MESSAGES, validateGamerTag } from "@galaxyclass/accounts/gamer-tag";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import {
@@ -12,13 +13,14 @@ import {
   verificationCodeSent,
 } from "@/lib/auth/messages";
 import { rememberConfirmEmail } from "@/lib/auth/pending-email";
-import { withNext } from "@/lib/auth/safe-next";
+import { readNextParam, withNext } from "@/lib/auth/safe-next";
 import { useNextParam } from "@/lib/auth/use-next";
 import { ButtonLink, TextLink } from "@/components/primitives";
 import { GamerTagField } from "@/components/profile/GamerTagField";
 import { AuthScreen, FieldHint, FormAlert, SubmitButton, TextField } from "./ui";
 
 export function SignUpForm() {
+  const router = useRouter();
   const next = useNextParam();
   const [email, setEmail] = useState("");
   const [gamerTag, setGamerTag] = useState("");
@@ -29,6 +31,12 @@ export function SignUpForm() {
   const [formError, setFormError] = useState("");
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  function continueToConfirm(address: string) {
+    rememberConfirmEmail(address);
+    setSent(true);
+    router.push(withNext("/confirm", readNextParam()));
+  }
 
   if (sent) {
     return (
@@ -66,7 +74,7 @@ export function SignUpForm() {
 
     setPending(true);
     try {
-      await withAuth((auth) =>
+      const outcome = await withAuth((auth) =>
         auth.signUp({
           username: nextEmail,
           password,
@@ -76,8 +84,11 @@ export function SignUpForm() {
           },
         }),
       );
-      rememberConfirmEmail(nextEmail);
-      setSent(true);
+      if (outcome.nextStep.signUpStep === "DONE") {
+        router.push(withNext("/sign-in", readNextParam()));
+        return;
+      }
+      continueToConfirm(nextEmail);
     } catch (error) {
       if (error instanceof AuthConfigError) {
         setFormError(COPY.configError);
@@ -90,8 +101,7 @@ export function SignUpForm() {
         return;
       }
       if (isDuplicateSignUp(error)) {
-        rememberConfirmEmail(nextEmail);
-        setSent(true);
+        continueToConfirm(nextEmail);
         return;
       }
       setFormError(COPY.signUpFailed);
