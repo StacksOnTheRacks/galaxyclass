@@ -175,7 +175,7 @@ function AuthAside({ kind }: { kind: AuthScreenKind }) {
 
         <div className="flex flex-col gap-3 border-bezel/70 max-lg:px-1 lg:border-t lg:pt-5">
           <p className="text-small text-ink-muted">
-            Just here to play? No account needed.
+            Just here for poker? Riffle Poker needs no account.
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ButtonLink href={ROOMS_HREF} variant="secondary" arrow className="max-sm:w-full">

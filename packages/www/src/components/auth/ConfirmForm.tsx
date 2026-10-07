@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AuthConfigError, withAuth } from "@/lib/auth/api";
 import { COPY, isValidEmail } from "@/lib/auth/messages";
 import { readConfirmEmail } from "@/lib/auth/pending-email";
+import { readNextParam, withNext } from "@/lib/auth/safe-next";
 import {
   AuthScreen,
   FormAlert,
@@ -52,7 +53,7 @@ export function ConfirmForm() {
           confirmationCode: code.trim(),
         }),
       );
-      router.push("/sign-in");
+      router.push(withNext("/sign-in", readNextParam()));
     } catch (error) {
       if (error instanceof AuthConfigError) {
         setFormError(COPY.configError);
