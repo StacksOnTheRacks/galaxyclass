@@ -11,7 +11,9 @@
     "./avatars": "./src/avatars.ts",
     "./account-hint": "./src/account-hint.ts",
     "./profile-api-contract": "./src/profile-api-contract.ts",
-    "./player-verifier": "./src/player-verifier.ts"
+    "./player-verifier": "./src/player-verifier.ts",
+    "./game-header": "./src/game-header.ts",
+    "./game-header.css": "./src/game-header.css"
   },
   "scripts": {
     "test": "vitest run",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
+    "happy-dom": "^17.6.3",
     "typescript": "^5.8.3",
     "vitest": "^5.0.2"
   }

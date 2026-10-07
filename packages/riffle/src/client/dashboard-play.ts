@@ -1,3 +1,4 @@
+import '@galaxyclass/accounts/game-header.css';
 import './dashboard/styles.css';
 import './dashboard-play/styles.css';
 import './dashboard-play/table-list.css';

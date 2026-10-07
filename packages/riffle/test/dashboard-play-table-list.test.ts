@@ -136,10 +136,13 @@ describe('dashboard play table list', () => {
     expect(new Set(labels)).toEqual(new Set(['Join']));
   });
 
-  it('shows Guest when no studio account is signed in', async () => {
+  it('shows Guest, with a sign-in that returns to Riffle, when no studio account is signed in', async () => {
     const { root } = await startList('/riffle');
-    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('guest');
-    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
+    expect(root.querySelector('.gc-game-header')?.getAttribute('data-account')).toBe('guest');
+    expect(root.querySelector('.gc-game-header-player-name')?.textContent).toBe('Guest');
+    const signIn = root.querySelector<HTMLAnchorElement>('.gc-game-header-button');
+    expect(signIn?.textContent).toBe('Sign in');
+    expect(signIn?.getAttribute('href')).toBe('https://galaxyclass.app/sign-in?next=%2Friffle');
     expect(root.querySelector('.table-list-subtitle')?.textContent).toContain('play as a guest');
   });
 
@@ -149,9 +152,10 @@ describe('dashboard play table list', () => {
       listConfigFetch(),
       signedInStorage({ signedIn: true, gamerTag: 'Maya_P', avatarId: 42 }),
     );
-    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
-    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Maya_P');
-    const avatar = root.querySelector('.table-list-account-avatar');
+    expect(root.querySelector('.gc-game-header')?.getAttribute('data-account')).toBe('signed-in');
+    expect(root.querySelector('.gc-game-header-player-name')?.textContent).toBe('Maya_P');
+    expect(root.querySelector('.gc-game-header-button')).toBeNull();
+    const avatar = root.querySelector('img.gc-game-header-avatar');
     expect(avatar?.tagName).toBe('IMG');
     expect(avatar?.getAttribute('src')).toBe('https://galaxyclass.app/avatars/42.webp');
     expect(avatar?.getAttribute('alt')).toBe('');
@@ -164,16 +168,15 @@ describe('dashboard play table list', () => {
       listConfigFetch(),
       signedInStorage({ signedIn: true, gamerTag: null, avatarId: null }),
     );
-    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
-    const link = root.querySelector<HTMLAnchorElement>('.table-list-playing-as-name a');
-    expect(link?.textContent).toBe('Set your gamer tag');
+    expect(root.querySelector('.gc-game-header')?.getAttribute('data-account')).toBe('signed-in');
+    const link = root.querySelector<HTMLAnchorElement>('a.gc-game-header-player');
+    expect(link?.textContent).toContain('Set your gamer tag');
     expect(link?.getAttribute('href')).toBe('https://galaxyclass.app/account');
-    expect(root.querySelector('.table-list-guest-avatar')?.textContent).toBe('P');
   });
 
   it('never shows the email from a legacy account hint', async () => {
     const { root } = await startList('/riffle', listConfigFetch(), signedInStorage({ email: 'maya@example.com' }));
-    expect(root.querySelector('.table-list-playing-as')?.getAttribute('data-account')).toBe('signed-in');
+    expect(root.querySelector('.gc-game-header')?.getAttribute('data-account')).toBe('signed-in');
     expect(root.textContent).not.toContain('maya@example.com');
   });
 
@@ -183,7 +186,7 @@ describe('dashboard play table list', () => {
       listConfigFetch(),
       accountStorage({ [ACCOUNT_HINT_KEY]: '{"email":' }),
     );
-    expect(root.querySelector('.table-list-playing-as-name')?.textContent).toBe('Guest');
+    expect(root.querySelector('.gc-game-header-player-name')?.textContent).toBe('Guest');
   });
 
   it('does not render inert filters, search, or join-with-a-link controls', async () => {
@@ -232,9 +235,9 @@ describe('dashboard play table list', () => {
 
   it('links back to the Galaxy Class library and shows the Riffle Poker logo', async () => {
     const { root } = await startList('/riffle');
-    const back = root.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a');
-    expect(back?.textContent).toContain('Galaxy Class Library');
-    expect(back?.getAttribute('href')).toBe('https://galaxyclass.app/#library');
+    const back = root.querySelector<HTMLAnchorElement>('nav[aria-label="Galaxy Class"] a');
+    expect(back?.getAttribute('aria-label')).toBe('Back to the Galaxy Class game library');
+    expect(back?.getAttribute('href')).toBe('https://galaxyclass.app/');
     const logo = root.querySelector<HTMLImageElement>('.table-list-lockup');
     expect(logo?.getAttribute('alt')).toBe('Riffle Poker');
     expect(logo?.getAttribute('src')).toBe('/assets/brand/riffle-lockup-reverse.svg');
@@ -246,7 +249,7 @@ describe('dashboard play table list', () => {
     renderTableList(root, []);
     const empty = root.querySelector('.table-list-empty');
     expect(empty?.querySelector('h2')?.textContent).toBe('No tables are dealing right now');
-    expect(empty?.querySelector('a')?.getAttribute('href')).toBe('https://galaxyclass.app/#library');
+    expect(empty?.querySelector('a')?.getAttribute('href')).toBe('https://galaxyclass.app/');
     expect(root.querySelector('.table-list-panel-desktop')).toBeNull();
   });
 

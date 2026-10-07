@@ -14,7 +14,7 @@ const bundles = [
   {
     entry: 'src/client/dashboard-play.ts',
     outfile: 'public/dashboard/dashboard-play.js',
-    external: ['/assets/*'],
+    external: ['/assets/*', '/fonts/*'],
     define: { RIFFLE_PUBLIC_BASE: '""' },
     split: true,
   },
