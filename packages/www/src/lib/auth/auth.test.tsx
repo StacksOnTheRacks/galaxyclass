@@ -223,6 +223,8 @@ describe("sign-up", () => {
       "href",
       "/confirm",
     );
+    expect(sessionStorage.getItem("galaxyclass.confirm.email")).toBe(EMAIL);
+    expect(nav.push).toHaveBeenCalledWith("/confirm");
     expect(signUp).toHaveBeenCalledWith({
       username: EMAIL,
       password: PASSWORD,
@@ -344,6 +346,8 @@ describe("sign-up", () => {
     expect(
       await screen.findByText(`We sent a verification code to ${EMAIL}.`),
     ).toBeInTheDocument();
+    expect(sessionStorage.getItem("galaxyclass.confirm.email")).toBe(EMAIL);
+    expect(nav.push).toHaveBeenCalledWith("/confirm");
     expect(screen.queryByText(/already registered/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
   });
@@ -395,6 +399,13 @@ describe("confirm", () => {
       "href",
       "/sign-in?next=%2Fscribble",
     );
+    fill("Email", EMAIL);
+    fill("Gamer tag", GAMER_TAG);
+    fill("Password", PASSWORD);
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => {
+      expect(nav.push).toHaveBeenCalledWith("/confirm?next=%2Fscribble");
+    });
     cleanup();
 
     window.history.pushState({}, "", "/confirm?next=/scribble");
@@ -567,21 +578,27 @@ describe("sign-in", () => {
     expect(screen.queryByText(/does not exist|username/i)).not.toBeInTheDocument();
   });
 
-  it("tells an unconfirmed user to confirm before signing in", async () => {
+  it("sends an unconfirmed user to the verification code page", async () => {
     setEnv();
     vi.mocked(signIn).mockRejectedValueOnce(
       Object.assign(new Error("User is not confirmed."), { name: "UserNotConfirmedException" }),
     );
     await submitSignIn();
-    expect(await screen.findByRole("alert")).toHaveTextContent(COPY.unconfirmed);
+    await waitFor(() => {
+      expect(nav.push).toHaveBeenCalledWith("/confirm");
+    });
+    expect(sessionStorage.getItem("galaxyclass.confirm.email")).toBe(EMAIL);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
+    nav.push.mockClear();
     vi.mocked(signIn).mockResolvedValueOnce({
       isSignedIn: false,
       nextStep: { signInStep: "CONFIRM_SIGN_UP" },
     });
     await submitSignIn();
-    const alerts = await screen.findAllByRole("alert");
-    expect(alerts.some((alert) => alert.textContent === COPY.unconfirmed)).toBe(true);
+    await waitFor(() => {
+      expect(nav.push).toHaveBeenCalledWith("/confirm");
+    });
   });
 });
 
