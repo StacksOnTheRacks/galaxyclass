@@ -1,8 +1,13 @@
-import type { EndReason, GameStatus, LastTurn } from '../rules/game.js';
+import type { EndReason, GameStatus, LastTurn, TurnRecord } from '../rules/game.js';
 import type { BoardTile, PlacementError, Tile } from '../rules/types.js';
 import type { ThemeId } from '../themes/ids.js';
 
 export type TableVisibility = 'public' | 'private';
+
+export interface RosterEntry {
+  displayName: string;
+  avatarId: number;
+}
 
 /** Shared game state kept on the table record. Racks and scores live on seats. */
 export interface StoredGame {
@@ -18,6 +23,23 @@ export interface StoredGame {
   endReason: EndReason | null;
   finalAdjustments: Record<string, number> | null;
   wentOutSeatId: string | null;
+  /** Absent on records written before turn history was kept. */
+  history?: TurnRecord[];
+  finalScores?: Record<string, number> | null;
+  /** Who played from each seat this game, so the report can still name a player who has left. */
+  roster?: Record<string, RosterEntry>;
+  /** ISO times the game started and ended. */
+  startedAt?: string;
+  endedAt?: string;
+}
+
+/** The end-of-game report data. Every field is public: it only repeats what the table already saw. */
+export interface GameRecap {
+  history: TurnRecord[];
+  finalScores: Record<string, number> | null;
+  roster: Record<string, RosterEntry>;
+  startedAt: string | null;
+  endedAt: string | null;
 }
 
 export interface TableRecord {
@@ -99,6 +121,8 @@ export interface TableSnapshot {
   endReason: EndReason | null;
   finalAdjustments: Record<string, number> | null;
   wentOutSeatId: string | null;
+  /** Present only once the game has ended. */
+  recap?: GameRecap;
   /** Present only in the snapshot sent to that seat's own connection. */
   you: { seatId: string; rack: Tile[] } | null;
 }
@@ -118,7 +142,33 @@ export type OutboundMessage =
   | { type: 'left'; seatId: string; reason?: 'taken_over' }
   | { type: 'word_check'; words: Array<{ text: string; valid: boolean }> }
   | { type: 'pong' }
-  | { type: 'table_list'; tables: Array<{ tableId: string; seatedCount: number; maxSeats: number; status: GameStatus }> };
+  | { type: 'my_tables'; you: { gamerTag: string | null; avatarId: number | null }; tables: TableSummary[] }
+  | { type: 'table_created'; table: TableSummary }
+  | { type: 'table_forgotten'; tableId: string }
+  | { type: 'table_deleted'; tableId: string };
+
+export type MembershipRole = 'owner' | 'member';
+
+/** A member's link to a table: created it, or opened its invite link while signed in. */
+export interface MembershipRecord {
+  playerSub: string;
+  tableId: string;
+  role: MembershipRole;
+  joinedAt: string;
+}
+
+/** One card in a member's table list. Carries no subs or seat tokens. */
+export interface TableSummary {
+  tableId: string;
+  tableName: string | null;
+  role: MembershipRole;
+  status: GameStatus;
+  gameNumber: number;
+  maxSeats: number;
+  seats: Array<{ seatId: string; displayName: string; avatarId: number; away: boolean; isYou: boolean }>;
+  createdAt: string;
+  joinedAt: string;
+}
 
 export interface WebSocketEvent {
   requestContext: {

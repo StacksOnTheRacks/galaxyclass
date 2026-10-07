@@ -11,16 +11,9 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('table session', () => {
-  it('rejects public create_table', async () => {
-    await h.connect('c1');
-    await h.send('c1', { action: 'create_table', name: 'mine' });
-    expect(h.lastError('c1')).toEqual({ type: 'error', code: 'unsupported_action' });
-    expect(h.store.tables.size).toBe(1);
-  });
-
   it('answers an unknown table id with table_not_found', async () => {
     await h.connect('c1');
-    await h.send('c1', { action: 'join_table', tableId: '00000000-0000-4000-8000-000000000000' });
+    await h.join('c1', '00000000-0000-4000-8000-000000000000');
     expect(h.lastError('c1')).toEqual({ type: 'error', code: 'table_not_found' });
     expect(h.store.connections.get('c1')?.tableId).toBeUndefined();
   });
@@ -43,31 +36,26 @@ describe('table session', () => {
 
   it('sends a snapshot on join with no open-ended listing', async () => {
     await h.connect('c1');
-    await h.send('c1', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('c1');
     const snapshot = h.snapshot('c1');
     expect(snapshot).toMatchObject({ tableId: TABLE_ID, status: 'waiting', themeId: 'default', maxSeats: 4, you: null });
     expect(snapshot.seats.map((s) => s.occupied)).toEqual([false, false, false, false]);
   });
 
-  it('lists occupancy only for the ids asked for', async () => {
-    await h.seat('a');
+  it('no longer answers the old public table listing', async () => {
     await h.connect('lobby');
-    await h.send('lobby', { action: 'list_tables', tableIds: [TABLE_ID, 'missing'] });
-    expect(h.last('lobby', 'table_list').tables).toEqual([
-      { tableId: TABLE_ID, seatedCount: 1, maxSeats: 4, status: 'waiting' },
-    ]);
-    await h.send('lobby', { action: 'list_tables' });
-    expect(h.last('lobby', 'table_list').tables).toEqual([]);
+    await h.send('lobby', { action: 'list_tables', tableIds: [TABLE_ID] });
+    expect(h.lastError('lobby')).toEqual({ type: 'error', code: 'not_table_member' });
   });
 });
 
 describe('sit', () => {
-  it('seats a guest under a server-chosen name and ignores a client-sent one', async () => {
+  it('names a member without a gamer tag on the server and ignores a client-sent name', async () => {
     await h.seat('a', { displayName: 'WordSmith', avatarId: 3 });
     const seat = h.snapshot('a').seats[0]!;
     expect(seat.displayName).not.toBe('WordSmith');
     expect(seat.displayName).toContain(' ');
-    expect(seat.signedIn).toBe(false);
+    expect(seat.signedIn).toBe(true);
     expect(h.snapshot('a').you).toEqual({ seatId: '1', rack: [] });
   });
 
@@ -76,9 +64,11 @@ describe('sit', () => {
     expect(h.snapshot('a').seats[0]).toMatchObject({ displayName: 'WordSmith', avatarId: 12, signedIn: true });
   });
 
-  it('never turns a bad access token into a guest', async () => {
+  it('never seats a missing or bad access token', async () => {
     await h.connect('a');
-    await h.send('a', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('a');
+    await h.send('a', { action: 'sit' });
+    expect(h.lastError('a')).toEqual({ type: 'error', code: 'sign_in_required' });
     await h.send('a', { action: 'sit', accessToken: signAccessToken({}, attackerKey) });
     expect(h.lastError('a')).toEqual({ type: 'error', code: 'invalid_access_token' });
     await h.send('a', { action: 'sit', accessToken: '' });
@@ -88,16 +78,17 @@ describe('sit', () => {
 
   it('enforces one seat per connection and open seats only', async () => {
     await h.seat('a', { accessToken: signAccessToken(), seatId: '2' });
-    await h.send('a', { action: 'sit' });
+    await h.send('a', { action: 'sit', accessToken: signAccessToken() });
     expect(h.lastError('a')).toEqual({ type: 'error', code: 'already_seated' });
 
+    const b = h.tokenFor('b');
     await h.connect('b');
-    await h.send('b', { action: 'join_table', tableId: TABLE_ID });
-    await h.send('b', { action: 'sit', seatId: '2' });
+    await h.join('b');
+    await h.send('b', { action: 'sit', seatId: '2', accessToken: b });
     expect(h.lastError('b')).toEqual({ type: 'error', code: 'seat_occupied' });
-    await h.send('b', { action: 'sit', seatId: '5' });
+    await h.send('b', { action: 'sit', seatId: '5', accessToken: b });
     expect(h.lastError('b')).toEqual({ type: 'error', code: 'invalid_seat' });
-    await h.send('b', { action: 'sit' });
+    await h.send('b', { action: 'sit', accessToken: b });
     expect(h.last('b', 'sat').seatId).toBe('1');
   });
 
@@ -120,8 +111,8 @@ describe('sit', () => {
       await h.seat(id);
     }
     await h.connect('e');
-    await h.send('e', { action: 'join_table', tableId: TABLE_ID });
-    await h.send('e', { action: 'sit' });
+    await h.join('e');
+    await h.send('e', { action: 'sit', accessToken: h.tokenFor('e') });
     expect(h.lastError('e')).toEqual({ type: 'error', code: 'table_full' });
   });
 
@@ -157,7 +148,7 @@ describe('seat token', () => {
     await h.connect('thief');
     await h.send('thief', { action: 'leave', seatToken: token });
     expect(h.lastError('thief')).toEqual({ type: 'error', code: 'not_table_member' });
-    await h.send('thief', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('thief');
     await h.send('thief', { action: 'leave', seatToken: token });
     expect(h.lastError('thief')).toEqual({ type: 'error', code: 'not_seated' });
   });
@@ -179,7 +170,7 @@ describe('themes', () => {
   it('lets a seated player change the whole table’s theme', async () => {
     const token = await h.seat('a');
     await h.connect('watcher');
-    await h.send('watcher', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('watcher');
     await h.send('a', { action: 'set_theme', seatToken: token, themeId: 'halloween' });
     expect(h.snapshot('a').themeId).toBe('halloween');
     expect(h.snapshot('watcher').themeId).toBe('halloween');
@@ -190,14 +181,14 @@ describe('themes', () => {
     await h.send('a', { action: 'set_theme', seatToken: token, themeId: 'neon' });
     expect(h.lastError('a')).toEqual({ type: 'error', code: 'invalid_theme' });
     await h.connect('watcher');
-    await h.send('watcher', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('watcher');
     await h.send('watcher', { action: 'set_theme', themeId: 'christmas' });
     expect(h.lastError('watcher')).toEqual({ type: 'error', code: 'invalid_seat_token' });
   });
 });
 
 describe('private invite-only tables', () => {
-  it('use the same join, sit, and leave with no listing', async () => {
+  it('use the same join, sit, and leave', async () => {
     const privateId = '0b7c1d2e-3f40-4a5b-8c6d-7e8f9a0b1c2d';
     await h.store.putTable(
       newTableRecord({ tableId: privateId, createdAt: '2026-10-04T00:00:00.000Z', visibility: 'private', createdBy: 'sub-word-smith' }),
@@ -206,10 +197,6 @@ describe('private invite-only tables', () => {
     expect(h.snapshot('a').you?.seatId).toBe('1');
     await h.send('a', { action: 'leave', seatToken: token });
     expect(h.store.seats.get(privateId)!.size).toBe(0);
-
-    await h.connect('lobby');
-    await h.send('lobby', { action: 'list_tables', tableIds: [privateId, TABLE_ID] });
-    expect(h.last('lobby', 'table_list').tables.map((t) => t.tableId)).toEqual([TABLE_ID]);
   });
 });
 
@@ -225,8 +212,8 @@ describe('concurrency', () => {
     const racing = new Harness({ failCommits: 10 });
     await racing.seed();
     await racing.connect('a');
-    await racing.send('a', { action: 'join_table', tableId: TABLE_ID });
-    await racing.send('a', { action: 'sit' });
+    await racing.join('a');
+    await racing.send('a', { action: 'sit', accessToken: racing.tokenFor('a') });
     expect(racing.lastError('a')).toEqual({ type: 'error', code: 'version_conflict' });
   });
 });

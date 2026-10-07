@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CfnOutput, CustomResource, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -10,10 +10,8 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3Deployment from 'aws-cdk-lib/aws-s3-deployment';
-import * as customResources from 'aws-cdk-lib/custom-resources';
 import type { Construct } from 'constructs';
 import type { PlayerAuthRefs } from './galaxy-class-auth-stack.js';
-import { SCRIBBLE_SEEDED_TABLES } from './scribble-seeded-tables.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.join(__dirname, '../../..');
@@ -28,7 +26,7 @@ export const SCRIBBLE_DICTIONARY_PATH = `/var/task/${SCRIBBLE_DICTIONARY_FILE}`;
 export const SCRIBBLE_DEPLOY_LAYER_NAME = 'ScribbleRuntimeStackPlayOriginCli';
 
 export interface ScribbleRuntimeStackProps extends StackProps {
-  /** Galaxy Class player pool; without it every player sits as a guest. */
+  /** Galaxy Class player pool; Scribble is members-only, so without it nobody can open a table. */
   playerAuth?: PlayerAuthRefs;
 }
 
@@ -133,38 +131,6 @@ export class ScribbleRuntimeStack extends Stack {
       }),
     );
 
-    const seedHandler = new lambdaNodejs.NodejsFunction(this, 'ScribbleSeedTableHandler', {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      entry: path.join(__dirname, 'scribble-seed-table-handler.ts'),
-      projectRoot: monorepoRoot,
-      handler: 'handler',
-      timeout: Duration.seconds(30),
-      bundling: {
-        target: 'node22',
-        format: lambdaNodejs.OutputFormat.ESM,
-        externalModules: ['@aws-sdk/*'],
-      },
-      depsLockFilePath: path.join(monorepoRoot, 'package-lock.json'),
-    });
-    seedHandler.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
-        resources: [table.tableArn],
-      }),
-    );
-    const seedProvider = new customResources.Provider(this, 'ScribbleSeedTableProvider', {
-      onEventHandler: seedHandler,
-    });
-
-    const seededTables = SCRIBBLE_SEEDED_TABLES.map((spec) => {
-      const seeded = new CustomResource(this, spec.constructId, {
-        serviceToken: seedProvider.serviceToken,
-        resourceType: 'Custom::SeededScribbleTable',
-        properties: { TableName: table.tableName, TableLabel: spec.name },
-      });
-      return { id: seeded.getAttString('TableId'), name: spec.name, blurb: spec.blurb };
-    });
-
     const playOriginBucket = new s3.Bucket(this, 'ScribblePlayOriginBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -180,7 +146,6 @@ export class ScribbleRuntimeStack extends Stack {
         s3Deployment.Source.asset(SCRIBBLE_ARTIFACT_DIR),
         s3Deployment.Source.jsonData('config.json', {
           webSocketUrl: this.webSocketUrl,
-          tables: seededTables,
           ...(playerAuth
             ? { auth: { userPoolId: playerAuth.userPoolId, userPoolClientId: playerAuth.userPoolClientId } }
             : {}),
@@ -195,7 +160,6 @@ export class ScribbleRuntimeStack extends Stack {
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'PlayOriginBucketName', { value: playOriginBucket.bucketName });
     new CfnOutput(this, 'LobbyUrl', { value: 'https://galaxyclass.app/scribble' });
-    new CfnOutput(this, 'SeededTableId', { value: seededTables[0]!.id });
   }
 }
 

@@ -15,7 +15,7 @@ describe('hidden state on the wire', () => {
     const tokenA = await h.seat('a', { accessToken: signAccessToken() });
     const tokenB = await h.seat('b');
     await h.connect('spectator');
-    await h.send('spectator', { action: 'join_table', tableId: TABLE_ID });
+    await h.join('spectator');
     await h.send('a', { action: 'start_game', seatToken: tokenA });
 
     const secrets = { a: new Set<string>(), b: new Set<string>(), bag: new Set<string>() };
@@ -42,8 +42,8 @@ describe('hidden state on the wire', () => {
     const wire = (conn: string) => (h.wire.get(conn) ?? []).join('\n');
     const leaks = (conn: string, ids: Iterable<string>) => [...ids].filter((id) => wire(conn).includes(`"${id}"`));
 
-    expect(leaks('b', finalA)).toEqual([]);
-    expect(leaks('a', finalB)).toEqual([]);
+    expect(leaks('b', [...finalA].filter((id) => !secrets.b.has(id)))).toEqual([]);
+    expect(leaks('a', [...finalB].filter((id) => !secrets.a.has(id)))).toEqual([]);
     expect(leaks('spectator', [...finalA, ...finalB])).toEqual([]);
     for (const conn of ['a', 'b', 'spectator']) {
       expect(leaks(conn, [...finalBag].filter((id) => !secrets.a.has(id) && !secrets.b.has(id)))).toEqual([]);

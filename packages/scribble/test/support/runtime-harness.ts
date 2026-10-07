@@ -7,7 +7,7 @@ import { MemoryScribbleStore } from '../../src/runtime/memory-store.js';
 import { newTableRecord } from '../../src/runtime/table-record.js';
 import type { OutboundMessage, TableRecord, TableSnapshot } from '../../src/runtime/types.js';
 import { tiles } from './game-fixtures.js';
-import { testAccessTokenVerifier } from './cognito-tokens.js';
+import { signAccessToken, testAccessTokenVerifier } from './cognito-tokens.js';
 
 export const TABLE_ID = '6f1d2c4e-8b3a-4d5f-9e7c-1a2b3c4d5e6f';
 
@@ -111,11 +111,21 @@ export class Harness {
     return this.messages(connectionId).at(-1);
   }
 
-  /** Connects, joins, and sits. Returns the seat token. */
+  /** A member access token for `sub-<connectionId>`, so each test connection is its own signed-in member. */
+  tokenFor(connectionId: string): string {
+    return signAccessToken({ sub: `sub-${connectionId}`, username: `sub-${connectionId}` });
+  }
+
+  async join(connectionId: string, tableId = TABLE_ID, accessToken: string = this.tokenFor(connectionId)) {
+    await this.send(connectionId, { action: 'join_table', tableId, accessToken });
+  }
+
+  /** Connects, joins, and sits as a member (`sub-<connectionId>` unless `sit.accessToken` says otherwise). Returns the seat token. */
   async seat(connectionId: string, sit: Record<string, unknown> = {}, tableId = TABLE_ID): Promise<string> {
+    const accessToken = typeof sit.accessToken === 'string' ? sit.accessToken : this.tokenFor(connectionId);
     await this.connect(connectionId);
-    await this.send(connectionId, { action: 'join_table', tableId });
-    await this.send(connectionId, { action: 'sit', ...sit });
+    await this.join(connectionId, tableId, accessToken);
+    await this.send(connectionId, { action: 'sit', ...sit, accessToken });
     return this.last(connectionId, 'sat').seatToken;
   }
 

@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import {
   playerResolverFromEnv,
-  resolveSitIdentity,
+  resolveMemberIdentity,
   type ResolvePlayer,
 } from '@galaxyclass/accounts/player-verifier';
 import { cryptoRandom, type Random } from '../rules/bag.js';
@@ -25,25 +25,27 @@ import {
 import { createDynamoStore } from './dynamo-store.js';
 import { createPostToConnection, fanOutSnapshots, isGoneError } from './fanout.js';
 import { hasClientSuppliedState, parseClientMessage, parsePlacements, parseTileIds, parseWords } from './messages.js';
+import { stampGame } from './recap.js';
 import { buildSeatScopedSnapshot } from './snapshot.js';
 import type { ScribbleStore } from './store.js';
+import { createMemberTable, deleteHostedTable, forgetMemberTable, joinAsMember, listMemberTables } from './tables.js';
 import type { ConnectionRecord, ErrorMessage, OutboundMessage, PostToConnection, SeatRecord, WebSocketEvent } from './types.js';
 
 export interface RuntimeDeps {
   store: ScribbleStore;
   postToConnection: PostToConnection;
   dictionary: Dictionary;
-  /** Verifies Cognito access tokens on sit. Without it every sit is a guest sit. */
+  /** Verifies Cognito access tokens. Scribble is members-only, so without it no one can open a table. */
   resolvePlayer?: ResolvePlayer | null;
   random?: Random;
   /** Epoch milliseconds; tests pin it to cross the away grace period. */
   now?: () => number;
   startOptions?: ActionContext['startOptions'];
+  newTableId?: () => string;
 }
 
 const LOG = { logTag: 'scribble' };
 const MAX_COMMIT_ATTEMPTS = 3;
-const MAX_LIST_TABLE_IDS = 32;
 
 function error(code: string): ErrorMessage {
   return { type: 'error', code };
@@ -92,7 +94,8 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       }
       const seats = await deps.store.listSeats(tableId);
       const connection = connectionId ? await deps.store.getConnection(connectionId) : null;
-      const result = build({ table, seats, connection, random, now: now(), startOptions: deps.startOptions });
+      const at = now();
+      const result = build({ table, seats, connection, random, now: at, startOptions: deps.startOptions });
       if (!result) {
         return;
       }
@@ -102,7 +105,9 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
         }
         return;
       }
-      const committed = await deps.store.commit({ ...result.change, expectedVersion: table.version });
+      const seatsAfter = applyChange(seats, result.change);
+      const change = { ...result.change, table: stampGame(table, result.change.table, seatsAfter, at) };
+      const committed = await deps.store.commit({ ...change, expectedVersion: table.version });
       if (!committed) {
         continue;
       }
@@ -112,11 +117,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       for (const { connectionId: other, message } of result.notify ?? []) {
         await send(other, message);
       }
-      await fanOutSnapshots(
-        { store: deps.store, postToConnection: send },
-        result.change.table,
-        applyChange(seats, result.change),
-      );
+      await fanOutSnapshots({ store: deps.store, postToConnection: send }, change.table, seatsAfter);
       return;
     }
     if (connectionId) {
@@ -165,42 +166,68 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
       return { statusCode: 200 };
     }
 
-    if (message.action === 'create_table') {
-      await send(connectionId, error('unsupported_action'));
-      return { statusCode: 200 };
-    }
-
-    if (message.action === 'list_tables') {
-      const requested = Array.isArray(message.tableIds) ? message.tableIds : [];
-      const ids = [...new Set(requested.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(
-        0,
-        MAX_LIST_TABLE_IDS,
-      );
-      const tables = [];
-      for (const tableId of ids) {
-        const table = await deps.store.getTable(tableId);
-        if (!table || !table.listed) {
-          continue;
-        }
-        const seats = await deps.store.listSeats(tableId);
-        tables.push({ tableId, seatedCount: seats.length, maxSeats: table.maxSeats, status: table.game.status });
-      }
-      await send(connectionId, { type: 'table_list', tables });
-      return { statusCode: 200 };
-    }
-
     if (hasClientSuppliedState(message)) {
       await send(connectionId, error('client_supplied_state'));
       return { statusCode: 200 };
     }
 
+    if (
+      message.action === 'list_my_tables' ||
+      message.action === 'create_table' ||
+      message.action === 'forget_table' ||
+      message.action === 'delete_table'
+    ) {
+      const identity = await resolveMemberIdentity(message.accessToken, deps.resolvePlayer, LOG);
+      if (!identity.ok) {
+        await send(connectionId, error(identity.code));
+        return { statusCode: 200 };
+      }
+      const { player } = identity;
+      if (message.action === 'list_my_tables') {
+        await send(connectionId, {
+          type: 'my_tables',
+          you: { gamerTag: player.gamerTag, avatarId: player.avatarId },
+          tables: await listMemberTables(deps.store, player.sub),
+        });
+      } else if (message.action === 'create_table') {
+        const created = await createMemberTable(deps.store, player, message.tableName, now(), deps.newTableId);
+        await send(connectionId, created.ok ? { type: 'table_created', table: created.value } : error(created.code));
+      } else if (message.action === 'delete_table') {
+        const deleted = await deleteHostedTable(deps.store, player.sub, message.tableId);
+        if (!deleted.ok) {
+          await send(connectionId, error(deleted.code));
+          return { statusCode: 200 };
+        }
+        const notice: OutboundMessage = { type: 'table_deleted', tableId: deleted.value.tableId };
+        for (const watcher of deleted.value.connectionIds) {
+          if (watcher !== connectionId) {
+            await send(watcher, notice);
+          }
+        }
+        await send(connectionId, notice);
+      } else {
+        const forgotten = await forgetMemberTable(deps.store, player.sub, message.tableId);
+        await send(
+          connectionId,
+          forgotten.ok ? { type: 'table_forgotten', tableId: forgotten.value } : error(forgotten.code),
+        );
+      }
+      return { statusCode: 200 };
+    }
+
     if (message.action === 'join_table') {
+      const identity = await resolveMemberIdentity(message.accessToken, deps.resolvePlayer, LOG);
+      if (!identity.ok) {
+        await send(connectionId, error(identity.code));
+        return { statusCode: 200 };
+      }
       const tableId = typeof message.tableId === 'string' ? message.tableId : '';
       const table = tableId ? await deps.store.getTable(tableId) : null;
       if (!table) {
         await send(connectionId, error('table_not_found'));
         return { statusCode: 200 };
       }
+      await joinAsMember(deps.store, identity.player.sub, table, now());
       const connection = await deps.store.getConnection(connectionId);
       if (connection?.tableId === tableId) {
         const seats = await deps.store.listSeats(tableId);
@@ -230,7 +257,7 @@ export function createRuntimeHandler(deps: RuntimeDeps) {
 
     switch (message.action) {
       case 'sit': {
-        const identity = await resolveSitIdentity(message.accessToken, deps.resolvePlayer, LOG);
+        const identity = await resolveMemberIdentity(message.accessToken, deps.resolvePlayer, LOG);
         if (!identity.ok) {
           await send(connectionId, error(identity.code));
           return { statusCode: 200 };
@@ -322,7 +349,7 @@ export async function handler(event: WebSocketEvent): Promise<{ statusCode: numb
       LOG,
     );
     if (!resolvePlayer) {
-      console.warn('[scribble] Cognito is not configured; every player sits as a guest.');
+      console.error('[scribble] Cognito is not configured; members-only tables will refuse everyone.');
     }
     cached = { store: createDynamoStore(client, tableName), resolvePlayer, dictionary: loadDictionary() };
   }

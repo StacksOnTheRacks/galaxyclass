@@ -23,31 +23,23 @@ describe('routes', () => {
 });
 
 describe('config.json', () => {
-  it('keeps valid tables and public auth ids, and drops everything else', () => {
+  it('keeps the socket url and public auth ids, and drops everything else', () => {
     const config = parseConfig({
       webSocketUrl: 'wss://abc.execute-api.us-east-1.amazonaws.com/prod',
-      tables: [
-        { id: 'good-1', name: 'Inkwell', blurb: 'Quiet' },
-        { id: '../etc', name: 'Bad id' },
-        { id: 'no-name', name: '  ' },
-        'junk',
-      ],
       auth: { userPoolId: 'us-east-1_AbC123', userPoolClientId: 'abc123def' },
       secret: 'ignored',
     });
     expect(config).toEqual({
       webSocketUrl: 'wss://abc.execute-api.us-east-1.amazonaws.com/prod',
-      tables: [{ id: 'good-1', name: 'Inkwell', blurb: 'Quiet' }],
       auth: { userPoolId: 'us-east-1_AbC123', userPoolClientId: 'abc123def' },
     });
   });
 
   it('rejects a missing or non-WebSocket url, ignores malformed auth, and only honours dev when true', () => {
-    expect(parseConfig({ webSocketUrl: 'https://x', tables: [] })).toBeNull();
+    expect(parseConfig({ webSocketUrl: 'https://x' })).toBeNull();
     expect(parseConfig(null)).toBeNull();
     expect(parseConfig({ webSocketUrl: 'ws://localhost:5180/ws', auth: { userPoolId: 'nope' }, dev: 'yes' })).toEqual({
       webSocketUrl: 'ws://localhost:5180/ws',
-      tables: [],
     });
   });
 });

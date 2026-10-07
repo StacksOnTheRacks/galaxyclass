@@ -1,9 +1,8 @@
-import { randomAvatarId } from '@galaxyclass/accounts/avatars';
+import { avatarIdForSeed } from '@galaxyclass/accounts/avatars';
 import type { VerifiedPlayer } from '@galaxyclass/accounts/player-verifier';
 import type { Random } from '../rules/bag.js';
 import type { Dictionary } from '../rules/dictionary.js';
 import {
-  addPlayer,
   applyExchange,
   applyPass,
   applyPlay,
@@ -114,20 +113,19 @@ export function resume(ctx: ActionContext, seatToken: unknown): ActionResult {
   return bindSeat(ctx, seat, seatToken as string, seat.seatTokenHash);
 }
 
-export function sit(
-  ctx: ActionContext,
-  requestedSeatId: unknown,
-  player: VerifiedPlayer | null,
-): ActionResult {
+export function sit(ctx: ActionContext, requestedSeatId: unknown, player: VerifiedPlayer): ActionResult {
   const { table, seats, connection } = ctx;
   if (seatOf(ctx)) {
     return fail('already_seated');
   }
-  const held = player ? seats.find((seat) => seat.playerSub === player.sub) : undefined;
+  const held = seats.find((seat) => seat.playerSub === player.sub);
   if (held) {
     // The account proves the seat is theirs, so a new device gets a fresh token and the old one dies.
     const token = mintSeatToken();
     return bindSeat(ctx, held, token, hashSeatToken(token));
+  }
+  if (table.game.status === 'playing') {
+    return fail('table_locked');
   }
 
   let seatId: string;
@@ -152,30 +150,21 @@ export function sit(
 
   const seatToken = mintSeatToken();
   const taken = seats.map((seat) => seat.displayName);
-  let seat: SeatRecord = {
+  const seat: SeatRecord = {
     seatId,
-    displayName: player?.gamerTag ?? randomGuestName(taken, ctx.random),
-    avatarId: player?.avatarId ?? randomAvatarId(() => ctx.random.int(1_000_000) / 1_000_000),
-    ...(player ? { playerSub: player.sub } : {}),
+    displayName: player.gamerTag ?? randomGuestName(taken, ctx.random),
+    avatarId: player.avatarId ?? avatarIdForSeed(player.sub),
+    playerSub: player.sub,
     seatTokenHash: hashSeatToken(seatToken),
     connectionId: connection.connectionId,
     rack: [],
     score: 0,
   };
 
-  let nextTable = table;
-  // With an empty bag a late sitter could only pass, so they wait for the next game instead.
-  if (table.game.status === 'playing' && table.game.bag.length > 0) {
-    const state = addPlayer(toGameState(table, seats), seatId);
-    const joined = state.players[seatId]!;
-    seat = { ...seat, rack: joined.rack, score: joined.score };
-    nextTable = fromGameState(table, seats, state).table;
-  }
-
   return {
     ok: true,
     change: {
-      table: bump(nextTable),
+      table: bump(table),
       putSeats: [seat],
       deleteSeatIds: [],
       connectionSeats: [{ connectionId: connection.connectionId, seatId }],

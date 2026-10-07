@@ -1,3 +1,4 @@
+import { recapOf } from './recap.js';
 import type { ConnectionRecord, PublicSeat, SeatRecord, TableRecord, TableSnapshot } from './types.js';
 
 /**
@@ -71,6 +72,7 @@ export function buildSeatScopedSnapshot(
     endReason: game.endReason,
     finalAdjustments: game.finalAdjustments,
     wentOutSeatId: game.wentOutSeatId,
+    ...(game.status === 'ended' ? { recap: recapOf(game) } : {}),
     you: viewerSeat
       ? { seatId: viewerSeat.seatId, rack: viewerSeat.rack.map(({ id, letter }) => ({ id, letter })) }
       : null,

@@ -14,6 +14,7 @@ const KID = 'scribble-dev';
 export const DEV_PROFILES: Record<string, { gamerTag: string; avatarId: number }> = {
   'dev-word-smith': { gamerTag: 'WordSmith', avatarId: 12 },
   'dev-quill-driver': { gamerTag: 'QuillDriver', avatarId: 40 },
+  'dev-ink-blot': { gamerTag: 'InkBlot', avatarId: 30 },
 };
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

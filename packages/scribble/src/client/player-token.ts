@@ -1,11 +1,11 @@
 import type { AuthConfig, ScribbleConfig } from './config.js';
 
-/** Resolves the signed-in player's Cognito access token, or null for guests. */
+/** Resolves the signed-in member's Cognito access token, or null when signed out. */
 export type GetAccessToken = () => Promise<string | null>;
 
 export const DEV_TOKEN_KEY = 'scribble.devAccessToken';
 
-const guest: GetAccessToken = async () => null;
+const signedOut: GetAccessToken = async () => null;
 
 /**
  * Reads the studio's Amplify session (same origin) and refreshes it when expired. The token is
@@ -23,7 +23,7 @@ function amplifyAccessToken(auth: AuthConfig): GetAccessToken {
       const session = await fetchAuthSession();
       return session.tokens?.accessToken?.toString() ?? null;
     } catch (error) {
-      console.warn('[scribble] could not read the studio session; sitting as a guest', {
+      console.warn('[scribble] could not read the studio session; treating the visitor as signed out', {
         error: error instanceof Error ? error.name : 'unknown',
       });
       return null;
@@ -40,5 +40,5 @@ export function accessTokenSource(config: ScribbleConfig, storage: Pick<Storage,
   if (config.dev) {
     return devAccessToken(storage);
   }
-  return config.auth ? amplifyAccessToken(config.auth) : guest;
+  return config.auth ? amplifyAccessToken(config.auth) : signedOut;
 }

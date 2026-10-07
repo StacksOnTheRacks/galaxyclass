@@ -6,6 +6,7 @@ import { THEMES } from '../themes/index.js';
 import { describeError, type ControllerUi, type TableController } from './controller.js';
 import { placedCount } from './draft.js';
 import type { TableModel } from './model.js';
+import { RecapPanel } from './recap-view.js';
 import { publicBase } from './route.js';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -75,7 +76,7 @@ export class TableOverlay implements ControllerUi {
   private readonly controls: HTMLElement;
   private readonly toastEl: HTMLElement;
   private readonly picker: HTMLElement;
-  private readonly endPanel: HTMLElement;
+  private readonly recap = new RecapPanel();
   private readonly previewEl: HTMLElement;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private pickerResolve: ((letter: string | null) => void) | null = null;
@@ -141,7 +142,6 @@ export class TableOverlay implements ControllerUi {
         button('Cancel', 'blank-cancel'),
       ),
     );
-    this.endPanel = el('section', { class: 'end-panel', 'aria-live': 'polite', hidden: '' });
     this.root = el(
       'div',
       { class: 'table-screen' },
@@ -151,7 +151,7 @@ export class TableOverlay implements ControllerUi {
       this.previewEl,
       this.toastEl,
       this.picker,
-      this.endPanel,
+      this.recap.root,
     );
     host.replaceChildren(this.root);
 
@@ -305,8 +305,10 @@ export class TableOverlay implements ControllerUi {
     const occupied = snapshot.seats.filter((seat) => seat.occupied);
     this.theme.disabled = !seated;
     this.theme.title = seated ? 'Change the theme for everyone at this table' : 'Sit down to change the theme';
-    this.seatButton.textContent = seated ? 'Leave seat' : 'Sit down';
-    this.seatButton.disabled = !seated && occupied.length >= snapshot.maxSeats;
+    const locked = !seated && snapshot.status === 'playing';
+    this.seatButton.textContent = seated ? 'Leave seat' : locked ? 'Seats locked' : 'Sit down';
+    this.seatButton.disabled = !seated && (locked || occupied.length >= snapshot.maxSeats);
+    this.seatButton.title = locked ? 'Seats open again when this game ends' : '';
 
     const now = Date.now();
     const canRemove = seated && snapshot.seats.some((seat) => seat.isLocal && seat.connected);
@@ -444,35 +446,6 @@ export class TableOverlay implements ControllerUi {
   }
 
   private renderEnd(): void {
-    const snapshot = this.model.snapshot!;
-    if (snapshot.status !== 'ended') {
-      this.endPanel.hidden = true;
-      return;
-    }
-    const reasons = {
-      played_out: 'A player used their last tile.',
-      scoreless_turns: 'Six scoreless turns in a row.',
-      abandoned: 'Too few players stayed to finish.',
-    } as const;
-    const rows = snapshot.seats
-      .filter((seat) => seat.occupied || snapshot.finalAdjustments?.[seat.seatId] !== undefined)
-      .sort((a, b) => b.score - a.score)
-      .map((seat) => {
-        const adjustment = snapshot.finalAdjustments?.[seat.seatId] ?? 0;
-        return el(
-          'li',
-          {},
-          el('span', {}, seat.displayName ?? `Seat ${seat.seatId}`),
-          el('span', { class: 'adjust' }, adjustment === 0 ? '' : adjustment > 0 ? `+${adjustment}` : String(adjustment)),
-          el('strong', {}, String(seat.score)),
-        );
-      });
-    this.endPanel.replaceChildren(
-      el('h2', {}, 'Game over'),
-      el('p', {}, snapshot.endReason ? reasons[snapshot.endReason] : ''),
-      el('ol', { class: 'final-scores' }, ...rows),
-      snapshot.you ? button('New game', 'new-game', { class: 'primary' }) : '',
-    );
-    this.endPanel.hidden = false;
+    this.recap.update(this.model.snapshot);
   }
 }

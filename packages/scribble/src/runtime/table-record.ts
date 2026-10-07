@@ -16,6 +16,8 @@ export function emptyStoredGame(): StoredGame {
     endReason: null,
     finalAdjustments: null,
     wentOutSeatId: null,
+    history: [],
+    finalScores: null,
   };
 }
 
@@ -86,6 +88,11 @@ export function parseTableItem(item: Record<string, unknown>): TableRecord {
       endReason: game.endReason ?? null,
       finalAdjustments: game.finalAdjustments ?? null,
       wentOutSeatId: typeof game.wentOutSeatId === 'string' ? game.wentOutSeatId : null,
+      history: Array.isArray(game.history) ? game.history : empty.history,
+      finalScores: game.finalScores ?? null,
+      ...(game.roster && typeof game.roster === 'object' ? { roster: game.roster } : {}),
+      ...(typeof game.startedAt === 'string' ? { startedAt: game.startedAt } : {}),
+      ...(typeof game.endedAt === 'string' ? { endedAt: game.endedAt } : {}),
     },
   };
 }

@@ -11,7 +11,6 @@ import {
   SCRIBBLE_DICTIONARY_PATH,
   ScribbleRuntimeStack,
 } from '../lib/scribble-runtime-stack.js';
-import { SCRIBBLE_SEEDED_TABLES } from '../lib/scribble-seeded-tables.js';
 import {
   CREDENTIAL_PATTERNS,
   listTextArtifacts,
@@ -102,40 +101,23 @@ describe('ScribbleRuntimeStack', () => {
     assert.match(JSON.stringify(synth.template.toJSON()), /execute-api:ManageConnections/);
   });
 
-  it('seeds one public table per lobby entry and has no create-table path', () => {
-    const seeds = resourcesOfType(synth.template, 'Custom::SeededScribbleTable');
-    assert.equal(seeds.length, SCRIBBLE_SEEDED_TABLES.length);
-    assert.deepEqual(
-      seeds.map(([, seed]) => seed.Properties?.TableLabel).sort(),
-      SCRIBBLE_SEEDED_TABLES.map((spec) => spec.name).sort(),
+  it('seeds no tables: members create their own, so there is no public lobby to stock', () => {
+    assert.deepEqual(Object.keys(synth.template.findResources('Custom::SeededScribbleTable')), []);
+    assert.deepEqual(Object.keys(synth.template.findOutputs('SeededTableId')), []);
+    assert.equal(
+      resourcesOfType(synth.template, 'AWS::Lambda::Function').filter(([id]) => id.includes('Seed')).length,
+      0,
     );
-    for (const spec of SCRIBBLE_SEEDED_TABLES) {
-      assert.ok(
-        Object.keys(synth.template.findResources('Custom::SeededScribbleTable')).some((id) =>
-          id.startsWith(spec.constructId),
-        ),
-        `${spec.constructId} keeps a stable logical id`,
-      );
-    }
-    synth.template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
     synth.template.resourceCountIs('AWS::Cognito::UserPool', 0);
   });
 
-  it('deploys the built client under /scribble with a config listing seeded tables', () => {
+  it('deploys the built client under /scribble with a config that lists no tables', () => {
     const props = playOriginDeployment(synth.template);
     assert.equal(props.DestinationBucketKeyPrefix, 'scribble');
     const { raw } = stagedConfigForDeployment(synth.outdir, props);
-    const config = parseStagedConfig(raw) as { webSocketUrl: string; tables: Array<{ id: string; name: string; blurb: string }> };
-    assert.match(config.webSocketUrl, /<<marker:/);
-    assert.deepEqual(
-      config.tables.map((table) => table.name),
-      SCRIBBLE_SEEDED_TABLES.map((spec) => spec.name),
-    );
-    for (const table of config.tables) {
-      assert.match(table.id, /<<marker:/, 'table ids come from the seed custom resources');
-      assert.ok(table.blurb.length > 0);
-    }
-    assert.equal((config as { auth?: unknown }).auth, undefined);
+    const config = parseStagedConfig(raw) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(config), ['webSocketUrl']);
+    assert.match(config.webSocketUrl as string, /<<marker:/);
     assert.doesNotMatch(raw, /blind|stack|poker/i);
   });
 
