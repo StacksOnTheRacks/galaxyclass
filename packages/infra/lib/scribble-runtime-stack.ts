@@ -25,6 +25,11 @@ export const SCRIBBLE_DICTIONARY_PATH = `/var/task/${SCRIBBLE_DICTIONARY_FILE}`;
 /** Matches layer:ScribbleRuntimeStack* in packages/infra/iam/scribble-runtime-cfn-exec.json. */
 export const SCRIBBLE_DEPLOY_LAYER_NAME = 'ScribbleRuntimeStackPlayOriginCli';
 
+const warshipsPackageRoot = path.join(monorepoRoot, 'packages/warships');
+export const WARSHIPS_ARTIFACT_DIR = path.join(warshipsPackageRoot, 'public/warships');
+/** Matches layer:ScribbleRuntimeStack* in packages/infra/iam/scribble-runtime-cfn-exec.json. */
+export const WARSHIPS_DEPLOY_LAYER_NAME = 'ScribbleRuntimeStackWarshipsCli';
+
 export interface ScribbleRuntimeStackProps extends StackProps {
   /** Galaxy Class player pool; Scribble is members-only, so without it nobody can open a table. */
   playerAuth?: PlayerAuthRefs;
@@ -32,6 +37,7 @@ export interface ScribbleRuntimeStackProps extends StackProps {
 
 export class ScribbleRuntimeStack extends Stack {
   readonly webSocketUrl: string;
+  readonly warshipsWebSocketUrl: string;
   readonly playOriginBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props?: ScribbleRuntimeStackProps) {
@@ -39,6 +45,9 @@ export class ScribbleRuntimeStack extends Stack {
     const playerAuth = props?.playerAuth;
     if (!existsSync(path.join(SCRIBBLE_ARTIFACT_DIR, 'index.html'))) {
       throw new Error(`Scribble client is not built at ${SCRIBBLE_ARTIFACT_DIR}; run npm run build:scribble first.`);
+    }
+    if (!existsSync(path.join(WARSHIPS_ARTIFACT_DIR, 'index.html'))) {
+      throw new Error(`Warships client is not built at ${WARSHIPS_ARTIFACT_DIR}; run npm run build:warships first.`);
     }
 
     const table = new dynamodb.Table(this, 'ScribbleTable', {
@@ -156,10 +165,96 @@ export class ScribbleRuntimeStack extends Stack {
     });
     nameBucketDeployLayer(playOriginDeployment, SCRIBBLE_DEPLOY_LAYER_NAME);
 
+    // Warships shares the table (under WS# keys) and the play-origin bucket (under warships/);
+    // it gets its own Lambda and WebSocket API because $connect/$disconnect take one integration each.
+    const warshipsHandler = new lambdaNodejs.NodejsFunction(this, 'WarshipsRuntimeHandler', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: path.join(warshipsPackageRoot, 'src/runtime/handler.ts'),
+      projectRoot: monorepoRoot,
+      handler: 'handler',
+      memorySize: 256,
+      timeout: Duration.seconds(10),
+      environment: {
+        TABLE_NAME: table.tableName,
+        ...(playerAuth
+          ? {
+              COGNITO_USER_POOL_ID: playerAuth.userPoolId,
+              COGNITO_CLIENT_ID: playerAuth.userPoolClientId,
+              PROFILE_TABLE_NAME: playerAuth.profileTableName,
+            }
+          : {}),
+      },
+      bundling: {
+        target: 'node22',
+        format: lambdaNodejs.OutputFormat.ESM,
+        mainFields: ['module', 'main'],
+        externalModules: ['@aws-sdk/*'],
+      },
+      depsLockFilePath: path.join(monorepoRoot, 'package-lock.json'),
+    });
+    table.grantReadWriteData(warshipsHandler);
+    if (playerAuth) {
+      warshipsHandler.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['dynamodb:GetItem'],
+          resources: [playerAuth.profileTableArn],
+        }),
+      );
+    }
+
+    const warshipsApi = new apigwv2.WebSocketApi(this, 'WarshipsWebSocketApi', {
+      connectRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WarshipsConnectIntegration', warshipsHandler),
+      },
+      disconnectRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WarshipsDisconnectIntegration', warshipsHandler),
+      },
+      defaultRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WarshipsDefaultIntegration', warshipsHandler),
+      },
+    });
+    const warshipsStage = new apigwv2.WebSocketStage(this, 'WarshipsWebSocketStage', {
+      webSocketApi: warshipsApi,
+      stageName: 'prod',
+      autoDeploy: true,
+    });
+    this.warshipsWebSocketUrl = warshipsStage.url;
+    warshipsHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['execute-api:ManageConnections'],
+        resources: [
+          Stack.of(this).formatArn({
+            service: 'execute-api',
+            resource: warshipsApi.apiId,
+            resourceName: `${warshipsStage.stageName}/POST/@connections/*`,
+          }),
+        ],
+      }),
+    );
+
+    const warshipsDeployment = new s3Deployment.BucketDeployment(this, 'WarshipsPlayOriginDeployment', {
+      destinationBucket: playOriginBucket,
+      // The sync's --delete is scoped to this prefix, so scribble/ is untouched.
+      destinationKeyPrefix: 'warships',
+      sources: [
+        s3Deployment.Source.asset(WARSHIPS_ARTIFACT_DIR),
+        s3Deployment.Source.jsonData('config.json', {
+          webSocketUrl: this.warshipsWebSocketUrl,
+          ...(playerAuth
+            ? { auth: { userPoolId: playerAuth.userPoolId, userPoolClientId: playerAuth.userPoolClientId } }
+            : {}),
+        }),
+      ],
+      cacheControl: [s3Deployment.CacheControl.noCache()],
+    });
+    nameBucketDeployLayer(warshipsDeployment, WARSHIPS_DEPLOY_LAYER_NAME);
+
     new CfnOutput(this, 'WebSocketUrl', { value: stage.url });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'PlayOriginBucketName', { value: playOriginBucket.bucketName });
     new CfnOutput(this, 'LobbyUrl', { value: 'https://galaxyclass.app/scribble' });
+    new CfnOutput(this, 'WarshipsWebSocketUrl', { value: warshipsStage.url });
+    new CfnOutput(this, 'WarshipsLobbyUrl', { value: 'https://galaxyclass.app/warships' });
   }
 }
 

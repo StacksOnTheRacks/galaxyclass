@@ -30,7 +30,7 @@ export const canonicalRedirectFunctionCode = `function handler(event) {
   return request;
 }
 function gameRoot(uri) {
-  var roots = ['/riffle', '/scribble'];
+  var roots = ['/riffle', '/scribble', '/warships'];
   for (var i = 0; i < roots.length; i++) {
     if (uri === roots[i] || uri.indexOf(roots[i] + '/') === 0) {
       return roots[i];

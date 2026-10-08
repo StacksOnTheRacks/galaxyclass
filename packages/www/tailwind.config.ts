@@ -40,6 +40,11 @@ const config: Config = {
           ink: channel("scribble-ink"),
           board: channel("scribble-board"),
         },
+        warships: {
+          DEFAULT: channel("warships"),
+          sea: channel("warships-sea"),
+          hit: channel("warships-hit"),
+        },
         suit: {
           red: channel("suit-red"),
           black: channel("suit-black"),
@@ -84,6 +89,7 @@ const config: Config = {
         "glow-pink": "var(--glow-pink)",
         "glow-riffle": "var(--glow-riffle)",
         "glow-scribble": "var(--glow-scribble)",
+        "glow-warships": "var(--glow-warships)",
       },
       maxWidth: {
         frame: "var(--size-frame)",

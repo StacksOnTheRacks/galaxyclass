@@ -46,28 +46,48 @@ describe("rooms home", () => {
     );
   });
 
+  it("opens the Warships room at same-origin /warships", () => {
+    render(<Home />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Warships" });
+    const room = within(heading.closest("article") as HTMLElement);
+    expect(room.getByText(/naval battle for two members/i)).toBeInTheDocument();
+    expect(room.getByRole("list", { name: "Warships details" })).toHaveTextContent(/2 players/);
+    expect(room.getByRole("link", { name: "Enter Warships room" })).toHaveAttribute(
+      "href",
+      "/warships",
+    );
+  });
+
+  it("never uses the trademarked board-game name for Warships", () => {
+    const { container } = render(<Home />);
+
+    expect(container.textContent ?? "").not.toMatch(/battleship/i);
+  });
+
   it("links into each game exactly once, from the room list", () => {
     const { container } = render(<Home />);
 
-    for (const prefix of ["/riffle", "/scribble"]) {
+    for (const prefix of ["/riffle", "/scribble", "/warships"]) {
       const links = Array.from(container.querySelectorAll(`a[href^="${prefix}"]`));
       expect(links, prefix).toHaveLength(1);
       expect(links[0]!.closest("#rooms"), prefix).not.toBeNull();
     }
     expect(
       within(screen.getByRole("navigation", { name: "Footer" })).queryByRole("link", {
-        name: /riffle|scribble/i,
+        name: /riffle|scribble|warships/i,
       }),
     ).toBeNull();
   });
 
-  it("teases more rooms without anything to enter", () => {
+  it("teases more rooms without anything to enter, on a row of its own", () => {
     render(<Home />);
 
     const heading = screen.getByRole("heading", { level: 3, name: "More rooms coming" });
     const teaser = within(heading.closest("article") as HTMLElement);
     expect(teaser.getByText("Coming soon")).toBeInTheDocument();
     expect(teaser.queryByRole("link")).toBeNull();
+    expect(heading.closest("li")).toHaveClass("sm:col-span-2", "lg:col-span-3");
   });
 
   it("calls the game Riffle Poker everywhere users can see or hear it", () => {
@@ -147,14 +167,17 @@ describe("about page", () => {
   it("does not link into a game directly", () => {
     const { container } = render(<About />);
 
-    expect(container.querySelector('a[href^="/riffle"], a[href^="/scribble"]')).toBeNull();
+    expect(
+      container.querySelector('a[href^="/riffle"], a[href^="/scribble"], a[href^="/warships"]'),
+    ).toBeNull();
   });
 });
 
 describe("site boundaries", () => {
-  it("does not capture /riffle or /scribble in Next", () => {
+  it("does not capture /riffle, /scribble, or /warships in Next", () => {
     expect(existsSync(path.join(root, "src/app/riffle"))).toBe(false);
     expect(existsSync(path.join(root, "src/app/scribble"))).toBe(false);
+    expect(existsSync(path.join(root, "src/app/warships"))).toBe(false);
     const nextConfig = readFileSync(path.join(root, "next.config.ts"), "utf8");
     expect(nextConfig).toMatch(/output:\s*"export"/);
     expect(nextConfig).not.toMatch(/rewrites|redirects/);

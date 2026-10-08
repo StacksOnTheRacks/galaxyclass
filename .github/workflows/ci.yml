@@ -47,6 +47,20 @@ jobs:
           path: packages/scribble/test-results/
           retention-days: 7
 
+      - name: Test Warships
+        run: npm run test --workspace=@galaxyclass/warships
+
+      - name: Warships two-browser e2e
+        run: npm run test:e2e --workspace=@galaxyclass/warships
+
+      - name: Upload Warships e2e traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warships-e2e-results
+          path: packages/warships/test-results/
+          retention-days: 7
+
       - name: Test infrastructure
         run: npm run test --workspace=@galaxyclass/infra
         env:

@@ -93,6 +93,25 @@ test('extensionless /scribble routes rewrite to /scribble/index.html and files p
   assert.equal(rewrite('/rifflescribble'), '/rifflescribble.html');
 });
 
+test('extensionless /warships routes rewrite to /warships/index.html and files pass through', () => {
+  const rewrite = (uri: string) => asRequest(runViewerRequest(event(uri, 'galaxyclass.app'))).uri;
+  assert.equal(rewrite('/warships'), '/warships/index.html');
+  assert.equal(rewrite('/warships/'), '/warships/index.html');
+  assert.equal(rewrite(`/warships/${TABLE_GUID}`), '/warships/index.html');
+  assert.equal(rewrite('/warships/config.json'), '/warships/config.json');
+  assert.equal(rewrite('/warships/main.js'), '/warships/main.js');
+  assert.equal(rewrite('/warships/assets/favicon.svg'), '/warships/assets/favicon.svg');
+  assert.equal(rewrite('/warshipss'), '/warshipss.html');
+  assert.equal(rewrite('/scribblewarships'), '/scribblewarships.html');
+});
+
+test('www redirect keeps /warships table paths', () => {
+  assert.equal(
+    locationOf(runViewerRequest(event(`/warships/${TABLE_GUID}`, 'www.galaxyclass.app'))),
+    `https://galaxyclass.app/warships/${TABLE_GUID}`,
+  );
+});
+
 test('www redirect keeps /scribble table paths', () => {
   assert.equal(
     locationOf(runViewerRequest(event(`/scribble/${TABLE_GUID}`, 'www.galaxyclass.app'))),

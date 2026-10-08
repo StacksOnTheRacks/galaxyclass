@@ -7,7 +7,7 @@ import { SiteShell } from "@/components/SiteShell";
 export const metadata: Metadata = {
   title: "About — Galaxy Class Gaming",
   description:
-    "How Galaxy Class game rooms work, and the independent studio behind Riffle Poker and Scribble.",
+    "How Galaxy Class game rooms work, and the independent studio behind Riffle Poker, Scribble, and Warships.",
 };
 
 export default function About() {

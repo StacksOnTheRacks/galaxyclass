@@ -34,7 +34,7 @@ export function AccountPrompt() {
           <p className="text-small text-ink-muted">
             {signedIn
               ? "Your gamer tag and avatar follow you into every room."
-              : "No account needed for Riffle Poker. Sign up free to play Scribble and bring your gamer tag and avatar into every room."}
+              : "No account needed for Riffle Poker. Sign up free to play Scribble and Warships, and bring your gamer tag and avatar into every room."}
           </p>
         </div>
       </div>

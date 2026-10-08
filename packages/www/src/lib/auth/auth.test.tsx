@@ -508,6 +508,14 @@ describe("sign-in", () => {
       expect(hard.navigate).toHaveBeenCalledWith("/scribble/abc");
     });
     expect(nav.push).not.toHaveBeenCalled();
+
+    hard.navigate.mockClear();
+    window.history.pushState({}, "", "/sign-in?next=/warships/abc");
+    await submitSignIn();
+    await waitFor(() => {
+      expect(hard.navigate).toHaveBeenCalledWith("/warships/abc");
+    });
+    expect(nav.push).not.toHaveBeenCalled();
   });
 
   it("follows a safe next path and otherwise goes to /account", async () => {

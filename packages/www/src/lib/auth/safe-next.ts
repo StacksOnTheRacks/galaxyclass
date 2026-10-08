@@ -1,7 +1,7 @@
 const DEFAULT_NEXT = "/account";
 
 /** Games are separate apps behind the studio's CDN; the Next router cannot client-route into them. */
-const GAME_PATHS = ["/riffle", "/scribble"];
+const GAME_PATHS = ["/riffle", "/scribble", "/warships"];
 
 /** Single-slash relative path. Rejects protocol-relative, schemes, and backslashes. */
 export function safeNext(value: string | null | undefined): string {

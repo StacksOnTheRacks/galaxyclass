@@ -17,11 +17,12 @@
     "@aws-amplify/core": "6.19.2"
   },
   "scripts": {
-    "build": "npm run build:riffle && npm run build:scribble && npm run build:www",
+    "build": "npm run build:riffle && npm run build:scribble && npm run build:www && npm run build:warships",
     "build:www": "npm run build --workspace=@galaxyclass/www",
     "build:riffle": "npm run build:client --workspace=@galaxyclass/riffle",
     "build:scribble": "npm run build:client --workspace=@galaxyclass/scribble",
-    "test": "npm run test --workspace=@galaxyclass/accounts && npm run test --workspace=@galaxyclass/www && npm run test --workspace=@galaxyclass/riffle && npm run test --workspace=@galaxyclass/scribble && npm run test --workspace=@galaxyclass/infra",
+    "build:warships": "npm run build:client --workspace=@galaxyclass/warships",
+    "test": "npm run test --workspace=@galaxyclass/accounts && npm run test --workspace=@galaxyclass/www && npm run test --workspace=@galaxyclass/riffle && npm run test --workspace=@galaxyclass/scribble && npm run test --workspace=@galaxyclass/warships && npm run test --workspace=@galaxyclass/infra",
     "lint": "npm run lint --workspace=@galaxyclass/www"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"

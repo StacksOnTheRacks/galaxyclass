@@ -5,9 +5,11 @@ import {
   HudLabel,
   PLAY_RIFFLE_HREF,
   PLAY_SCRIBBLE_HREF,
+  PLAY_WARSHIPS_HREF,
 } from "../primitives";
 import { RiffleRoomArt, RiffleWordmark } from "../RiffleScreen";
 import { ScribbleRoomArt, ScribbleWordmark } from "../ScribbleScreen";
+import { WarshipsRoomArt, WarshipsWordmark } from "../WarshipsScreen";
 
 type Room = {
   id: string;
@@ -41,6 +43,16 @@ const rooms: Room[] = [
     tags: ["Words", "2–4 players", "Members"],
     art: <ScribbleRoomArt className="aspect-[16/9]" />,
     wordmark: <ScribbleWordmark className="text-[24px]" />,
+  },
+  {
+    id: "warships",
+    name: "Warships",
+    href: PLAY_WARSHIPS_HREF,
+    accent: "var(--c-warships)",
+    blurb: "Naval battle for two members. Hide your fleet, call your shots, and sink theirs first.",
+    tags: ["Strategy", "2 players", "Members"],
+    art: <WarshipsRoomArt className="aspect-[16/9]" />,
+    wordmark: <WarshipsWordmark className="text-[24px]" />,
   },
 ];
 
@@ -115,7 +127,7 @@ export function RoomList() {
             <RoomCard room={room} />
           </li>
         ))}
-        <li className="sm:col-span-2 lg:col-span-1">
+        <li className="sm:col-span-2 lg:col-span-3">
           <ComingSoonCard />
         </li>
       </ul>

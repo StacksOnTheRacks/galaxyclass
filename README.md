@@ -9,6 +9,8 @@ Studio site and games for [galaxyclass.app](https://galaxyclass.app).
 | `@galaxyclass/accounts` | `packages/accounts` | Player profile shared by the site, games, and AWS: gamer tag rules, the avatar library, the account hint, and the profile Lambdas |
 | `@galaxyclass/www` | `packages/www` | Next.js static studio site (Cognito auth, account page, avatar images at `/avatars`) |
 | `@galaxyclass/riffle` | `packages/riffle` | Riffle Poker play app (WebSocket + static SPA) |
+| `@galaxyclass/scribble` | `packages/scribble` | Scribble, the members-only word game at `/scribble` (WebSocket + static SPA) |
+| `@galaxyclass/warships` | `packages/warships` | Warships, the members-only two-player naval game at `/warships` (WebSocket + static SPA, hosted in the Scribble runtime stack) |
 | `@galaxyclass/infra` | `packages/infra` | AWS CDK — auth, site, and match runtime stacks |
 
 ## Player profiles
@@ -29,7 +31,10 @@ Gamer tags: 3–20 characters, letters, numbers, `_` or `-`, starting and ending
 npm ci
 npm run dev --workspace=@galaxyclass/www   # studio site
 npm run dev --workspace=@galaxyclass/riffle # local Hono server
+npm run dev --workspace=@galaxyclass/warships # http://localhost:5182/warships with dev sign-in
 ```
+
+The studio site's room links (`/riffle`, `/scribble`, `/warships`) are same-origin paths that CloudFront serves from each game's origin, so they 404 under `next dev`. Play a game on its own dev server. For Warships, sign in as two different dev members in two tabs (dev tokens are per tab).
 
 ## Test
 
