@@ -4,7 +4,7 @@ const sheet = [
   { term: "Makes", detail: "Online multiplayer games" },
   { term: "Plays in", detail: "Your browser, phone or desktop" },
   { term: "Chips", detail: "Social only — nothing to buy" },
-  { term: "Rooms open", detail: "Riffle Poker, Scribble, Warships" },
+  { term: "Rooms open", detail: "Riffle Poker, Scribble, Warships, Whodunit?" },
 ];
 
 export function StudioStory() {
@@ -27,8 +27,8 @@ export function StudioStory() {
           <p>
             We build for the table, not the wallet: games run in the browser,
             play uses social chips, and there is nothing to buy. Each game is its
-            own room with its own name and look — Riffle Poker, Scribble, and
-            Warships are open now, and more are on the way.
+            own room with its own name and look — Riffle Poker, Scribble,
+            Warships, and Whodunit? are open now, and more are on the way.
           </p>
         </div>
       </div>

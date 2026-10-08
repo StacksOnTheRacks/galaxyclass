@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export const PLAY_RIFFLE_HREF = "/riffle";
 export const PLAY_SCRIBBLE_HREF = "/scribble";
 export const PLAY_WARSHIPS_HREF = "/warships";
+export const PLAY_WHODUNIT_HREF = "/whodunit";
 export const SIGN_IN_HREF = "/sign-in";
 export const SIGN_UP_HREF = "/sign-up";
 export const ACCOUNT_HREF = "/account";

@@ -45,6 +45,11 @@ const config: Config = {
           sea: channel("warships-sea"),
           hit: channel("warships-hit"),
         },
+        whodunit: {
+          DEFAULT: channel("whodunit"),
+          brass: channel("whodunit-brass"),
+          night: channel("whodunit-night"),
+        },
         suit: {
           red: channel("suit-red"),
           black: channel("suit-black"),
@@ -90,6 +95,7 @@ const config: Config = {
         "glow-riffle": "var(--glow-riffle)",
         "glow-scribble": "var(--glow-scribble)",
         "glow-warships": "var(--glow-warships)",
+        "glow-whodunit": "var(--glow-whodunit)",
       },
       maxWidth: {
         frame: "var(--size-frame)",

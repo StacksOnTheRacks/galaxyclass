@@ -65,29 +65,52 @@ describe("rooms home", () => {
     expect(container.textContent ?? "").not.toMatch(/battleship/i);
   });
 
+  it("opens the Whodunit? room at same-origin /whodunit", () => {
+    render(<Home />);
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Whodunit?" });
+    const room = within(heading.closest("article") as HTMLElement);
+    expect(room.getByText(/mystery at starfall manor for 3–6 members/i)).toBeInTheDocument();
+    expect(room.getByRole("list", { name: "Whodunit? details" })).toHaveTextContent(/3–6 players/);
+    expect(room.getByRole("link", { name: "Enter Whodunit? room" })).toHaveAttribute(
+      "href",
+      "/whodunit",
+    );
+  });
+
+  it("never uses the trademarked board-game name or its characters for Whodunit?", () => {
+    const banned = /\b(clue\w*|hasbro|scarlet|mustard|peacock|plum|colonel)\b/i;
+    const { container } = render(<Home />);
+
+    expect(container.textContent ?? "").not.toMatch(banned);
+    for (const file of sourceFiles(path.join(root, "src"))) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(banned);
+    }
+  });
+
   it("links into each game exactly once, from the room list", () => {
     const { container } = render(<Home />);
 
-    for (const prefix of ["/riffle", "/scribble", "/warships"]) {
+    for (const prefix of ["/riffle", "/scribble", "/warships", "/whodunit"]) {
       const links = Array.from(container.querySelectorAll(`a[href^="${prefix}"]`));
       expect(links, prefix).toHaveLength(1);
       expect(links[0]!.closest("#rooms"), prefix).not.toBeNull();
     }
     expect(
       within(screen.getByRole("navigation", { name: "Footer" })).queryByRole("link", {
-        name: /riffle|scribble|warships/i,
+        name: /riffle|scribble|warships|whodunit/i,
       }),
     ).toBeNull();
   });
 
-  it("teases more rooms without anything to enter, on a row of its own", () => {
+  it("teases more rooms without anything to enter, filling out the last row", () => {
     render(<Home />);
 
     const heading = screen.getByRole("heading", { level: 3, name: "More rooms coming" });
     const teaser = within(heading.closest("article") as HTMLElement);
     expect(teaser.getByText("Coming soon")).toBeInTheDocument();
     expect(teaser.queryByRole("link")).toBeNull();
-    expect(heading.closest("li")).toHaveClass("sm:col-span-2", "lg:col-span-3");
+    expect(heading.closest("li")).toHaveClass("sm:col-span-2", "lg:col-span-2");
   });
 
   it("calls the game Riffle Poker everywhere users can see or hear it", () => {
@@ -168,16 +191,19 @@ describe("about page", () => {
     const { container } = render(<About />);
 
     expect(
-      container.querySelector('a[href^="/riffle"], a[href^="/scribble"], a[href^="/warships"]'),
+      container.querySelector(
+        'a[href^="/riffle"], a[href^="/scribble"], a[href^="/warships"], a[href^="/whodunit"]',
+      ),
     ).toBeNull();
   });
 });
 
 describe("site boundaries", () => {
-  it("does not capture /riffle, /scribble, or /warships in Next", () => {
+  it("does not capture /riffle, /scribble, /warships, or /whodunit in Next", () => {
     expect(existsSync(path.join(root, "src/app/riffle"))).toBe(false);
     expect(existsSync(path.join(root, "src/app/scribble"))).toBe(false);
     expect(existsSync(path.join(root, "src/app/warships"))).toBe(false);
+    expect(existsSync(path.join(root, "src/app/whodunit"))).toBe(false);
     const nextConfig = readFileSync(path.join(root, "next.config.ts"), "utf8");
     expect(nextConfig).toMatch(/output:\s*"export"/);
     expect(nextConfig).not.toMatch(/rewrites|redirects/);

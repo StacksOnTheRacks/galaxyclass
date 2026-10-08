@@ -11,6 +11,7 @@ Studio site and games for [galaxyclass.app](https://galaxyclass.app).
 | `@galaxyclass/riffle` | `packages/riffle` | Riffle Poker play app (WebSocket + static SPA) |
 | `@galaxyclass/scribble` | `packages/scribble` | Scribble, the members-only word game at `/scribble` (WebSocket + static SPA) |
 | `@galaxyclass/warships` | `packages/warships` | Warships, the members-only two-player naval game at `/warships` (WebSocket + static SPA, hosted in the Scribble runtime stack) |
+| `@galaxyclass/whodunit` | `packages/whodunit` | Whodunit?, the members-only 3–6 player mansion mystery at `/whodunit` (WebSocket + static SPA, hosted in the Scribble runtime stack) |
 | `@galaxyclass/infra` | `packages/infra` | AWS CDK — auth, site, and match runtime stacks |
 
 ## Player profiles
@@ -32,9 +33,10 @@ npm ci
 npm run dev --workspace=@galaxyclass/www   # studio site
 npm run dev --workspace=@galaxyclass/riffle # local Hono server
 npm run dev --workspace=@galaxyclass/warships # http://localhost:5182/warships with dev sign-in
+npm run dev --workspace=@galaxyclass/whodunit # http://localhost:5184/whodunit with dev sign-in
 ```
 
-The studio site's room links (`/riffle`, `/scribble`, `/warships`) are same-origin paths that CloudFront serves from each game's origin, so they 404 under `next dev`. Play a game on its own dev server. For Warships, sign in as two different dev members in two tabs (dev tokens are per tab).
+The studio site's room links (`/riffle`, `/scribble`, `/warships`, `/whodunit`) are same-origin paths that CloudFront serves from each game's origin, so they 404 under `next dev`. Play a game on its own dev server. For Warships, sign in as two different dev members in two tabs (dev tokens are per tab); Whodunit? needs at least three.
 
 ## Test
 

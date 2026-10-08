@@ -12,6 +12,8 @@ import {
   ScribbleRuntimeStack,
   WARSHIPS_ARTIFACT_DIR,
   WARSHIPS_DEPLOY_LAYER_NAME,
+  WHODUNIT_ARTIFACT_DIR,
+  WHODUNIT_DEPLOY_LAYER_NAME,
 } from '../lib/scribble-runtime-stack.js';
 import {
   CREDENTIAL_PATTERNS,
@@ -39,7 +41,7 @@ function parseStagedConfig(raw: string): unknown {
 
 function playOriginDeployment(template: Template, prefix = 'scribble'): Record<string, unknown> {
   const deployments = resourcesOfType(template, 'Custom::CDKBucketDeployment');
-  assert.equal(deployments.length, 2, 'one deployment per game into the shared play-origin bucket');
+  assert.equal(deployments.length, 3, 'one deployment per game into the shared play-origin bucket');
   const matching = deployments.filter(([, deployment]) => deployment.Properties?.DestinationBucketKeyPrefix === prefix);
   assert.equal(matching.length, 1);
   return matching[0]![1].Properties!;
@@ -48,6 +50,14 @@ function playOriginDeployment(template: Template, prefix = 'scribble'): Record<s
 function warshipsHandler(template: Template): Record<string, unknown> {
   const functions = resourcesOfType(template, 'AWS::Lambda::Function').filter(([id]) =>
     id.startsWith('WarshipsRuntimeHandler'),
+  );
+  assert.equal(functions.length, 1);
+  return functions[0]![1].Properties!;
+}
+
+function whodunitHandler(template: Template): Record<string, unknown> {
+  const functions = resourcesOfType(template, 'AWS::Lambda::Function').filter(([id]) =>
+    id.startsWith('WhodunitRuntimeHandler'),
   );
   assert.equal(functions.length, 1);
   return functions[0]![1].Properties!;
@@ -103,13 +113,13 @@ describe('ScribbleRuntimeStack', () => {
   });
 
   it('exposes one WebSocket API per game, each with only connect, disconnect and default routes on a prod stage', () => {
-    synth.template.resourceCountIs('AWS::ApiGatewayV2::Api', 2);
+    synth.template.resourceCountIs('AWS::ApiGatewayV2::Api', 3);
     const apis = resourcesOfType(synth.template, 'AWS::ApiGatewayV2::Api');
     for (const [, api] of apis) {
       assert.equal(api.Properties?.ProtocolType, 'WEBSOCKET');
     }
     const stages = resourcesOfType(synth.template, 'AWS::ApiGatewayV2::Stage');
-    assert.equal(stages.length, 2);
+    assert.equal(stages.length, 3);
     for (const [, stage] of stages) {
       assert.equal(stage.Properties?.StageName, 'prod');
       assert.equal(stage.Properties?.AutoDeploy, true);
@@ -266,6 +276,98 @@ describe('Warships in ScribbleRuntimeStack', () => {
   it('ships a client artifact with no credentials', () => {
     assert.ok(fs.existsSync(path.join(WARSHIPS_ARTIFACT_DIR, 'index.html')));
     for (const file of listTextArtifacts(WARSHIPS_ARTIFACT_DIR)) {
+      const body = fs.readFileSync(file, 'utf8');
+      for (const pattern of CREDENTIAL_PATTERNS) {
+        assert.doesNotMatch(body, pattern, file);
+      }
+    }
+  });
+});
+
+describe('Whodunit in ScribbleRuntimeStack', () => {
+  let synth: ReturnType<typeof synthScribble>;
+  let authed: ReturnType<typeof synthScribble>;
+
+  before(() => {
+    synth = synthScribble();
+    authed = synthScribble({ withPlayerAuth: true });
+  });
+
+  it('runs a small Node 22 Lambda on the shared table, without the dictionary', () => {
+    const handler = whodunitHandler(synth.template);
+    assert.equal(handler.Runtime, 'nodejs22.x');
+    assert.equal(handler.MemorySize, 256);
+    assert.equal(handler.Timeout, 10);
+    const variables = (handler.Environment as { Variables: Record<string, unknown> }).Variables;
+    assert.deepEqual(Object.keys(variables), ['TABLE_NAME']);
+    const [tableId] = Object.keys(synth.template.findResources('AWS::DynamoDB::Table'));
+    assert.deepEqual(variables.TABLE_NAME, { Ref: tableId });
+  });
+
+  it('wires its own WebSocket API to the Whodunit Lambda only', () => {
+    const integrations = resourcesOfType(synth.template, 'AWS::ApiGatewayV2::Integration');
+    const whodunit = integrations.filter(([id]) => id.startsWith('WhodunitWebSocketApi'));
+    assert.equal(whodunit.length, 3);
+    for (const [, integration] of whodunit) {
+      assert.match(JSON.stringify(integration.Properties?.IntegrationUri), /WhodunitRuntimeHandler/);
+    }
+    const policies = JSON.stringify(synth.template.findResources('AWS::IAM::Policy'));
+    assert.match(policies, /WhodunitWebSocketApi/);
+  });
+
+  it('deploys the built client under /whodunit in the Scribble play-origin bucket', () => {
+    const props = playOriginDeployment(synth.template, 'whodunit');
+    const scribble = playOriginDeployment(synth.template, 'scribble');
+    assert.deepEqual(props.DestinationBucketName, scribble.DestinationBucketName);
+    const { raw } = stagedConfigForDeployment(synth.outdir, props);
+    const config = parseStagedConfig(raw) as Record<string, unknown>;
+    assert.deepEqual(Object.keys(config), ['webSocketUrl']);
+    assert.match(config.webSocketUrl as string, /<<marker:/);
+    synth.template.resourceCountIs('AWS::S3::Bucket', 1);
+  });
+
+  it('names its deploy CLI layer for the scoped execution role', () => {
+    const layers = resourcesOfType(synth.template, 'AWS::Lambda::LayerVersion').map(
+      ([, layer]) => layer.Properties?.LayerName,
+    );
+    assert.ok(layers.includes(WHODUNIT_DEPLOY_LAYER_NAME));
+    for (const name of layers) {
+      assert.match(String(name), /^ScribbleRuntimeStack/);
+    }
+  });
+
+  it('outputs its socket and lobby URLs', () => {
+    const outputs = synth.template.findOutputs('*');
+    assert.ok(outputs.WhodunitWebSocketUrl);
+    assert.equal(outputs.WhodunitLobbyUrl?.Value, 'https://galaxyclass.app/whodunit');
+  });
+
+  it('with player auth, reads profiles only and shares the studio user pool with the client', () => {
+    const variables = (whodunitHandler(authed.template).Environment as { Variables: Record<string, unknown> }).Variables;
+    assert.ok(variables.COGNITO_USER_POOL_ID);
+    assert.ok(variables.COGNITO_CLIENT_ID);
+    assert.ok(variables.PROFILE_TABLE_NAME);
+    assert.equal(variables.DICTIONARY_PATH, undefined);
+
+    const whodunitPolicies = Object.entries(authed.template.findResources('AWS::IAM::Policy')).filter(([id]) =>
+      id.startsWith('WhodunitRuntimeHandler'),
+    );
+    assert.equal(whodunitPolicies.length, 1);
+    const statements = (whodunitPolicies[0]![1] as { Properties: { PolicyDocument: { Statement: unknown[] } } }).Properties
+      .PolicyDocument.Statement;
+    const profile = statements.filter((statement) => JSON.stringify(statement).includes('GalaxyClassAuth-prod'));
+    assert.equal(profile.length, 1);
+    assert.equal((profile[0] as { Action: unknown }).Action, 'dynamodb:GetItem');
+
+    const { raw } = stagedConfigForDeployment(authed.outdir, playOriginDeployment(authed.template, 'whodunit'));
+    const config = parseStagedConfig(raw) as { auth?: { userPoolId: string; userPoolClientId: string } };
+    assert.ok(config.auth?.userPoolId);
+    assert.ok(config.auth?.userPoolClientId);
+  });
+
+  it('ships a client artifact with no credentials', () => {
+    assert.ok(fs.existsSync(path.join(WHODUNIT_ARTIFACT_DIR, 'index.html')));
+    for (const file of listTextArtifacts(WHODUNIT_ARTIFACT_DIR)) {
       const body = fs.readFileSync(file, 'utf8');
       for (const pattern of CREDENTIAL_PATTERNS) {
         assert.doesNotMatch(body, pattern, file);

@@ -1,0 +1,43 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+/** Vocabulary from the games this backend was modelled on. "Captain" stays: Captain Rook is a suspect. */
+const BORROWED = /fleet|admiral|sonar|torpedo|shipId|\bbattle\b|rematch|forfeit|\bsalvo\b|\bstrokes?\b|\bguess(er)?\b|\bdrawer\b/i;
+
+function files(dir: string): string[] {
+  if (!existsSync(dir)) {
+    return [];
+  }
+  return readdirSync(dir).flatMap((name) => {
+    const full = path.join(dir, name);
+    return statSync(full).isDirectory() ? files(full) : /\.(ts|mjs|json|md)$/.test(name) ? [full] : [];
+  });
+}
+
+describe('naming in the backend', () => {
+  it('speaks only of the case in the rules, runtime, dev server, and wire contract', () => {
+    const scanned = [
+      ...files(path.join(root, 'src/rules')),
+      ...files(path.join(root, 'src/runtime')),
+      ...files(path.join(root, 'src/dev')),
+      path.join(root, 'src/protocol.ts'),
+      path.join(root, 'package.json'),
+    ];
+    expect(scanned.length).toBeGreaterThan(20);
+    const hits = scanned.flatMap((file) =>
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => (BORROWED.test(line) ? [`${path.relative(root, file)}:${i + 1}: ${line.trim()}`] : [])),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it('logs and names storage under whodunit', () => {
+    expect(readFileSync(path.join(root, 'src/runtime/handler.ts'), 'utf8')).toMatch(/whodunit/);
+    expect(readFileSync(path.join(root, 'src/dev/server.ts'), 'utf8')).toMatch(/whodunit\.devAccessToken/);
+    expect(readFileSync(path.join(root, 'src/runtime/keys.ts'), 'utf8')).toMatch(/'WD#'/);
+  });
+});

@@ -61,6 +61,20 @@ jobs:
           path: packages/warships/test-results/
           retention-days: 7
 
+      - name: Test Whodunit
+        run: npm run test --workspace=@galaxyclass/whodunit
+
+      - name: Whodunit multi-browser e2e
+        run: npm run test:e2e --workspace=@galaxyclass/whodunit
+
+      - name: Upload Whodunit e2e traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whodunit-e2e-results
+          path: packages/whodunit/test-results/
+          retention-days: 7
+
       - name: Test infrastructure
         run: npm run test --workspace=@galaxyclass/infra
         env:

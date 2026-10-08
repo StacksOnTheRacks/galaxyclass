@@ -26,10 +26,12 @@ describe("next across auth pages", () => {
       "/riffle#t",
       "/warships",
       "/warships/abc",
+      "/whodunit",
+      "/whodunit/abc",
     ]) {
       expect(isGamePath(path)).toBe(true);
     }
-    for (const path of ["/account", "/scribbles", "/warshipss", "/about", "/"]) {
+    for (const path of ["/account", "/scribbles", "/warshipss", "/whodunits", "/about", "/"]) {
       expect(isGamePath(path)).toBe(false);
     }
   });
@@ -40,6 +42,7 @@ describe("safeNext", () => {
     expect(safeNext("/account")).toBe("/account");
     expect(safeNext("/riffle")).toBe("/riffle");
     expect(safeNext("/warships/abc")).toBe("/warships/abc");
+    expect(safeNext("/whodunit/abc")).toBe("/whodunit/abc");
   });
 
   it("falls back when the value is missing, protocol-relative, or a scheme", () => {

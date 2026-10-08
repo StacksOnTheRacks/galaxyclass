@@ -30,6 +30,11 @@ export const WARSHIPS_ARTIFACT_DIR = path.join(warshipsPackageRoot, 'public/wars
 /** Matches layer:ScribbleRuntimeStack* in packages/infra/iam/scribble-runtime-cfn-exec.json. */
 export const WARSHIPS_DEPLOY_LAYER_NAME = 'ScribbleRuntimeStackWarshipsCli';
 
+const whodunitPackageRoot = path.join(monorepoRoot, 'packages/whodunit');
+export const WHODUNIT_ARTIFACT_DIR = path.join(whodunitPackageRoot, 'public/whodunit');
+/** Matches layer:ScribbleRuntimeStack* in packages/infra/iam/scribble-runtime-cfn-exec.json. */
+export const WHODUNIT_DEPLOY_LAYER_NAME = 'ScribbleRuntimeStackWhodunitCli';
+
 export interface ScribbleRuntimeStackProps extends StackProps {
   /** Galaxy Class player pool; Scribble is members-only, so without it nobody can open a table. */
   playerAuth?: PlayerAuthRefs;
@@ -38,6 +43,7 @@ export interface ScribbleRuntimeStackProps extends StackProps {
 export class ScribbleRuntimeStack extends Stack {
   readonly webSocketUrl: string;
   readonly warshipsWebSocketUrl: string;
+  readonly whodunitWebSocketUrl: string;
   readonly playOriginBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props?: ScribbleRuntimeStackProps) {
@@ -48,6 +54,9 @@ export class ScribbleRuntimeStack extends Stack {
     }
     if (!existsSync(path.join(WARSHIPS_ARTIFACT_DIR, 'index.html'))) {
       throw new Error(`Warships client is not built at ${WARSHIPS_ARTIFACT_DIR}; run npm run build:warships first.`);
+    }
+    if (!existsSync(path.join(WHODUNIT_ARTIFACT_DIR, 'index.html'))) {
+      throw new Error(`Whodunit client is not built at ${WHODUNIT_ARTIFACT_DIR}; run npm run build:whodunit first.`);
     }
 
     const table = new dynamodb.Table(this, 'ScribbleTable', {
@@ -249,12 +258,98 @@ export class ScribbleRuntimeStack extends Stack {
     });
     nameBucketDeployLayer(warshipsDeployment, WARSHIPS_DEPLOY_LAYER_NAME);
 
+    // Whodunit follows Warships: the shared table (under WD# keys) and bucket (under whodunit/),
+    // with its own Lambda and WebSocket API.
+    const whodunitHandler = new lambdaNodejs.NodejsFunction(this, 'WhodunitRuntimeHandler', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: path.join(whodunitPackageRoot, 'src/runtime/handler.ts'),
+      projectRoot: monorepoRoot,
+      handler: 'handler',
+      memorySize: 256,
+      timeout: Duration.seconds(10),
+      environment: {
+        TABLE_NAME: table.tableName,
+        ...(playerAuth
+          ? {
+              COGNITO_USER_POOL_ID: playerAuth.userPoolId,
+              COGNITO_CLIENT_ID: playerAuth.userPoolClientId,
+              PROFILE_TABLE_NAME: playerAuth.profileTableName,
+            }
+          : {}),
+      },
+      bundling: {
+        target: 'node22',
+        format: lambdaNodejs.OutputFormat.ESM,
+        mainFields: ['module', 'main'],
+        externalModules: ['@aws-sdk/*'],
+      },
+      depsLockFilePath: path.join(monorepoRoot, 'package-lock.json'),
+    });
+    table.grantReadWriteData(whodunitHandler);
+    if (playerAuth) {
+      whodunitHandler.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['dynamodb:GetItem'],
+          resources: [playerAuth.profileTableArn],
+        }),
+      );
+    }
+
+    const whodunitApi = new apigwv2.WebSocketApi(this, 'WhodunitWebSocketApi', {
+      connectRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WhodunitConnectIntegration', whodunitHandler),
+      },
+      disconnectRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WhodunitDisconnectIntegration', whodunitHandler),
+      },
+      defaultRouteOptions: {
+        integration: new apigwv2Integrations.WebSocketLambdaIntegration('WhodunitDefaultIntegration', whodunitHandler),
+      },
+    });
+    const whodunitStage = new apigwv2.WebSocketStage(this, 'WhodunitWebSocketStage', {
+      webSocketApi: whodunitApi,
+      stageName: 'prod',
+      autoDeploy: true,
+    });
+    this.whodunitWebSocketUrl = whodunitStage.url;
+    whodunitHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['execute-api:ManageConnections'],
+        resources: [
+          Stack.of(this).formatArn({
+            service: 'execute-api',
+            resource: whodunitApi.apiId,
+            resourceName: `${whodunitStage.stageName}/POST/@connections/*`,
+          }),
+        ],
+      }),
+    );
+
+    const whodunitDeployment = new s3Deployment.BucketDeployment(this, 'WhodunitPlayOriginDeployment', {
+      destinationBucket: playOriginBucket,
+      // The sync's --delete is scoped to this prefix, so scribble/ and warships/ are untouched.
+      destinationKeyPrefix: 'whodunit',
+      sources: [
+        s3Deployment.Source.asset(WHODUNIT_ARTIFACT_DIR),
+        s3Deployment.Source.jsonData('config.json', {
+          webSocketUrl: this.whodunitWebSocketUrl,
+          ...(playerAuth
+            ? { auth: { userPoolId: playerAuth.userPoolId, userPoolClientId: playerAuth.userPoolClientId } }
+            : {}),
+        }),
+      ],
+      cacheControl: [s3Deployment.CacheControl.noCache()],
+    });
+    nameBucketDeployLayer(whodunitDeployment, WHODUNIT_DEPLOY_LAYER_NAME);
+
     new CfnOutput(this, 'WebSocketUrl', { value: stage.url });
     new CfnOutput(this, 'TableName', { value: table.tableName });
     new CfnOutput(this, 'PlayOriginBucketName', { value: playOriginBucket.bucketName });
     new CfnOutput(this, 'LobbyUrl', { value: 'https://galaxyclass.app/scribble' });
     new CfnOutput(this, 'WarshipsWebSocketUrl', { value: warshipsStage.url });
     new CfnOutput(this, 'WarshipsLobbyUrl', { value: 'https://galaxyclass.app/warships' });
+    new CfnOutput(this, 'WhodunitWebSocketUrl', { value: whodunitStage.url });
+    new CfnOutput(this, 'WhodunitLobbyUrl', { value: 'https://galaxyclass.app/whodunit' });
   }
 }
 
