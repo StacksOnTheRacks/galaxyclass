@@ -6,10 +6,12 @@ import {
   PLAY_RIFFLE_HREF,
   PLAY_SCRIBBLE_HREF,
   PLAY_WARSHIPS_HREF,
+  PLAY_WHODUNIT_HREF,
 } from "../primitives";
 import { RiffleRoomArt, RiffleWordmark } from "../RiffleScreen";
 import { ScribbleRoomArt, ScribbleWordmark } from "../ScribbleScreen";
 import { WarshipsRoomArt, WarshipsWordmark } from "../WarshipsScreen";
+import { WhodunitRoomArt, WhodunitWordmark } from "../WhodunitScreen";
 
 type Room = {
   id: string;
@@ -53,6 +55,17 @@ const rooms: Room[] = [
     tags: ["Strategy", "2 players", "Members"],
     art: <WarshipsRoomArt className="aspect-[16/9]" />,
     wordmark: <WarshipsWordmark className="text-[24px]" />,
+  },
+  {
+    id: "whodunit",
+    name: "Whodunit?",
+    href: PLAY_WHODUNIT_HREF,
+    accent: "var(--c-whodunit)",
+    blurb:
+      "A mystery at Starfall Manor for 3–6 members. Prowl the halls, rule out what the others show you, and name who did it, with what, and where.",
+    tags: ["Deduction", "3–6 players", "Members"],
+    art: <WhodunitRoomArt className="aspect-[16/9]" />,
+    wordmark: <WhodunitWordmark className="text-[24px]" />,
   },
 ];
 
@@ -127,7 +140,7 @@ export function RoomList() {
             <RoomCard room={room} />
           </li>
         ))}
-        <li className="sm:col-span-2 lg:col-span-3">
+        <li className="sm:col-span-2 lg:col-span-2">
           <ComingSoonCard />
         </li>
       </ul>
