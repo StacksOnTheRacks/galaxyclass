@@ -1,0 +1,34 @@
+{
+  "name": "@galaxyclass/warships",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "dev": "npm run build:client && tsx src/dev/server.ts",
+    "test": "npm run build:client && vitest run",
+    "test:e2e": "npm run build:client && playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.787.0",
+    "@aws-sdk/client-dynamodb": "^3.787.0",
+    "@aws-sdk/lib-dynamodb": "^3.787.0",
+    "@galaxyclass/accounts": "*",
+    "aws-amplify": "^6.22.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.14.1",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.25.2",
+    "happy-dom": "^17.6.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.2",
+    "ws": "^8.22.0"
+  }
+}
