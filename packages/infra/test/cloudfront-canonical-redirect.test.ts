@@ -112,6 +112,26 @@ test('www redirect keeps /warships table paths', () => {
   );
 });
 
+test('extensionless /whodunit routes rewrite to /whodunit/index.html and files pass through', () => {
+  const rewrite = (uri: string) => asRequest(runViewerRequest(event(uri, 'galaxyclass.app'))).uri;
+  assert.equal(rewrite('/whodunit'), '/whodunit/index.html');
+  assert.equal(rewrite('/whodunit/'), '/whodunit/index.html');
+  assert.equal(rewrite(`/whodunit/${TABLE_GUID}`), '/whodunit/index.html');
+  assert.equal(rewrite('/whodunit/config.json'), '/whodunit/config.json');
+  assert.equal(rewrite('/whodunit/main.js'), '/whodunit/main.js');
+  assert.equal(rewrite('/whodunit/chunks/table-app-ABC123.js'), '/whodunit/chunks/table-app-ABC123.js');
+  assert.equal(rewrite('/whodunit/assets/favicon.svg'), '/whodunit/assets/favicon.svg');
+  assert.equal(rewrite('/whodunits'), '/whodunits.html');
+  assert.equal(rewrite('/warshipswhodunit'), '/warshipswhodunit.html');
+});
+
+test('www redirect keeps /whodunit table paths', () => {
+  assert.equal(
+    locationOf(runViewerRequest(event(`/whodunit/${TABLE_GUID}`, 'www.galaxyclass.app'))),
+    `https://galaxyclass.app/whodunit/${TABLE_GUID}`,
+  );
+});
+
 test('www redirect keeps /scribble table paths', () => {
   assert.equal(
     locationOf(runViewerRequest(event(`/scribble/${TABLE_GUID}`, 'www.galaxyclass.app'))),

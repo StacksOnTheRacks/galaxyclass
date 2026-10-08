@@ -179,7 +179,7 @@ export class GalaxyClassSiteStack extends Stack {
       };
     }
     if (scribbleOrigin && scribbleHeaders) {
-      for (const pattern of ['/scribble', '/scribble/*', '/warships', '/warships/*']) {
+      for (const pattern of ['/scribble', '/scribble/*', '/warships', '/warships/*', '/whodunit', '/whodunit/*']) {
         additionalBehaviors[pattern] = {
           origin: scribbleOrigin,
           responseHeadersPolicy: scribbleHeaders,
