@@ -33,9 +33,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Every cdk deploy synthesizes the whole app, and ScribbleRuntimeStack stages this artifact.
-      - name: Build Scribble client artifacts
-        run: npm run build:scribble
+      # Every cdk deploy synthesizes the whole app, and ScribbleRuntimeStack stages both artifacts.
+      - name: Build Scribble and Warships client artifacts
+        run: npm run build:scribble && npm run build:warships
 
       - name: Deploy GalaxyClassAuth-prod
         working-directory: packages/infra

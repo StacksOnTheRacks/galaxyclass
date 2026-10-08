@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "synth": "cdk synth",
-    "pretest": "npm run build:dashboard-riffle --workspace=@galaxyclass/riffle && npm run build:client --workspace=@galaxyclass/scribble",
+    "pretest": "npm run build:dashboard-riffle --workspace=@galaxyclass/riffle && npm run build:client --workspace=@galaxyclass/scribble && npm run build:client --workspace=@galaxyclass/warships",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

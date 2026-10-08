@@ -240,7 +240,7 @@ test('viewer-request function is associated before origin on every behavior', ()
   const code = String((functions[functionIds[0]] as Resource).Properties?.FunctionCode);
   assert.equal(code, canonicalRedirectFunctionCode);
   assert.match(code, /www\.galaxyclass\.app/);
-  assert.match(code, /\['\/riffle', '\/scribble'\]/);
+  assert.match(code, /\['\/riffle', '\/scribble', '\/warships'\]/);
   assert.match(code, /'\/index\.html'/);
 
   const distribution = distributionConfig(template);
@@ -322,9 +322,12 @@ test('scribble is served from its own play origin at /scribble with its own CSP'
   const behaviors = distribution.CacheBehaviors as Array<Record<string, any>>;
   assert.deepEqual(
     behaviors.map((behavior) => behavior.PathPattern).sort(),
-    [PROFILE_API_PATH, '/riffle', '/riffle/*', '/scribble', '/scribble/*'],
+    [PROFILE_API_PATH, '/riffle', '/riffle/*', '/scribble', '/scribble/*', '/warships', '/warships/*'],
   );
-  const scribble = behaviors.filter((behavior) => String(behavior.PathPattern).startsWith('/scribble'));
+  // Warships deploys under warships/ in the Scribble play-origin bucket and shares its CSP.
+  const scribble = behaviors.filter((behavior) => /^\/(scribble|warships)/.test(String(behavior.PathPattern)));
+  assert.equal(scribble.length, 4);
+  assert.equal(new Set(scribble.map((behavior) => behavior.TargetOriginId)).size, 1);
   const riffle = behaviors.find((behavior) => behavior.PathPattern === '/riffle')!;
   assert.equal(scribble[0]!.TargetOriginId, scribble[1]!.TargetOriginId);
   assert.notEqual(scribble[0]!.TargetOriginId, riffle.TargetOriginId);
