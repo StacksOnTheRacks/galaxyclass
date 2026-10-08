@@ -18,10 +18,18 @@ describe("next across auth pages", () => {
   });
 
   it("recognizes the games, which load outside the Next app", () => {
-    for (const path of ["/scribble", "/scribble/abc", "/riffle", "/riffle?x=1", "/riffle#t"]) {
+    for (const path of [
+      "/scribble",
+      "/scribble/abc",
+      "/riffle",
+      "/riffle?x=1",
+      "/riffle#t",
+      "/warships",
+      "/warships/abc",
+    ]) {
       expect(isGamePath(path)).toBe(true);
     }
-    for (const path of ["/account", "/scribbles", "/about", "/"]) {
+    for (const path of ["/account", "/scribbles", "/warshipss", "/about", "/"]) {
       expect(isGamePath(path)).toBe(false);
     }
   });
@@ -31,6 +39,7 @@ describe("safeNext", () => {
   it("keeps a single-slash relative path", () => {
     expect(safeNext("/account")).toBe("/account");
     expect(safeNext("/riffle")).toBe("/riffle");
+    expect(safeNext("/warships/abc")).toBe("/warships/abc");
   });
 
   it("falls back when the value is missing, protocol-relative, or a scheme", () => {
