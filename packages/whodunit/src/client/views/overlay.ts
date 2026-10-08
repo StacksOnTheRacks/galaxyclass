@@ -21,6 +21,20 @@ export interface EndState {
   me: SeatId | null;
 }
 
+/** The magnifying glass from the favicon, inside the brass ring. Static markup. */
+const EMBLEM_SVG =
+  '<svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">' +
+  '<circle cx="27" cy="27" r="17" fill="#2a1745"/><circle cx="27" cy="23" r="6" fill="#d9a441"/>' +
+  '<path d="M23.5 26h7l2.5 13h-12z" fill="#d9a441"/>' +
+  '<circle cx="27" cy="27" r="17" fill="none" stroke="#ff4fa3" stroke-width="4.5"/>' +
+  '<path d="M40 40l14 14" stroke="#f5c96b" stroke-width="6" stroke-linecap="round"/></svg>';
+
+function emblem(): HTMLElement {
+  const node = h('span', { class: 'wd-end-emblem', 'aria-hidden': 'true' });
+  node.innerHTML = EMBLEM_SVG;
+  return node;
+}
+
 const TITLES: Record<EndReason, { win: string; other: string }> = {
   solved: { win: 'Case solved!', other: 'Case closed' },
   unsolved: { win: 'Case gone cold', other: 'Case gone cold' },
@@ -77,7 +91,7 @@ export class Overlay {
       h(
         'div',
         { class: 'wd-end-card' },
-        h('span', { class: 'wd-end-emblem', 'aria-hidden': 'true' }),
+        emblem(),
         this.endTitle,
         this.endLine,
         this.endSolution,

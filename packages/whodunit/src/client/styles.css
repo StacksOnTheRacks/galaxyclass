@@ -1507,6 +1507,8 @@ body {
 }
 
 .wd-end-emblem {
+  display: grid;
+  place-items: center;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -1536,6 +1538,10 @@ body {
 .wd-end-solution-line,
 .wd-end-note {
   margin: 0;
+}
+
+.wd-end-report .wd-recap-solution {
+  display: none;
 }
 
 .wd-end-solution-line {
