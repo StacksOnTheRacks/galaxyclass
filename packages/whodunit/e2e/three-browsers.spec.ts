@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { cardName } from '../src/client/cards.js';
 import { SCRIPTED_DEAL_SEED } from '../src/dev/dev-tables.js';
 import type { CardId, GameEvent, SeatId, SuspectId, TableSnapshot } from '../src/protocol.js';
 import { SUSPECT_IDS, WEAPON_IDS } from '../src/rules/constants.js';
@@ -111,6 +112,9 @@ test('three detectives pick suspects, walk, suggest, refute privately, accuse, a
   }
   await waitFor(inspector.page, `s.seats.filter((seat) => seat.ready).length === 3`);
   await inspector.page.screenshot({ path: testInfo.outputPath('setup-inspector.png') });
+  // The line-up, Open the case, and the invite link sit beside the board without page scroll.
+  expect(await inspector.page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+  await expect(inspector.page.getByTestId('start-game')).toBeInViewport();
   await expect(sleuth.page.getByTestId('start-game')).toBeHidden();
   await inspector.page.getByTestId('start-game').click();
 
@@ -179,10 +183,20 @@ test('three detectives pick suspects, walk, suggest, refute privately, accuse, a
         expect(event.card).toBeUndefined();
       }
     }
+    // The suggester sees the shown card itself, face up; nobody else gets the popup.
+    const popup = inspector.page.getByTestId('shown-card');
+    await expect(popup).toBeVisible();
+    await expect(popup.locator('.wd-card-name')).toHaveText(cardName(shownCard));
     await inspector.page.screenshot({ path: testInfo.outputPath('refuted-inspector.png') });
+    await expect(refuter.page.getByTestId('shown-card')).toBeHidden();
+    await expect(bystander.page.getByTestId('shown-card')).toBeHidden();
+    await inspector.page.getByTestId('shown-card-dismiss').click();
+    await expect(popup).toBeHidden();
   }
   await waitMyMove(inspector);
   await inspector.page.screenshot({ path: testInfo.outputPath('table-inspector-full.png'), fullPage: true });
+  // Controls, board, and notepad all fit the window: the page itself never scrolls.
+  expect(await inspector.page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
   await inspector.page.getByTestId('end-turn').click();
 
   // Turn 2: the Sleuth accuses wrongly and is out of the running, but stays at the table.

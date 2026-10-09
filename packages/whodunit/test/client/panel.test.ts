@@ -21,11 +21,11 @@ function panel(state: TableSnapshot) {
     cycleNote: vi.fn(),
   };
   const view = new Panel(intents as unknown as PanelIntents);
-  document.body.replaceChildren(view.root);
+  document.body.replaceChildren(view.root, view.side);
   const update = (next: TableSnapshot) =>
     view.update({ vm: viewModel(next, { serverNow: 5_000, resolving: false }), snapshot: next, notes: noteRows(next, {}), names: namesFor(next.seats, '1') });
   update(state);
-  const q = <T extends HTMLElement = HTMLElement>(testid: string) => view.root.querySelector<T>(`[data-testid="${testid}"]`)!;
+  const q = <T extends HTMLElement = HTMLElement>(testid: string) => document.body.querySelector<T>(`[data-testid="${testid}"]`)!;
   return { view, intents, q, update };
 }
 
@@ -112,7 +112,9 @@ describe('control panel', () => {
   });
 
   it('keeps a notepad with your hand already filled in, and cycles the rest', () => {
-    const { q, intents } = panel(snapshot());
+    const { view, q, intents } = panel(snapshot());
+    expect(view.side.contains(q('notepad'))).toBe(true);
+    expect(view.root.contains(q('notepad'))).toBe(false);
     const known = q<HTMLButtonElement>('note-rook-1');
     expect(known.dataset.mark).toBe('has');
     expect(known.disabled).toBe(true);

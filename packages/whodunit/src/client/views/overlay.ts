@@ -1,9 +1,19 @@
 import type { GameRecap, PublicSeat, Solution } from '../../protocol.js';
-import type { EndReason, SeatId } from '../../rules/types.js';
-import { solutionLine } from '../cards.js';
+import type { CardId, EndReason, SeatId, SuspectId } from '../../rules/types.js';
+import { cardName, solutionLine } from '../cards.js';
 import { h, setText } from './dom.js';
-import { cardFace } from './figures.js';
+import { cardFace, suspectChip } from './figures.js';
 import { renderRecap } from './recap-view.js';
+
+/** How long the card you were shown stays up before it tucks itself away. */
+export const SHOWN_CARD_MS = 6000;
+
+export interface ShownCard {
+  card: CardId;
+  /** Who showed it, and the suspect they play (for the portrait chip). */
+  fromName: string;
+  fromSuspect: SuspectId | null;
+}
 
 export interface EndIntents {
   newGame(): void;
@@ -43,13 +53,20 @@ const TITLES: Record<EndReason, { win: string; other: string }> = {
 
 /**
  * Everything layered over the table: toasts, the polite live region that narrates every event,
- * the banner layer, and the end screen with the case file and New case.
+ * the banner layer, the card another detective just showed you, and the end screen with the case
+ * file and New case.
  */
 export class Overlay {
   readonly bannerLayer: HTMLElement;
   readonly toastEl: HTMLElement;
   readonly live: HTMLElement;
   readonly end: HTMLElement;
+  readonly shown: HTMLElement;
+  private readonly shownFrom: HTMLElement;
+  private readonly shownChip: HTMLElement;
+  private readonly shownSlot: HTMLElement;
+  private readonly shownNote: HTMLElement;
+  private shownTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly endTitle: HTMLElement;
   private readonly endLine: HTMLElement;
   private readonly endSolution: HTMLElement;
@@ -66,6 +83,28 @@ export class Overlay {
     this.bannerLayer = h('div', { class: 'wd-banners', 'aria-hidden': 'true' });
     this.toastEl = h('div', { class: 'wd-toast', role: 'status', 'aria-live': 'polite', hidden: true });
     this.live = h('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
+
+    this.shownChip = h('span', { class: 'wd-shown-chip' });
+    this.shownFrom = h('span', {});
+    this.shownSlot = h('div', { class: 'wd-shown-slot' });
+    this.shownNote = h('p', { class: 'wd-shown-note' });
+    const sheet = h(
+      'div',
+      { class: 'wd-shown-card' },
+      h('p', { class: 'wd-shown-kicker', id: 'wd-shown-title' }, this.shownChip, this.shownFrom),
+      this.shownSlot,
+      this.shownNote,
+      h('button', { type: 'button', class: 'wd-btn wd-btn-primary', 'data-testid': 'shown-card-dismiss' }, 'Got it'),
+      h('span', { class: 'wd-shown-timer', 'aria-hidden': 'true' }),
+    );
+    // A tap anywhere on the card (or Got it) puts it away early.
+    sheet.addEventListener('click', () => this.hideShownCard());
+    this.shown = h(
+      'section',
+      { class: 'wd-shown', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'wd-shown-title', 'data-testid': 'shown-card', hidden: true },
+      sheet,
+    );
+    this.shown.style.setProperty('--wd-shown-ms', `${SHOWN_CARD_MS}ms`);
 
     this.endTitle = h('h2', { class: 'wd-end-title', id: 'wd-end-title' });
     this.endLine = h('p', { class: 'wd-end-line' });
@@ -126,6 +165,32 @@ export class Overlay {
     this.liveTimer = setTimeout(() => {
       this.live.textContent = text;
     }, 30);
+  }
+
+  /** The card a refuter just showed you, face up and large, until it times out or you dismiss it. */
+  showShownCard(shown: ShownCard): void {
+    this.shownChip.replaceChildren(...(shown.fromSuspect ? [suspectChip(shown.fromSuspect, 'wd-note-chip')] : []));
+    setText(this.shownFrom, `${shown.fromName} shows you`);
+    const face = cardFace(shown.card);
+    face.classList.add('wd-shown-face');
+    this.shownSlot.replaceChildren(face);
+    setText(this.shownNote, `Marked on your notepad: ${shown.fromName} has ${cardName(shown.card)}.`);
+    // Hide first so the entrance animation replays when a second card follows the first.
+    this.shown.hidden = true;
+    void this.shown.offsetWidth;
+    this.shown.hidden = false;
+    if (this.shownTimer) {
+      clearTimeout(this.shownTimer);
+    }
+    this.shownTimer = setTimeout(() => this.hideShownCard(), SHOWN_CARD_MS);
+  }
+
+  hideShownCard(): void {
+    if (this.shownTimer) {
+      clearTimeout(this.shownTimer);
+      this.shownTimer = null;
+    }
+    this.shown.hidden = true;
   }
 
   showEnd(state: EndState): void {

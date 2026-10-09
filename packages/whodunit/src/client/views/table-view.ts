@@ -1,4 +1,4 @@
-import type { EventMessage, GameEvent, TableSnapshot } from '../../protocol.js';
+import type { EventMessage, GameEvent, PublicSeat, TableSnapshot } from '../../protocol.js';
 import { ROOM_NAME, SUSPECT_NAME, WEAPON_NAME } from '../../rules/constants.js';
 import type { SeatId } from '../../rules/types.js';
 import type { ManorAudio } from '../audio.js';
@@ -13,7 +13,7 @@ import { endLine, type ViewModel } from '../view-model.js';
 import { BoardView } from './board.js';
 import { h, setText } from './dom.js';
 import { Hud } from './hud.js';
-import { Overlay } from './overlay.js';
+import { Overlay, SHOWN_CARD_MS } from './overlay.js';
 import { Panel, type PanelIntents } from './panel.js';
 import { SetupPanel, type SetupIntents } from './setup.js';
 
@@ -34,10 +34,13 @@ export interface TableDeps {
 /** The end screen waits this long after the final reveal so the stamp lands first. */
 const END_DELAY_MS = 400;
 
+type Refuted = Extract<GameEvent, { kind: 'refuted' }>;
+
 /**
- * The table screen: the HUD and turn line on top, the mansion board as the play surface, and the
- * control panel (or the suspect line-up, before the case) beneath it. Banners, toasts, the live
- * region, and the end screen layer above everything.
+ * The table screen: the HUD and turn line on top, then (during the case) your controls, the
+ * mansion board, and the notepad side by side; before the case, the board with the suspect
+ * line-up beneath it. Banners, the card you were shown, toasts, the live region, and the end
+ * screen layer above everything.
  */
 export class TableView {
   readonly root: HTMLElement;
@@ -57,6 +60,7 @@ export class TableView {
   private clock: FxClock | null = null;
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   private endTimer: ReturnType<typeof setTimeout> | null = null;
+  private shownEventId: string | null = null;
 
   constructor(
     host: HTMLElement,
@@ -89,9 +93,10 @@ export class TableView {
     this.theater = h(
       'div',
       { class: 'wd-theater' },
-      h('div', { class: 'wd-surface' }, this.board.root, this.overlay.bannerLayer),
-      this.setup.root,
       this.panel.root,
+      h('div', { class: 'wd-surface' }, this.board.root, this.overlay.bannerLayer),
+      this.panel.side,
+      this.setup.root,
     );
     this.stage = h('main', { class: 'wd-stage', id: 'main' }, this.joining, this.notice);
     this.root = h(
@@ -100,6 +105,7 @@ export class TableView {
       this.hud.root,
       this.hud.statusBar,
       this.stage,
+      this.overlay.shown,
       this.overlay.end,
       this.overlay.toastEl,
       this.overlay.live,
@@ -129,11 +135,19 @@ export class TableView {
     }
     this.setup.root.hidden = vm.screen !== 'setup';
     this.panel.root.hidden = vm.screen !== 'playing' && vm.screen !== 'finished';
+    this.panel.side.hidden = this.panel.root.hidden;
     if (vm.screen === 'setup') {
       this.setup.update(vm.setup);
     }
     this.board.update(snapshot, vm);
     this.panel.update({ vm, snapshot, notes, names });
+
+    // A card shown while this tab was asleep (or before a reload) skips the animation; still put it
+    // up while it is the latest thing that happened.
+    const last = snapshot?.status === 'playing' ? snapshot.log.at(-1) : undefined;
+    if (last?.kind === 'refuted') {
+      this.showShownCard(last, names, snapshot!.seats);
+    }
 
     this.transitions(prev, vm, snapshot);
     this.prev = vm;
@@ -212,6 +226,9 @@ export class TableView {
     if (event.kind === 'rolled') {
       this.panel.playRoll(event.dice, schedule, elapsed, event.eventId);
     }
+    if (event.kind === 'refuted' && elapsed < SHOWN_CARD_MS) {
+      this.showShownCard(event, names, before?.seats ?? []);
+    }
     for (const { spec, at } of this.banners(event, schedule, names)) {
       if (at + 200 >= elapsed) {
         scheduleBanner(this.overlay.bannerLayer, spec, { clock, start: at, reduced: schedule.reduced });
@@ -246,9 +263,7 @@ export class TableView {
         return out;
       }
       case 'refuted': {
-        if (event.card && event.suggesterSeatId === names.me) {
-          return [{ spec: { kicker: `${names.name(event.refuterSeatId)} shows you`, title: cardName(event.card), tone: 'mine' }, at: 0 }];
-        }
+        // The suggester gets the card itself (showShownCard), not a banner.
         if (event.card && event.refuterSeatId === names.me) {
           return [{ spec: { kicker: `You show ${names.name(event.suggesterSeatId)}`, title: cardName(event.card), tone: 'mine' }, at: 0 }];
         }
@@ -281,6 +296,19 @@ export class TableView {
       default:
         return [];
     }
+  }
+
+  /** Once per refutation, and only for the suggester, who is the one the card was shown to. */
+  private showShownCard(event: Refuted, names: Names, seats: readonly PublicSeat[]): void {
+    if (!event.card || event.suggesterSeatId !== names.me || event.eventId === this.shownEventId) {
+      return;
+    }
+    this.shownEventId = event.eventId;
+    this.overlay.showShownCard({
+      card: event.card,
+      fromName: names.name(event.refuterSeatId),
+      fromSuspect: seats.find((seat) => seat.seatId === event.refuterSeatId)?.suspect ?? null,
+    });
   }
 
   private sounds(event: GameEvent, schedule: EventSchedule, elapsed: number, me: SeatId | null): void {
