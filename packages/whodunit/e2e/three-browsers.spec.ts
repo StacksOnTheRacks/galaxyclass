@@ -112,6 +112,9 @@ test('three detectives pick suspects, walk, suggest, refute privately, accuse, a
   }
   await waitFor(inspector.page, `s.seats.filter((seat) => seat.ready).length === 3`);
   await inspector.page.screenshot({ path: testInfo.outputPath('setup-inspector.png') });
+  // The line-up, Open the case, and the invite link sit beside the board without page scroll.
+  expect(await inspector.page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+  await expect(inspector.page.getByTestId('start-game')).toBeInViewport();
   await expect(sleuth.page.getByTestId('start-game')).toBeHidden();
   await inspector.page.getByTestId('start-game').click();
 

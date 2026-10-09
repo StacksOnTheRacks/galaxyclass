@@ -1876,6 +1876,12 @@ body {
   }
 }
 
+/* Stacked, the line-up comes first: picking a suspect should not mean scrolling past the board. */
+.wd-app[data-screen='setup'] .wd-theater {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'setup' 'surface';
+}
+
 @media (max-width: 860px) {
   .wd-surface {
     width: min(100%, calc(100dvh - 120px));
@@ -1887,12 +1893,12 @@ body {
 }
 
 /*
- * Fitted table: during the case the app is exactly the viewport tall and the stage takes what the
- * top bar and turn line leave. The stage is a size container, so the board column is
- * min(stage height, what the side columns leave) and the board stays square at that size.
+ * Fitted table: before and during the case the app is exactly the viewport tall and the stage
+ * takes what the top bar and turn line leave. The stage is a size container, so the board column
+ * is min(stage height, what the side columns leave) and the board stays square at that size.
  */
 @media (min-width: 900px) and (min-height: 600px) {
-  .wd-app:is([data-screen='playing'], [data-screen='finished']) {
+  .wd-app:is([data-screen='setup'], [data-screen='playing'], [data-screen='finished']) {
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -1900,21 +1906,54 @@ body {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
-  .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-topbar {
+  .wd-app:is([data-screen='setup'], [data-screen='playing'], [data-screen='finished']) .wd-topbar {
     width: 100%;
     max-width: 1840px;
   }
 
-  .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-status {
+  .wd-app:is([data-screen='setup'], [data-screen='playing'], [data-screen='finished']) .wd-status {
     width: 100%;
   }
 
-  .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-stage {
+  .wd-app:is([data-screen='setup'], [data-screen='playing'], [data-screen='finished']) .wd-stage {
     flex: 1 1 0;
     width: 100%;
     max-width: 1840px;
     min-height: 0;
     container-type: size;
+  }
+
+  .wd-app:is([data-screen='setup'], [data-screen='playing'], [data-screen='finished']) .wd-surface {
+    width: 100%;
+    min-width: 0;
+    align-self: center;
+  }
+
+  /* Before the case: the line-up beside the board, in the column your controls take later. */
+  .wd-app[data-screen='setup'] .wd-theater {
+    height: 100%;
+    grid-template-columns: minmax(380px, 560px) min(100cqh, 100cqw - 392px);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: 'setup surface';
+    justify-content: center;
+    align-items: stretch;
+  }
+
+  .wd-app[data-screen='setup'] .wd-setup {
+    align-content: safe center;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wd-bezel) transparent;
+  }
+
+  .wd-app[data-screen='setup'] .wd-lineup {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wd-app[data-screen='setup'] .wd-pick-frame {
+    width: min(100%, 92px, 11cqh);
   }
 
   .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-theater {
@@ -1924,12 +1963,6 @@ body {
     grid-template-areas: 'main surface' 'side surface';
     justify-content: center;
     align-items: stretch;
-  }
-
-  .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-surface {
-    width: 100%;
-    min-width: 0;
-    align-self: center;
   }
 
   .wd-app:is([data-screen='playing'], [data-screen='finished']) .wd-hand {
@@ -1955,6 +1988,13 @@ body {
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: var(--wd-bezel) transparent;
+  }
+}
+
+/* A short window drops the line-up's flavour text so the picks, Ready, and the invite link still fit. */
+@media (min-width: 900px) and (min-height: 600px) and (max-height: 820px) {
+  .wd-app[data-screen='setup'] :is(.wd-setup-lede, .wd-pick-role) {
+    display: none;
   }
 }
 
