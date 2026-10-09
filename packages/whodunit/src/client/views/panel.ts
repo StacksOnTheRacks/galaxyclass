@@ -97,11 +97,13 @@ class Picker<T extends string> {
 }
 
 /**
- * The control panel under the board: the dice and what you can do this turn, your hand, the
- * suggestion and accusation forms, the private "show a card" prompt, the notepad, and the case log.
+ * The controls beside the board (`root`): the dice and what you can do this turn, the private
+ * "show a card" prompt, the suggestion and accusation forms, and your hand. The notepad and the
+ * case log sit in their own column (`side`) on the board's other flank.
  */
 export class Panel {
   readonly root: HTMLElement;
+  readonly side: HTMLElement;
   private readonly dice: HTMLElement;
   private readonly dieA: HTMLElement;
   private readonly dieB: HTMLElement;
@@ -261,26 +263,22 @@ export class Panel {
       { class: 'wd-panel', 'aria-label': 'Your turn controls', 'data-testid': 'panel' },
       h(
         'div',
-        { class: 'wd-panel-main' },
-        h(
-          'div',
-          { class: 'wd-turn-box' },
-          this.dice,
-          h('div', { class: 'wd-turn-text' }, this.hint, this.roomList),
-          h('div', { class: 'wd-actions' }, this.rollButton, this.passageButton, this.suggestButton, this.accuseButton, this.endTurnButton),
-        ),
-        this.refuteBox,
-        this.suggestBox,
-        this.accuseBox,
-        h('div', { class: 'wd-hand-box' }, h('h3', { class: 'wd-box-title' }, 'Your cards'), this.hand),
+        { class: 'wd-turn-box' },
+        this.dice,
+        h('div', { class: 'wd-turn-text' }, this.hint, this.roomList),
+        h('div', { class: 'wd-actions' }, this.rollButton, this.passageButton, this.suggestButton, this.accuseButton, this.endTurnButton),
       ),
-      h(
-        'div',
-        { class: 'wd-panel-side' },
-        h('div', { class: 'wd-tabs', role: 'tablist', 'aria-label': 'Notes' }, notesTab, logTab),
-        notesPanel,
-        logPanel,
-      ),
+      this.refuteBox,
+      this.suggestBox,
+      this.accuseBox,
+      h('div', { class: 'wd-hand-box' }, h('h3', { class: 'wd-box-title' }, 'Your cards'), this.hand),
+    );
+    this.side = h(
+      'section',
+      { class: 'wd-notes', 'aria-label': 'Notepad and case log', 'data-testid': 'notes' },
+      h('div', { class: 'wd-tabs', role: 'tablist', 'aria-label': 'Notes' }, notesTab, logTab),
+      notesPanel,
+      logPanel,
     );
   }
 
@@ -306,7 +304,8 @@ export class Panel {
     this.suggestSuspect.set(null);
     this.suggestWeapon.set(null);
     show(this.suggestBox, true);
-    this.suggestBox.querySelector<HTMLButtonElement>('.wd-option')?.focus();
+    this.suggestBox.querySelector<HTMLButtonElement>('.wd-option')?.focus({ preventScroll: true });
+    this.suggestBox.scrollIntoView?.({ block: 'nearest' });
   }
 
   private openAccuse(): void {
@@ -320,7 +319,8 @@ export class Panel {
     show(this.accuseForm, true);
     show(this.accuseConfirmBox, false);
     show(this.accuseBox, true);
-    this.accuseBox.querySelector<HTMLButtonElement>('.wd-option')?.focus();
+    this.accuseBox.querySelector<HTMLButtonElement>('.wd-option')?.focus({ preventScroll: true });
+    this.accuseBox.scrollIntoView?.({ block: 'nearest' });
   }
 
   closeSheets(): void {

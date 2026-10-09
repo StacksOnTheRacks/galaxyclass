@@ -56,6 +56,67 @@ describe('table screen', () => {
     view.stopFx();
   });
 
+  it('lays out your controls, the board, and the notepad side by side, in that order', () => {
+    const { host, render } = table();
+    render(snapshot());
+    const theater = host.querySelector('.wd-theater')!;
+    const columns = [...theater.children].filter((child) => !(child as HTMLElement).hidden).map((child) => child.className);
+    expect(columns).toEqual(['wd-panel', 'wd-surface', 'wd-notes']);
+    expect(host.querySelector<HTMLElement>('[data-testid="notes"]')!.querySelector('[data-testid="notepad"]')).not.toBeNull();
+  });
+
+  it('puts the card you were shown up large, then tucks it away', () => {
+    const { view, host, render } = table();
+    const names = namesFor(snapshot().seats, '1');
+    render(snapshot());
+    const shown = host.querySelector<HTMLElement>('[data-testid="shown-card"]')!;
+    expect(shown.hidden).toBe(true);
+
+    const refuted = eventMessage({ kind: 'refuted', suggesterSeatId: '1', refuterSeatId: '2', card: 'juniper' });
+    view.playEvent(refuted, eventSchedule(refuted.event, { reduced: false }), 0, snapshot(), names);
+    expect(shown.hidden).toBe(false);
+    expect(shown.querySelector('.wd-shown-kicker')?.textContent).toBe('Sleuth shows you');
+    expect(shown.querySelector('.wd-card-name')?.textContent).toBe('Juniper Lark');
+    expect(shown.querySelector('.wd-shown-chip [data-suspect="finch"]')).not.toBeNull();
+    // The popup replaces the suggester's banner rather than doubling it.
+    expect(host.querySelector('.wd-banner')).toBeNull();
+
+    // Folding the same event into the log does not put it up a second time.
+    shown.querySelector<HTMLButtonElement>('[data-testid="shown-card-dismiss"]')!.click();
+    expect(shown.hidden).toBe(true);
+    render(snapshot({ log: [refuted.event] }));
+    expect(shown.hidden).toBe(true);
+
+    const again = eventMessage({ kind: 'refuted', suggesterSeatId: '1', refuterSeatId: '3', card: 'bust' });
+    view.playEvent(again, eventSchedule(again.event, { reduced: false }), 0, snapshot(), names);
+    expect(shown.hidden).toBe(false);
+    vi.advanceTimersByTime(6100);
+    expect(shown.hidden).toBe(true);
+    view.stopFx();
+  });
+
+  it('shows the card only to the detective it was shown to', () => {
+    const { view, host, render } = table();
+    render(snapshot());
+    const shown = host.querySelector<HTMLElement>('[data-testid="shown-card"]')!;
+    const mine = eventMessage({ kind: 'refuted', suggesterSeatId: '2', refuterSeatId: '1', card: 'rook' });
+    view.playEvent(mine, eventSchedule(mine.event, { reduced: false }), 0, snapshot(), namesFor(snapshot().seats, '1'));
+    expect(shown.hidden).toBe(true);
+    const theirs = eventMessage({ kind: 'refuted', suggesterSeatId: '2', refuterSeatId: '3' });
+    view.playEvent(theirs, eventSchedule(theirs.event, { reduced: false }), 0, snapshot(), namesFor(snapshot().seats, '1'));
+    expect(shown.hidden).toBe(true);
+    view.stopFx();
+  });
+
+  it('still shows a card that arrived while the tab was away, while it is the latest news', () => {
+    const { host, render } = table();
+    const refuted = eventMessage({ kind: 'refuted', suggesterSeatId: '1', refuterSeatId: '2', card: 'juniper' }).event;
+    render(snapshot({ log: [refuted] }));
+    const shown = host.querySelector<HTMLElement>('[data-testid="shown-card"]')!;
+    expect(shown.hidden).toBe(false);
+    expect(shown.querySelector('.wd-card-name')?.textContent).toBe('Juniper Lark');
+  });
+
   it('shows a notice, and no board, to a member at a locked table', () => {
     const { host, render } = table();
     const base = snapshot();

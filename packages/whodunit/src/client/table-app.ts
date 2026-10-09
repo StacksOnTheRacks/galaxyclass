@@ -341,6 +341,7 @@ export function startTable(host: HTMLElement, config: WhodunitConfig, tableId: s
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       view.panel.closeSheets();
+      view.overlay.hideShownCard();
     }
   });
   motion.onChange(() => render());
