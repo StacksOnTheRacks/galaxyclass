@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Bungee, Chakra_Petch, Silkscreen } from "next/font/google";
+import { Bungee, Chakra_Petch, Outfit, Silkscreen } from "next/font/google";
 import { SessionProvider } from "@/lib/auth/session";
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-outfit",
+  display: "swap",
+});
 
 const bungee = Bungee({
   subsets: ["latin"],
@@ -25,19 +32,19 @@ const silkscreen = Silkscreen({
 });
 
 export const metadata: Metadata = {
-  title: "Galaxy Class Gaming — Pick a room and play",
+  title: "Galaxy Class — Deep games you can open in a tab",
   description:
-    "Galaxy Class Gaming makes online game rooms for strangers, friends, and family. Play Riffle Poker, Scribble, Warships, or Whodunit? in your browser with social chips — nothing to buy.",
+    "Galaxy Class makes larger original games, starting with Aphelion Run. The Arcade keeps Riffle Poker, Scribble, Warships, and Whodunit? in the browser.",
   openGraph: {
-    title: "Galaxy Class Gaming",
+    title: "Galaxy Class",
     description:
-      "Game rooms for strangers, friends, and family: Riffle Poker, Scribble, Warships, and Whodunit? Social chips only — nothing to buy.",
+      "A studio for larger games, starting with Aphelion Run. The Arcade holds Riffle Poker, Scribble, Warships, and Whodunit?.",
     type: "website",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09080d",
+  themeColor: "#08080a",
   viewportFit: "cover",
 };
 
@@ -49,7 +56,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${bungee.variable} ${chakra.variable} ${silkscreen.variable}`}
+      className={`${outfit.variable} ${bungee.variable} ${chakra.variable} ${silkscreen.variable}`}
     >
       <body className="min-h-screen overflow-x-hidden">
         <SessionProvider>{children}</SessionProvider>

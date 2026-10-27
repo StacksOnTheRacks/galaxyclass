@@ -2,11 +2,11 @@
 
 import type { ReactNode } from "react";
 import {
+  ARCADE_HREF,
   ButtonLink,
   buttonClass,
   Frame,
   HudLabel,
-  ROOMS_HREF,
 } from "@/components/primitives";
 import { SiteShell } from "@/components/SiteShell";
 
@@ -38,8 +38,8 @@ const screens: Record<
       headline: "Welcome back, player.",
       points: [
         "Your account works across every Galaxy Class game.",
-        "Start private, invite-only tables for your people.",
-        "Social chips only — nothing to buy.",
+        "In The Arcade, start private, invite-only tables for your people.",
+        "The Arcade uses social chips — nothing to buy.",
       ],
     },
   },
@@ -51,9 +51,9 @@ const screens: Record<
       headline: "One account. Every game.",
       points: [
         "Pick a gamer tag — it’s how other players see you.",
-        "Works across every Galaxy Class game, starting with Riffle Poker.",
-        "Unlocks private, invite-only tables.",
-        "Free: nothing to buy, no cashier, no KYC.",
+        "Works across every Galaxy Class game.",
+        "Unlocks private, invite-only tables in The Arcade.",
+        "The Arcade is free: social chips, nothing to buy, no cashier, no KYC.",
       ],
     },
   },
@@ -97,11 +97,11 @@ const screens: Record<
     eyebrow: "Your account",
     aside: {
       kicker: "Player card",
-      headline: "One sign-in, every room.",
+      headline: "One sign-in, every game.",
       points: [
-        "Your gamer tag and avatar follow you into every room.",
-        "Private, invite-only tables in supported games.",
-        "Social chips only — nothing to buy.",
+        "Your gamer tag and avatar follow you into every Galaxy Class game.",
+        "Private, invite-only tables in The Arcade.",
+        "The Arcade uses social chips — nothing to buy.",
       ],
     },
   },
@@ -121,7 +121,7 @@ function Steps({ flow, done }: { flow: Flow; done: boolean }) {
             aria-current={state === "current" ? "step" : undefined}
             className={`flex flex-col gap-1.5 rounded-sm border px-2.5 py-2 ${
               state === "current"
-                ? "border-cyan bg-cyan/10 text-ink"
+                ? "border-mark bg-mark/10 text-ink"
                 : state === "done"
                   ? "border-bezel bg-floor text-ink-muted"
                   : "border-dashed border-bezel text-ink-muted"
@@ -150,42 +150,35 @@ function AuthAside({ kind }: { kind: AuthScreenKind }) {
   return (
     <aside
       aria-labelledby="auth-aside-heading"
-      className="flex flex-col lg:panel lg:p-4"
+      className="flex flex-col gap-8 lg:panel lg:justify-between lg:p-8"
     >
-      <div className="flex flex-1 flex-col justify-between gap-8 lg:crt lg:bg-[radial-gradient(ellipse_at_20%_0%,rgb(var(--c-pink)/0.18),transparent_60%),radial-gradient(ellipse_at_100%_100%,rgb(var(--c-cyan)/0.14),transparent_60%)] lg:p-8">
-        <div className="flex flex-col gap-4 max-lg:hidden">
-          <HudLabel tone="cyan">{aside.kicker}</HudLabel>
-          <h2
-            id="auth-aside-heading"
-            className="font-display text-display-l uppercase text-ink [text-shadow:0_0_22px_rgb(var(--c-pink)/0.4)]"
-          >
-            {aside.headline}
-          </h2>
-          <ul className="flex flex-col gap-3">
-            {aside.points.map((point) => (
-              <li key={point} className="flex gap-3 text-body text-ink/90">
-                <span aria-hidden="true" className="text-pink">
-                  ▸
-                </span>
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="flex flex-col gap-4 max-lg:hidden">
+        <HudLabel tone="mark">{aside.kicker}</HudLabel>
+        <h2
+          id="auth-aside-heading"
+          className="font-display text-display-l font-medium leading-[1.05] tracking-[-0.02em] text-ink"
+        >
+          {aside.headline}
+        </h2>
+        <ul className="flex flex-col gap-3">
+          {aside.points.map((point) => (
+            <li key={point} className="flex gap-3 text-body text-ink/90">
+              <span aria-hidden="true" className="text-mark">
+                ▸
+              </span>
+              {point}
+            </li>
+          ))}
+        </ul>
+      </div>
 
-        <div className="flex flex-col gap-3 border-bezel/70 max-lg:px-1 lg:border-t lg:pt-5">
-          <p className="text-small text-ink-muted">
-            Just here for poker? Riffle Poker needs no account.
-          </p>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <ButtonLink href={ROOMS_HREF} variant="secondary" arrow className="max-sm:w-full">
-              Browse rooms
-            </ButtonLink>
-            <HudLabel tone="amber" as="span" className="max-lg:hidden">
-              Free play
-            </HudLabel>
-          </div>
-        </div>
+      <div className="flex flex-col gap-3 border-bezel/70 max-lg:px-1 lg:border-t lg:pt-5">
+        <p className="text-small text-ink-muted">
+          Just here for poker? Riffle Poker needs no account.
+        </p>
+        <ButtonLink href={ARCADE_HREF} variant="secondary" arrow className="self-start max-sm:w-full">
+          The Arcade
+        </ButtonLink>
       </div>
     </aside>
   );
@@ -218,7 +211,7 @@ export function AuthScreen({
             aria-labelledby="auth-heading"
             className="panel flex flex-col gap-6 p-4 sm:p-7"
           >
-            <HudLabel tone="pink" as="span">
+            <HudLabel tone="mark" as="span">
               {config.eyebrow}
             </HudLabel>
 
@@ -270,8 +263,8 @@ export function FormAlert({ children }: { children: ReactNode }) {
 
 export function FormNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-3 rounded-md border border-cyan/60 bg-cyan/10 px-4 py-3">
-      <span aria-hidden="true" className="font-display text-[13px] text-cyan">
+    <div className="flex items-start gap-3 rounded-md border border-mark/60 bg-mark/10 px-4 py-3">
+      <span aria-hidden="true" className="font-display text-[13px] text-mark">
         i
       </span>
       <p role="status" className="text-small text-ink">
@@ -342,10 +335,10 @@ export function TextField({
         autoCapitalize={autoCapitalize}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
-        className={`min-h-12 w-full rounded-md border-2 bg-void px-4 text-body text-ink shadow-[inset_0_2px_8px_rgb(0_0_0/0.55)] transition duration-quick placeholder:text-ink-muted focus:shadow-glow-cyan focus-visible:rounded-md focus-visible:outline-offset-2 ${
+        className={`min-h-12 w-full rounded-md border-2 bg-void px-4 text-body text-ink shadow-[inset_0_2px_8px_rgb(0_0_0/0.35)] transition duration-quick placeholder:text-ink-muted focus:shadow-glow-mark focus-visible:rounded-md focus-visible:outline-offset-2 ${
           error
             ? "border-danger focus:border-danger"
-            : "border-bezel hover:border-bezel-hi focus:border-cyan"
+            : "border-bezel hover:border-bezel-hi focus:border-mark"
         }`}
       />
       {error ? (

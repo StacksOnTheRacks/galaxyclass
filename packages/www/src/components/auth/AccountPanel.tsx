@@ -14,7 +14,7 @@ import { AuthScreen, FormAlert, TextAction } from "./ui";
 function SectionHeading({ id, kicker, children }: { id: string; kicker: string; children: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <HudLabel tone="pink" as="span">
+      <HudLabel tone="mark" as="span">
         {kicker}
       </HudLabel>
       <h2 id={id} className="font-display text-heading uppercase text-ink">

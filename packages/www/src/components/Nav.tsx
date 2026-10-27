@@ -6,19 +6,19 @@ import { PlayerIcon } from "./icons";
 import {
   ABOUT_HREF,
   ACCOUNT_HREF,
+  ARCADE_HREF,
   ButtonLink,
   buttonClass,
   Frame,
   Logo,
-  ROOMS_HREF,
   SIGN_IN_HREF,
   SIGN_UP_HREF,
 } from "./primitives";
 
-export type NavSection = "rooms" | "about" | "account";
+export type NavSection = "arcade" | "about" | "account";
 
 export const sections: { href: string; label: string; section: NavSection }[] = [
-  { href: ROOMS_HREF, label: "Rooms", section: "rooms" },
+  { href: ARCADE_HREF, label: "Arcade", section: "arcade" },
   { href: ABOUT_HREF, label: "About", section: "about" },
 ];
 
@@ -34,7 +34,7 @@ function Tabs({ current }: { current?: NavSection }) {
               aria-current={active ? "page" : undefined}
               className={`relative inline-flex min-h-11 items-center px-3 font-display text-[14px] uppercase tracking-wider transition duration-quick hover:text-ink ${
                 active
-                  ? "text-ink after:absolute after:inset-x-3 after:bottom-1 after:h-[3px] after:rounded-full after:bg-cyan after:shadow-glow-cyan"
+                  ? "text-ink after:absolute after:inset-x-3 after:bottom-1 after:h-[3px] after:rounded-full after:bg-mark after:shadow-glow-mark"
                   : "text-ink-muted"
               }`}
             >
@@ -71,7 +71,7 @@ export function Nav({ current }: { current?: NavSection }) {
                   href={ACCOUNT_HREF}
                   aria-label={`Signed in as ${playerLabel(session.profile)}`}
                   aria-current={current === "account" ? "page" : undefined}
-                  className="inline-flex min-h-11 max-w-[14rem] items-center gap-2 rounded-md px-1.5 text-small font-semibold text-ink transition duration-quick hover:text-cyan"
+                  className="inline-flex min-h-11 max-w-[14rem] items-center gap-2 rounded-md px-1.5 text-small font-semibold text-ink transition duration-quick hover:text-mark"
                 >
                   {session.profile ? (
                     <Avatar avatarId={session.profile.avatarId} size="sm" />

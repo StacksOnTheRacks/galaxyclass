@@ -27,6 +27,11 @@ const config: Config = {
           deep: channel("pink-deep"),
         },
         amber: channel("amber"),
+        accent: {
+          DEFAULT: channel("accent"),
+          ink: channel("accent-ink"),
+        },
+        mark: channel("mark"),
         danger: channel("danger"),
         success: channel("success"),
         riffle: {
@@ -56,9 +61,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["var(--font-bungee)", "Impact", "system-ui", "sans-serif"],
-        body: ["var(--font-chakra)", "system-ui", "sans-serif"],
-        hud: ["var(--font-silkscreen)", "ui-monospace", "monospace"],
+        display: ["var(--font-display)", "system-ui", "sans-serif"],
+        body: ["var(--font-body)", "system-ui", "sans-serif"],
+        hud: ["var(--font-hud)", "ui-monospace", "monospace"],
       },
       fontSize: {
         "display-l": [
@@ -83,6 +88,7 @@ const config: Config = {
         md: "var(--radius-md)",
         lg: "var(--radius-lg)",
         screen: "var(--radius-screen)",
+        button: "var(--radius-button)",
       },
       boxShadow: {
         panel: "var(--shadow-panel)",
@@ -92,6 +98,7 @@ const config: Config = {
         screen: "var(--shadow-screen)",
         "glow-cyan": "var(--glow-cyan)",
         "glow-pink": "var(--glow-pink)",
+        "glow-mark": "var(--glow-mark)",
         "glow-riffle": "var(--glow-riffle)",
         "glow-scribble": "var(--glow-scribble)",
         "glow-warships": "var(--glow-warships)",

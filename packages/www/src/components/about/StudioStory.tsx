@@ -1,10 +1,10 @@
 import { HudLabel } from "../primitives";
 
 const sheet = [
-  { term: "Makes", detail: "Online multiplayer games" },
-  { term: "Plays in", detail: "Your browser, phone or desktop" },
-  { term: "Chips", detail: "Social only — nothing to buy" },
-  { term: "Rooms open", detail: "Riffle Poker, Scribble, Warships, Whodunit?" },
+  { term: "Makes", detail: "Larger original games" },
+  { term: "Now", detail: "Aphelion Run" },
+  { term: "Arcade", detail: "Riffle Poker, Scribble, Warships, Whodunit?" },
+  { term: "Plays in", detail: "Your browser" },
 ];
 
 export function StudioStory() {
@@ -15,20 +15,19 @@ export function StudioStory() {
       className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start lg:gap-10"
     >
       <div className="flex flex-col gap-3">
-        <HudLabel tone="cyan">The studio</HudLabel>
-        <h2 id="studio-heading" className="font-display text-title uppercase">
+        <HudLabel tone="mark">The studio</HudLabel>
+        <h2 id="studio-heading" className="font-display text-title font-medium">
           Who we are
         </h2>
         <div className="flex max-w-[62ch] flex-col gap-4 text-ink-muted md:text-body-l">
           <p>
-            Galaxy Class Gaming is an independent studio making online games
-            you can play with strangers, or with friends and family.
+            Galaxy Class is an independent studio making larger original games,
+            starting with Aphelion Run.
           </p>
           <p>
-            We build for the table, not the wallet: games run in the browser,
-            play uses social chips, and there is nothing to buy. Each game is its
-            own room with its own name and look — Riffle Poker, Scribble,
-            Warships, and Whodunit? are open now, and more are on the way.
+            The Arcade is where the smaller games live: Riffle Poker, Scribble,
+            Warships, and Whodunit?. They run in the browser. Arcade play uses
+            social chips, and there is nothing to buy.
           </p>
         </div>
       </div>
@@ -36,8 +35,8 @@ export function StudioStory() {
       <dl className="panel flex flex-col divide-y divide-bezel px-5 py-2">
         {sheet.map((row) => (
           <div key={row.term} className="flex items-baseline justify-between gap-4 py-3">
-            <dt className="font-hud text-hud uppercase text-ink-muted">{row.term}</dt>
-            <dd className="text-right font-semibold text-ink">{row.detail}</dd>
+            <dt className="shrink-0 font-hud text-hud uppercase tracking-[0.18em] text-ink-muted">{row.term}</dt>
+            <dd className="min-w-0 text-right font-semibold text-ink">{row.detail}</dd>
           </div>
         ))}
       </dl>
