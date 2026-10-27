@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import {
   buttonClass,
   Chip,
-  HudLabel,
   PLAY_RIFFLE_HREF,
   PLAY_SCRIBBLE_HREF,
   PLAY_WARSHIPS_HREF,
@@ -110,24 +109,6 @@ function RoomCard({ room }: { room: Room }) {
   );
 }
 
-function ComingSoonCard() {
-  return (
-    <article
-      aria-labelledby="room-coming-soon"
-      className="flex h-full flex-col justify-center gap-3 rounded-lg border-2 border-dashed border-bezel bg-floor/60 p-6"
-    >
-      <HudLabel tone="muted">Coming soon</HudLabel>
-      <h3 id="room-coming-soon" className="font-display text-title uppercase text-ink-muted">
-        More rooms coming
-      </h3>
-      <p className="max-w-[40ch] text-small text-ink-muted">
-        The next game is in the workshop. Your Galaxy Class account will work in
-        every room.
-      </p>
-    </article>
-  );
-}
-
 export function RoomList() {
   return (
     <section id="rooms" aria-labelledby="rooms-heading" className="flex flex-col gap-4">
@@ -140,9 +121,6 @@ export function RoomList() {
             <RoomCard room={room} />
           </li>
         ))}
-        <li className="sm:col-span-2 lg:col-span-2">
-          <ComingSoonCard />
-        </li>
       </ul>
     </section>
   );

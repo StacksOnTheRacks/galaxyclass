@@ -1,22 +1,24 @@
-import { ABOUT_HREF, Frame, HudLabel, ROOMS_HREF } from "./primitives";
+import { ABOUT_HREF, ARCADE_HREF, Frame, HudLabel } from "./primitives";
 
 const links = [
-  { href: ROOMS_HREF, label: "Rooms" },
+  { href: ARCADE_HREF, label: "Arcade" },
   { href: ABOUT_HREF, label: "About" },
 ];
 
 const linkClass =
   "inline-flex min-h-11 items-center text-ink-muted transition duration-quick hover:text-ink";
 
-export function Footer() {
+export function Footer({ theme = "studio" }: { theme?: "studio" | "arcade" }) {
   const year = new Date().getFullYear();
 
   return (
     <footer className="mt-16 border-t border-bezel bg-floor/80">
       <Frame className="flex flex-col gap-3 py-6 text-small md:flex-row md:items-center md:justify-between md:gap-6">
-        <HudLabel tone="amber" className="order-first md:order-none">
-          Social chips only · Nothing to buy · No real-money wagering
-        </HudLabel>
+        {theme === "arcade" ? (
+          <HudLabel tone="amber" className="order-first md:order-none">
+            Social chips only · Nothing to buy · No real-money wagering
+          </HudLabel>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 md:justify-end">
           <nav aria-label="Footer">
             <ul className="flex flex-wrap gap-x-5 font-semibold">

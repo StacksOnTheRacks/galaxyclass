@@ -4,21 +4,31 @@
 
 @layer base {
   :root {
-    /* Color — RGB channels so Tailwind opacity modifiers work. */
-    --c-void: 9 8 13;
-    --c-floor: 17 15 24;
-    --c-panel: 25 22 35;
-    --c-raised: 36 32 50;
-    --c-bezel: 55 50 76;
-    --c-bezel-hi: 88 81 116;
-    --c-ink: 246 241 231;
-    --c-ink-muted: 180 172 199;
+    /* Studio palette. RGB channels so Tailwind opacity modifiers work.
+       Brass is darker than Aphelion Run's HUD gold. Arcade restores neon below. */
+    --font-display: var(--font-outfit);
+    --font-body: var(--font-outfit);
+    --font-hud: var(--font-outfit);
+
+    --c-void: 8 8 10;
+    --c-floor: 14 14 16;
+    --c-panel: 20 20 22;
+    --c-raised: 28 28 31;
+    --c-bezel: 58 56 52;
+    --c-bezel-hi: 92 88 80;
+    --c-ink: 236 230 216;
+    --c-ink-muted: 168 160 148;
+    --c-accent: 176 140 68;
+    --c-accent-ink: 14 12 8;
+    --c-mark: 176 140 68;
+    --c-amber: 176 140 68;
+    --c-danger: 214 106 90;
+    --c-success: 142 184 120;
+    /* Neon channels stay defined so arcade art can reference them.
+       Studio chrome uses accent and mark, not these. */
     --c-cyan: 52 228 234;
     --c-pink: 255 64 140;
     --c-pink-deep: 150 22 78;
-    --c-amber: 255 184 48;
-    --c-danger: 255 118 98;
-    --c-success: 146 240 112;
     --c-riffle: 62 232 165;
     --c-riffle-felt: 12 70 54;
     --c-riffle-rail: 34 24 18;
@@ -43,23 +53,24 @@
 
     /* Radius */
     --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 14px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
     --radius-screen: 20px;
+    --radius-button: 14px;
 
-    /* Elevation */
-    --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.06),
-      0 24px 48px -20px rgb(0 0 0 / 0.8);
-    --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.05),
-      0 10px 24px -10px rgb(0 0 0 / 0.7);
-    --shadow-press: 0 4px 0 0 rgb(var(--c-pink-deep));
-    --shadow-press-down: 0 1px 0 0 rgb(var(--c-pink-deep));
+    /* Elevation — hairline on the studio, press-shadow in the arcade. */
+    --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.04);
+    --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.04);
+    --shadow-press: none;
+    --shadow-press-down: none;
+    --btn-press: 0px;
     --shadow-screen: inset 0 0 0 2px rgb(0 0 0 / 0.9),
       inset 0 0 60px rgb(0 0 0 / 0.75);
     --glow-cyan: 0 0 0 1px rgb(var(--c-cyan) / 0.55),
       0 0 22px rgb(var(--c-cyan) / 0.3);
     --glow-pink: 0 0 0 1px rgb(var(--c-pink) / 0.6),
       0 0 26px rgb(var(--c-pink) / 0.35);
+    --glow-mark: none;
     --glow-riffle: 0 0 0 1px rgb(var(--c-riffle) / 0.55),
       0 0 26px rgb(var(--c-riffle) / 0.28);
     --glow-scribble: 0 0 0 1px rgb(var(--c-scribble) / 0.55),
@@ -73,6 +84,43 @@
     --motion-quick: 140ms;
     --motion-base: 240ms;
     --ease-snap: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  }
+
+  /* The Arcade keeps the neon lobby: display faces, pink press, cyan mark. */
+  .arcade {
+    --font-display: var(--font-bungee);
+    --font-body: var(--font-chakra);
+    --font-hud: var(--font-silkscreen);
+
+    --c-void: 9 8 13;
+    --c-floor: 17 15 24;
+    --c-panel: 25 22 35;
+    --c-raised: 36 32 50;
+    --c-bezel: 55 50 76;
+    --c-bezel-hi: 88 81 116;
+    --c-ink: 246 241 231;
+    --c-ink-muted: 180 172 199;
+    --c-accent: 255 64 140;
+    --c-accent-ink: 9 8 13;
+    --c-mark: 52 228 234;
+    --c-amber: 255 184 48;
+    --c-danger: 255 118 98;
+    --c-success: 146 240 112;
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 14px;
+    --radius-button: 8px;
+
+    --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.06),
+      0 24px 48px -20px rgb(0 0 0 / 0.8);
+    --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 10px 24px -10px rgb(0 0 0 / 0.7);
+    --shadow-press: 0 4px 0 0 rgb(var(--c-pink-deep));
+    --shadow-press-down: 0 1px 0 0 rgb(var(--c-pink-deep));
+    --btn-press: 3px;
+    --glow-mark: 0 0 0 1px rgb(var(--c-mark) / 0.55),
+      0 0 22px rgb(var(--c-mark) / 0.3);
   }
 
   html {
@@ -100,18 +148,29 @@
   }
 
   ::selection {
-    @apply bg-pink/40 text-ink;
+    background: rgb(var(--c-accent) / 0.35);
+    color: rgb(var(--c-ink));
   }
 
   :focus-visible {
-    @apply rounded-sm outline outline-2 outline-offset-4 outline-cyan;
+    border-radius: var(--radius-sm);
+    outline: 2px solid rgb(var(--c-mark));
+    outline-offset: 4px;
   }
 }
 
 @layer components {
-  /* App backdrop: soft neon wash over a faint doodle texture. */
+  /* Studio field: a faint brass wash. The arcade puts neon and the doodle back. */
   .app-backdrop {
     background-color: rgb(var(--c-void));
+    background-image: radial-gradient(
+      42rem 22rem at 50% -10rem,
+      rgb(var(--c-accent) / 0.1),
+      transparent 70%
+    );
+  }
+
+  .arcade.app-backdrop {
     background-image:
       radial-gradient(
         60rem 28rem at 12% -6rem,
@@ -129,6 +188,43 @@
       auto,
       320px 320px;
     background-repeat: no-repeat, no-repeat, repeat;
+  }
+
+  .wordmark {
+    letter-spacing: 0.14em;
+    font-weight: 500;
+  }
+
+  .arcade .wordmark {
+    letter-spacing: 0.025em;
+    font-weight: 400;
+  }
+
+  .arcade-mark,
+  .logo-kicker {
+    display: none;
+  }
+
+  .arcade .arcade-mark {
+    display: flex;
+  }
+
+  .arcade .logo-kicker {
+    display: block;
+  }
+
+  @media (max-width: 389px) {
+    .arcade .logo-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
   }
 
   .panel {

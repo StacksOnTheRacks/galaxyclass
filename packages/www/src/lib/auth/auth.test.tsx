@@ -178,19 +178,20 @@ describe("auth screens", () => {
     ["sign-in", () => <SignInForm />],
     ["sign-up", () => <SignUpForm />],
     ["forgot password", () => <ForgotPasswordForm />],
-  ])("%s sends players to the rooms instead of straight to Riffle Poker", (_, form) => {
+  ])("%s sends players to The Arcade instead of straight to Riffle Poker", (_, form) => {
     const { container } = render(form());
 
     expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
-    expect(screen.getByRole("link", { name: "Browse rooms" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "The Arcade" })).toHaveAttribute("href", "/arcade");
   });
 
   it("names the game Riffle Poker in sign-up copy", () => {
     render(<SignUpForm />);
 
     expect(
-      screen.getByText("Works across every Galaxy Class game, starting with Riffle Poker."),
+      screen.getByText("Just here for poker? Riffle Poker needs no account."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/starting with Riffle Poker/)).not.toBeInTheDocument();
   });
 });
 
@@ -685,7 +686,7 @@ describe("account", () => {
     expect(await screen.findByLabelText("Gamer tag")).toHaveValue(GAMER_TAG);
     expect(container.querySelector('a[href^="/riffle"]')).toBeNull();
     expect(screen.queryByRole("link", { name: /riffle/i })).toBeNull();
-    expect(screen.getByRole("link", { name: "Browse rooms" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "The Arcade" })).toHaveAttribute("href", "/arcade");
   });
 
   it("prompts an existing player without a gamer tag and saves one", async () => {
