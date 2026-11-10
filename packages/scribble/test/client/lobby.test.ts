@@ -57,7 +57,7 @@ describe('scribble table list', () => {
     await renderLobby(host, CONFIG, d);
     expect(request).not.toHaveBeenCalled();
     expect(host.querySelector('.gc-game-header')?.getAttribute('data-account')).toBe('signed-out');
-    expect(host.querySelector('.gc-game-header-back')?.getAttribute('href')).toBe('/');
+    expect(host.querySelector('.gc-game-header-back')?.getAttribute('href')).toBe('/arcade');
     const panel = host.querySelector('.sl-members')!;
     expect(panel.querySelector('h2')?.textContent).toBe('Scribble is for Galaxy Class members');
     expect([...panel.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([

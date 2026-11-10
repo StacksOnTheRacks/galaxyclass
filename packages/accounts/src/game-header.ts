@@ -6,8 +6,8 @@ import { avatarUrl, isAvatarId } from './avatars.js';
  * `game-header.css` and fonts are served by the studio site at `/fonts/`.
  */
 
-/** The studio site's rooms list (packages/www ROOMS_HREF). */
-export const GALAXY_CLASS_LIBRARY_PATH = '/';
+/** The Arcade, where the studio lists its games (packages/www ARCADE_HREF). */
+export const GALAXY_CLASS_LIBRARY_PATH = '/arcade';
 export const GALAXY_CLASS_ACCOUNT_PATH = '/account';
 export const GALAXY_CLASS_SIGN_IN_PATH = '/sign-in';
 export const GALAXY_CLASS_SIGN_UP_PATH = '/sign-up';

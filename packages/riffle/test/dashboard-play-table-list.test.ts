@@ -237,7 +237,7 @@ describe('dashboard play table list', () => {
     const { root } = await startList('/riffle');
     const back = root.querySelector<HTMLAnchorElement>('nav[aria-label="Galaxy Class"] a');
     expect(back?.getAttribute('aria-label')).toBe('Back to the Galaxy Class game library');
-    expect(back?.getAttribute('href')).toBe('https://galaxyclass.app/');
+    expect(back?.getAttribute('href')).toBe('https://galaxyclass.app/arcade');
     const logo = root.querySelector<HTMLImageElement>('.table-list-lockup');
     expect(logo?.getAttribute('alt')).toBe('Riffle Poker');
     expect(logo?.getAttribute('src')).toBe('/assets/brand/riffle-lockup-reverse.svg');
@@ -249,7 +249,7 @@ describe('dashboard play table list', () => {
     renderTableList(root, []);
     const empty = root.querySelector('.table-list-empty');
     expect(empty?.querySelector('h2')?.textContent).toBe('No tables are dealing right now');
-    expect(empty?.querySelector('a')?.getAttribute('href')).toBe('https://galaxyclass.app/');
+    expect(empty?.querySelector('a')?.getAttribute('href')).toBe('https://galaxyclass.app/arcade');
     expect(root.querySelector('.table-list-panel-desktop')).toBeNull();
   });
 

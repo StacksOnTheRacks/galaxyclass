@@ -11,7 +11,7 @@ describe('game header', () => {
   it('links back to the Galaxy Class game library', () => {
     const header = renderGameHeader({ account: null, guests: true, returnTo: '/riffle' });
     const back = header.querySelector<HTMLAnchorElement>('nav[aria-label="Galaxy Class"] a');
-    expect(back?.getAttribute('href')).toBe('/');
+    expect(back?.getAttribute('href')).toBe('/arcade');
     expect(back?.getAttribute('aria-label')).toBe('Back to the Galaxy Class game library');
     expect(back?.textContent).toContain('Game library');
   });
@@ -23,7 +23,7 @@ describe('game header', () => {
       returnTo: '/riffle',
       origin: 'https://galaxyclass.app/',
     });
-    expect(header.querySelector('.gc-game-header-back')?.getAttribute('href')).toBe('https://galaxyclass.app/');
+    expect(header.querySelector('.gc-game-header-back')?.getAttribute('href')).toBe('https://galaxyclass.app/arcade');
     expect(header.querySelector('.gc-game-header-player')?.getAttribute('href')).toBe('https://galaxyclass.app/account');
     expect(header.querySelector('img.gc-game-header-avatar')?.getAttribute('src')).toBe(
       'https://galaxyclass.app/avatars/42.webp',
