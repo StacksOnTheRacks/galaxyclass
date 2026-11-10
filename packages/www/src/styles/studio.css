@@ -1,0 +1,781 @@
+/*
+ * Studio ("Deep Field") styles.
+ *
+ * Plain CSS: no Tailwind directives (tailwind-at-rules). Every top-level selector starts
+ * with `.studio`, `.gc-`, or `[data-gc`. `:root` only declares new `--gc-*` and
+ * `--ar-*` variables. Keyframes are named `gc-*`. The Arcade never reads
+ * anything in this file: globals.css stays the Arcade's source of truth.
+ */
+
+/* ---------------------------------------------------------------------------
+   Tokens (additive; channels as "R G B" so Tailwind alpha modifiers work)
+   ------------------------------------------------------------------------ */
+
+:root {
+  --gc-void: 5 6 10;
+  --gc-deep: 9 11 18;
+  --gc-hull: 15 18 27;
+  --gc-hull-2: 22 26 38;
+  --gc-rule: 35 41 55;
+  --gc-rule-2: 52 60 79;
+  --gc-ink: 243 239 230;
+  --gc-ink-2: 184 179 167;
+  --gc-ink-3: 138 134 125;
+  --gc-solar: 247 181 56;
+  --gc-flare: 255 226 160;
+  --gc-ember: 217 121 43;
+  --gc-stellar: 143 216 245;
+  --gc-nebula: 91 75 196;
+  --gc-rose: 201 73 127;
+  --gc-danger: 255 107 87;
+  --gc-success: 126 214 154;
+
+  /* Elevation and glow */
+  --gc-shadow-1: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 20px 40px -24px rgb(0 0 0 / 0.9);
+  --gc-shadow-2: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 40px 80px -32px rgb(0 0 0 / 0.95);
+  --gc-glow-solar: 0 0 0 1px rgb(247 181 56 / 0.55), 0 0 32px rgb(247 181 56 / 0.35),
+    0 0 120px rgb(217 121 43 / 0.25);
+  --gc-glow-stellar: 0 0 0 1px rgb(143 216 245 / 0.5), 0 0 28px rgb(143 216 245 / 0.3);
+  --gc-text-glow: 0 0 24px rgb(255 226 160 / 0.35);
+
+  /* Motion */
+  --gc-dur-1: 120ms;
+  --gc-dur-2: 200ms;
+  --gc-dur-3: 400ms;
+  --gc-dur-4: 700ms;
+  --gc-dur-5: 1200ms;
+  --gc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --gc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --gc-ease-snap: cubic-bezier(0.2, 0.9, 0.3, 1.15);
+
+  /* Layout */
+  --gc-nav-h: 3.75rem;
+  --gc-frame: 90rem;
+  --gc-gutter: clamp(1.25rem, 0.5rem + 3vw, 4rem);
+  --gc-space-section: clamp(6rem, 4rem + 8vw, 12rem);
+  --gc-col-gap: clamp(1rem, 0.5rem + 1.5vw, 2rem);
+
+  /* Chamfers: the signature HUD corner cut (top-left and bottom-right) */
+  --gc-chamfer: 12px;
+  --gc-chamfer-btn: 10px;
+  --gc-chamfer-card: 18px;
+
+  /* Aphelion Run sub-palette (mirrors the game's palette.ts exactly) */
+  --ar-gold: #ffd73d;
+  --ar-amber: #e8b23a;
+  --ar-bronze: #c48a2e;
+  --ar-bone: #e8e4d9;
+  --ar-plate: #11141a;
+  --ar-rule: #2c3340;
+  --ar-ion: #7ed4f0;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gc-nav-h: 4.5rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Studio scope: re-skins the shared token channels. Overrides ONLY variables
+   that `.arcade` also overrides, so a nested `.arcade` island resets them.
+   ------------------------------------------------------------------------ */
+
+.studio {
+  --font-display: var(--font-anybody);
+  --font-body: var(--font-geist);
+  --font-hud: var(--font-geist-mono);
+
+  --c-void: 5 6 10;
+  --c-floor: 9 11 18;
+  --c-panel: 15 18 27;
+  --c-raised: 22 26 38;
+  --c-bezel: 35 41 55;
+  --c-bezel-hi: 52 60 79;
+  --c-ink: 243 239 230;
+  --c-ink-muted: 184 179 167;
+  --c-accent: 247 181 56;
+  --c-accent-ink: 5 6 10;
+  --c-mark: 143 216 245;
+  --c-amber: 247 181 56;
+  --c-danger: 255 107 87;
+  --c-success: 126 214 154;
+
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-button: 2px;
+
+  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 30px 60px -30px rgb(0 0 0 / 0.85);
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 16px 32px -16px rgb(0 0 0 / 0.8);
+  --shadow-press: none;
+  --shadow-press-down: none;
+  --btn-press: 0px;
+  --glow-mark: 0 0 0 1px rgb(143 216 245 / 0.5), 0 0 24px rgb(143 216 245 / 0.25);
+}
+
+.studio ::selection {
+  background: rgb(var(--gc-solar) / 0.35);
+  color: rgb(var(--gc-ink));
+}
+
+.studio :focus-visible {
+  outline: 2px solid rgb(var(--gc-stellar));
+  outline-offset: 3px;
+}
+
+/* A nested Arcade island keeps the Arcade's own cyan focus ring. */
+.studio .arcade :focus-visible {
+  outline-color: rgb(var(--c-mark));
+  outline-offset: 4px;
+}
+
+.gc-shell {
+  background-color: rgb(var(--gc-void));
+  background-image: radial-gradient(
+    70rem 34rem at 50% -14rem,
+    rgb(var(--gc-nebula) / 0.12),
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+  color: rgb(var(--gc-ink));
+}
+
+/* ---------------------------------------------------------------------------
+   Type: faces and widths (sizes come from Tailwind `text-gc-*`)
+   ------------------------------------------------------------------------ */
+
+.gc-wdth-60 {
+  font-variation-settings: "wdth" 60;
+}
+.gc-wdth-80 {
+  font-variation-settings: "wdth" 80;
+}
+.gc-wdth-92 {
+  font-variation-settings: "wdth" 92;
+}
+.gc-wdth-100 {
+  font-variation-settings: "wdth" 100;
+}
+.gc-wdth-110 {
+  font-variation-settings: "wdth" 110;
+}
+.gc-wdth-120 {
+  font-variation-settings: "wdth" 120;
+}
+.gc-wdth-135 {
+  font-variation-settings: "wdth" 135;
+}
+
+.gc-t-mega,
+.gc-t-d1,
+.gc-t-d2,
+.gc-t-d3,
+.gc-t-statement {
+  font-family: var(--font-anybody), system-ui, sans-serif;
+  text-wrap: balance;
+}
+.gc-t-mega {
+  font-weight: 800;
+  font-variation-settings: "wdth" 120;
+  text-transform: uppercase;
+}
+.gc-t-d1 {
+  font-weight: 750;
+  font-variation-settings: "wdth" 110;
+  text-transform: uppercase;
+}
+.gc-t-d2 {
+  font-weight: 700;
+  font-variation-settings: "wdth" 105;
+}
+.gc-t-d3 {
+  font-weight: 650;
+  font-variation-settings: "wdth" 100;
+}
+.gc-t-statement {
+  font-weight: 500;
+  font-variation-settings: "wdth" 92;
+}
+.gc-t-serif {
+  font-family: var(--font-instrument), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  text-wrap: balance;
+}
+.gc-t-mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.gc-glow-text {
+  color: rgb(var(--gc-flare));
+  text-shadow: var(--gc-text-glow);
+}
+
+/* ---------------------------------------------------------------------------
+   Surfaces
+   ------------------------------------------------------------------------ */
+
+.gc-panel {
+  position: relative;
+  background-color: rgb(var(--gc-hull) / 0.72);
+  background-image: linear-gradient(90deg, rgb(var(--gc-solar) / 0.6), transparent 40%);
+  background-position: top left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: 1px solid rgb(var(--gc-rule));
+}
+
+/* Blur only where the panel sits over the starfield. */
+.gc-panel--glass {
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/*
+ * Chamfered shapes are drawn on pseudo-elements, never on the focusable
+ * element itself, so :focus-visible outlines are not clipped. ::before is the
+ * 1px line, ::after is the fill inset by 1px.
+ */
+.gc-chamfer {
+  --gc-ch: var(--gc-chamfer);
+  position: relative;
+  isolation: isolate;
+}
+.gc-chamfer::before,
+.gc-chamfer::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+.gc-chamfer::before {
+  inset: 0;
+  background: var(--gc-chamfer-line, rgb(var(--gc-rule)));
+  clip-path: polygon(
+    var(--gc-ch) 0,
+    100% 0,
+    100% calc(100% - var(--gc-ch)),
+    calc(100% - var(--gc-ch)) 100%,
+    0 100%,
+    0 var(--gc-ch)
+  );
+}
+.gc-chamfer::after {
+  inset: 1px;
+  background: var(--gc-chamfer-fill, rgb(var(--gc-hull) / 0.72));
+  clip-path: polygon(
+    calc(var(--gc-ch) - 0.42px) 0,
+    100% 0,
+    100% calc(100% - var(--gc-ch) + 0.42px),
+    calc(100% - var(--gc-ch) + 0.42px) 100%,
+    0 100%,
+    0 calc(var(--gc-ch) - 0.42px)
+  );
+}
+.gc-chamfer--card {
+  --gc-ch: var(--gc-chamfer-card);
+}
+.gc-chamfer.gc-panel {
+  border: 0;
+  background: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+   ------------------------------------------------------------------------ */
+
+.gc-btn {
+  --gc-ch: var(--gc-chamfer-btn);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0 1.5rem;
+  border: 0;
+  background: none;
+  color: var(--gc-btn-ink, rgb(var(--gc-ink)));
+  font-family: var(--font-anybody), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variation-settings: "wdth" 110;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--gc-dur-2) var(--gc-ease-out),
+    filter var(--gc-dur-2) var(--gc-ease-out),
+    transform var(--gc-dur-2) var(--gc-ease-snap);
+}
+.gc-btn::before,
+.gc-btn::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  transition: background-color var(--gc-dur-2) var(--gc-ease-out);
+}
+.gc-btn::before {
+  inset: 0;
+  background-color: var(--gc-btn-line, transparent);
+  clip-path: polygon(
+    var(--gc-ch) 0,
+    100% 0,
+    100% calc(100% - var(--gc-ch)),
+    calc(100% - var(--gc-ch)) 100%,
+    0 100%,
+    0 var(--gc-ch)
+  );
+}
+.gc-btn::after {
+  inset: 1px;
+  background-color: var(--gc-btn-fill, transparent);
+  clip-path: polygon(
+    calc(var(--gc-ch) - 0.42px) 0,
+    100% 0,
+    100% calc(100% - var(--gc-ch) + 0.42px),
+    calc(100% - var(--gc-ch) + 0.42px) 100%,
+    0 100%,
+    0 calc(var(--gc-ch) - 0.42px)
+  );
+}
+.gc-btn:active {
+  transform: translateY(1px);
+}
+.gc-btn:disabled,
+.gc-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.gc-btn--lg {
+  min-height: 3.25rem;
+  padding: 0 2rem;
+  font-size: 0.875rem;
+}
+.gc-btn__icon {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.gc-btn--solar {
+  --gc-btn-line: rgb(var(--gc-solar));
+  --gc-btn-fill: rgb(var(--gc-solar));
+  --gc-btn-ink: rgb(var(--gc-void));
+}
+.gc-btn--solar:hover {
+  --gc-btn-line: rgb(var(--gc-flare));
+  --gc-btn-fill: rgb(var(--gc-flare));
+  filter: drop-shadow(0 0 14px rgb(var(--gc-solar) / 0.4));
+}
+
+.gc-btn--outline {
+  --gc-btn-line: rgb(var(--gc-rule-2));
+  --gc-btn-fill: rgb(var(--gc-void) / 0.4);
+  --gc-btn-ink: rgb(var(--gc-ink));
+}
+.gc-btn--outline:hover {
+  --gc-btn-line: rgb(var(--gc-solar));
+  --gc-btn-fill: rgb(var(--gc-solar) / 0.1);
+  --gc-btn-ink: rgb(var(--gc-flare));
+}
+
+.gc-btn--ghost {
+  --gc-btn-ink: rgb(var(--gc-ink));
+  padding: 0 0.875rem;
+}
+.gc-btn--ghost:hover {
+  --gc-btn-ink: rgb(var(--gc-flare));
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   HUD detailing
+   ------------------------------------------------------------------------ */
+
+/* A frame with corner brackets. Override --gc-hud-line / --gc-hud-bracket to retint. */
+.gc-hud-frame {
+  position: relative;
+  border: 1px solid var(--gc-hud-line, rgb(var(--gc-rule)));
+  background-color: rgb(var(--gc-void) / 0.6);
+}
+.gc-hud-frame::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) top left / 18px 2px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) top left / 2px 18px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) top right / 18px 2px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) top right / 2px 18px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) bottom left / 18px 2px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) bottom left / 2px 18px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) bottom right / 18px 2px no-repeat,
+    linear-gradient(var(--gc-hud-bracket, rgb(var(--gc-solar))), var(--gc-hud-bracket, rgb(var(--gc-solar)))) bottom right / 2px 18px no-repeat;
+}
+
+.gc-orbit-rule {
+  position: relative;
+  height: 1px;
+  overflow: hidden;
+  background-color: rgb(var(--gc-rule));
+}
+.gc-orbit-rule::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80px;
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--gc-solar)), transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gc-orbit-rule::after {
+    animation: gc-pulse 6s var(--gc-ease-in-out) infinite;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Atmosphere: grain, starfield fallback, vignette
+   ------------------------------------------------------------------------ */
+
+.gc-grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gc-grain {
+    animation: gc-grain 0.9s steps(6) infinite;
+  }
+}
+
+/* CSS-only starfield: the no-JS hero, auth aside, About, and placeholders. */
+.gc-starfield-css {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: rgb(var(--gc-void));
+  background-image:
+    radial-gradient(1px 1px at 18px 40px, rgb(var(--gc-ink) / 0.5) 50%, transparent 100%),
+    radial-gradient(1px 1px at 120px 150px, rgb(var(--gc-ink) / 0.5) 50%, transparent 100%),
+    radial-gradient(1px 1px at 190px 70px, rgb(var(--gc-ink) / 0.5) 50%, transparent 100%),
+    radial-gradient(1px 1px at 60px 260px, rgb(var(--gc-ink) / 0.35) 50%, transparent 100%),
+    radial-gradient(1px 1px at 300px 90px, rgb(var(--gc-ink) / 0.35) 50%, transparent 100%),
+    radial-gradient(1px 1px at 140px 20px, rgb(var(--gc-ink) / 0.35) 50%, transparent 100%),
+    radial-gradient(1px 1px at 410px 120px, rgb(var(--gc-ink) / 0.25) 50%, transparent 100%),
+    radial-gradient(1px 1px at 200px 400px, rgb(var(--gc-ink) / 0.25) 50%, transparent 100%),
+    radial-gradient(1px 1px at 470px 300px, rgb(var(--gc-ink) / 0.25) 50%, transparent 100%),
+    radial-gradient(ellipse 60% 50% at 18% 28%, rgb(var(--gc-nebula) / 0.14), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 82% 18%, rgb(var(--gc-rose) / 0.08), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 78% 64%, rgb(var(--gc-solar) / 0.18), transparent 70%);
+  background-size:
+    220px 220px,
+    220px 220px,
+    220px 220px,
+    340px 340px,
+    340px 340px,
+    340px 340px,
+    520px 520px,
+    520px 520px,
+    520px 520px,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat,
+    no-repeat, no-repeat, no-repeat;
+}
+
+.gc-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 40%, transparent 55%, rgb(0 0 0 / 0.65) 100%);
+}
+
+/* ---------------------------------------------------------------------------
+   Reveal, intro, and looping utilities (all content visible without JS)
+   ------------------------------------------------------------------------ */
+
+.gc-reveal {
+  transition:
+    opacity var(--gc-dur-3) var(--gc-ease-out),
+    transform var(--gc-dur-3) var(--gc-ease-out),
+    filter var(--gc-dur-3) var(--gc-ease-out);
+  transition-delay: var(--gc-delay, 0ms);
+}
+.gc-reveal[data-reveal="pending"] {
+  opacity: 0;
+  transform: translateY(24px);
+}
+.gc-reveal--blur[data-reveal="pending"] {
+  filter: blur(6px);
+}
+
+/* Default to fully progressed; useSectionProgress writes the live value. */
+.gc-progress {
+  --p: 1;
+}
+
+.gc-intro-wdth {
+  animation: gc-wdth-in 1100ms var(--gc-ease-out) both;
+  animation-delay: var(--gc-delay, 0ms);
+}
+.gc-intro-rise {
+  animation: gc-rise var(--gc-dur-4) var(--gc-ease-out) both;
+  animation-delay: var(--gc-delay, 0ms);
+}
+.gc-intro-type {
+  animation: gc-type-on var(--gc-dur-4) steps(24, end) both;
+  animation-delay: var(--gc-delay, 0ms);
+}
+
+/* The Arcade "lights on" flicker (S5). Put .gc-lit on the section, .gc-neon on targets. */
+.gc-lit[data-lit="true"] .gc-neon {
+  animation: gc-neon-on 600ms steps(1, end) both;
+}
+
+.gc-planet-strip {
+  display: flex;
+  width: 200%;
+  animation: gc-spin-strip 60s linear infinite;
+}
+
+.gc-scan-line {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gc-scan, rgb(var(--gc-solar))), transparent);
+  animation: gc-scan 5s linear infinite;
+}
+
+.gc-rec-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: var(--gc-rec, rgb(var(--gc-solar)));
+  animation: gc-blink 1.4s steps(1, end) infinite;
+}
+
+/* Footer wordmark: expands from wdth 70 to 130 once in view. */
+.gc-outline-word {
+  color: transparent;
+  -webkit-text-stroke: 1px rgb(var(--gc-rule-2));
+  font-family: var(--font-anybody), system-ui, sans-serif;
+  font-weight: 800;
+  font-variation-settings: "wdth" 130;
+  letter-spacing: 0.02em;
+  line-height: 0.9;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: font-variation-settings 1200ms var(--gc-ease-out);
+}
+.gc-outline-word[data-expand="pending"] {
+  font-variation-settings: "wdth" 70;
+}
+
+/* Pointer-spotlight room card (inside the nested .arcade island). */
+.gc-room-card {
+  --room: var(--c-riffle);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgb(var(--c-bezel));
+  border-radius: var(--radius-lg);
+  background-color: rgb(var(--c-panel));
+  transition:
+    border-color var(--gc-dur-2) var(--gc-ease-out),
+    box-shadow var(--gc-dur-2) var(--gc-ease-out);
+}
+.gc-room-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, -20%),
+    rgb(var(--room) / 0.18),
+    transparent 60%
+  );
+  transition: opacity var(--gc-dur-3) var(--gc-ease-out);
+}
+.gc-room-card:hover,
+.gc-room-card:focus-within {
+  border-color: rgb(var(--room) / 0.6);
+  box-shadow:
+    0 0 0 1px rgb(var(--room) / 0.5),
+    0 0 26px rgb(var(--room) / 0.28);
+}
+.gc-room-card:hover::before,
+.gc-room-card:focus-within::before {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Keyframes
+   ------------------------------------------------------------------------ */
+
+@keyframes gc-grain {
+  0% {
+    transform: translate(0, 0);
+  }
+  17% {
+    transform: translate(-4%, 3%);
+  }
+  34% {
+    transform: translate(3%, -5%);
+  }
+  50% {
+    transform: translate(-6%, -2%);
+  }
+  67% {
+    transform: translate(5%, 4%);
+  }
+  84% {
+    transform: translate(-2%, 6%);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes gc-pulse {
+  0% {
+    left: -80px;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes gc-wdth-in {
+  from {
+    font-variation-settings: "wdth" 60;
+    letter-spacing: 0.2em;
+    opacity: 0;
+  }
+  to {
+    font-variation-settings: "wdth" var(--gc-wdth-to, 120);
+    letter-spacing: var(--gc-track-to, -0.02em);
+    opacity: 1;
+  }
+}
+
+@keyframes gc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gc-neon-on {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.7;
+  }
+  45% {
+    opacity: 0.2;
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes gc-type-on {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes gc-spin-strip {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes gc-scan {
+  from {
+    top: 0;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+@keyframes gc-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Motion Off (user toggle or prefers-reduced-motion): everything is still,
+   fully visible, and untransformed. The Arcade island's own ambient loops are
+   paused so the toggle holds for the whole page.
+   ------------------------------------------------------------------------ */
+
+.studio[data-motion="off"] [class*="gc-"],
+.studio[data-motion="off"] [class*="gc-"]::before,
+.studio[data-motion="off"] [class*="gc-"]::after {
+  animation: none !important;
+  transition: none !important;
+}
+.studio[data-motion="off"] .gc-reveal[data-reveal="pending"] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.studio[data-motion="off"] .arcade *,
+.studio[data-motion="off"] .arcade *::before,
+.studio[data-motion="off"] .arcade *::after {
+  animation-play-state: paused !important;
+}
