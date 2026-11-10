@@ -236,7 +236,7 @@ test('a signed-out visitor is asked to sign in before seeing any table', async (
   await expect(page.getByRole('heading', { name: 'Table not found' })).toBeVisible();
   await page.goto('/scribble');
   await expect(page.getByRole('heading', { name: 'Scribble is for Galaxy Class members' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Back to the Galaxy Class game library' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'Back to the Galaxy Class game library' })).toHaveAttribute('href', '/arcade');
 });
 
 test('an unknown table id says table not found to a member', async ({ browser }) => {
