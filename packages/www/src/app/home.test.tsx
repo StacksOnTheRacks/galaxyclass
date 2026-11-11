@@ -7,7 +7,7 @@ describe("studio home", () => {
     render(<Home />);
 
     expect(
-      screen.getByRole("heading", { level: 1, name: /deep games you can open in a tab/i }),
+      screen.getByRole("heading", { level: 1, name: /aphelion run/i }),
     ).toBeInTheDocument();
     const play = screen.getByRole("link", { name: /play aphelion run/i });
     expect(play).toHaveAttribute("href", "https://aphelionrun.com");

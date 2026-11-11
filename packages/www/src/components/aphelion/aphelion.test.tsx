@@ -29,7 +29,7 @@ describe("Aphelion Run section", () => {
     const section = container.querySelector("section#aphelion-run");
     expect(section).not.toBeNull();
     expect(section).toHaveAttribute("aria-labelledby", "aphelion-heading");
-    expect(screen.getByRole("heading", { level: 2, name: "Aphelion Run" })).toHaveAttribute("id", "aphelion-heading");
+    expect(screen.getByRole("heading", { level: 1, name: "Aphelion Run" })).toHaveAttribute("id", "aphelion-heading");
     expect(container.querySelector("#aphelion-launch")).not.toBeNull();
   });
 

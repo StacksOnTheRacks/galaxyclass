@@ -33,7 +33,7 @@ export function AphelionFeature() {
     <section
       id="aphelion-run"
       aria-labelledby="aphelion-heading"
-      className={`gc-aphelion ${styles.section} scroll-mt-[var(--gc-nav-h)] pb-gc-section pt-gc-section`}
+      className={`gc-aphelion ${styles.section} scroll-mt-[var(--gc-nav-h)] pb-gc-section pt-[calc(var(--gc-nav-h)+clamp(2rem,5vw,4.5rem))]`}
     >
       <div className="absolute inset-x-0 top-0">
         <OrbitRule />
@@ -47,9 +47,9 @@ export function AphelionFeature() {
               <Eyebrow className="!text-[color:var(--ar-gold)]">{copy.eyebrow}</Eyebrow>
             </Reveal>
             <Reveal blur delay={60}>
-              <h2 id="aphelion-heading" className={`${gcType.d1} ${styles.title}`}>
+              <h1 id="aphelion-heading" className={`${gcType.d1} ${styles.title}`}>
                 {copy.title}
-              </h2>
+              </h1>
             </Reveal>
             <Reveal delay={120}>
               <p className={`${gcType.serif} ${styles.tagline}`}>{copy.tagline}</p>
