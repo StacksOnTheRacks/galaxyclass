@@ -73,7 +73,7 @@ export const PROMO_COPY = {
     { term: "Built for", detail: "Phone and desktop, in the browser" },
   ],
   status: "In development · Coming soon",
-  cta: "Play Aphelion Run",
+  cta: "Follow Aphelion Run",
   storyLink: "Read the story",
   rulesLink: "Read the rules",
   credit: "Planet surface maps: NASA (public domain); Solar System Scope (CC BY 4.0).",

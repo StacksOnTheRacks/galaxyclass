@@ -203,7 +203,7 @@ export const ABOUT_COPY = {
       label: "Worlds",
       title: "Aphelion Run",
       body: "Fly one ship out of your home base in Sol. Siphon the Sun, mine the worlds, sell energy on Earth’s black market, and survive the trip home.",
-      cta: "Play Aphelion Run",
+      cta: "Follow Aphelion Run",
     },
     tables: {
       label: "Tables",

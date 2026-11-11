@@ -47,11 +47,11 @@ describe("Aphelion Run section", () => {
     const { container } = render(<AphelionFeature />);
 
     const launch = within(container.querySelector("#aphelion-launch") as HTMLElement);
-    const cta = launch.getByRole("link", { name: /play aphelion run/i });
+    const cta = launch.getByRole("link", { name: /follow aphelion run/i });
     expect(cta).toHaveAttribute("href", "https://aphelionrun.com");
     expect(cta).toHaveAttribute("target", "_blank");
     expect(cta).toHaveAttribute("rel", expect.stringContaining("noopener"));
-    expect(screen.getAllByRole("link", { name: /play aphelion run/i })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /follow aphelion run/i })).toHaveLength(1);
 
     expect(launch.getByRole("link", { name: /read the story/i })).toHaveAttribute(
       "href",

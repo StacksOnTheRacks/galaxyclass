@@ -11,7 +11,7 @@ import { GcFrame, OrbitRule } from "./ui";
 
 type FooterLink = { href: string; label: string; external?: boolean };
 
-// Link names must stay distinct from page CTAs ("Play Aphelion Run", "Enter The Arcade",
+// Link names must stay distinct from page CTAs ("Follow Aphelion Run", "Enter The Arcade",
 // "The Arcade"). Never link to a game path from here.
 const columns: { title: string; links: FooterLink[] }[] = [
   {

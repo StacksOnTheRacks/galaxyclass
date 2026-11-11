@@ -9,7 +9,7 @@ describe("studio home", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: /aphelion run/i }),
     ).toBeInTheDocument();
-    const play = screen.getByRole("link", { name: /play aphelion run/i });
+    const play = screen.getByRole("link", { name: /follow aphelion run/i });
     expect(play).toHaveAttribute("href", "https://aphelionrun.com");
     expect(play).toHaveAttribute("target", "_blank");
     expect(play).toHaveAttribute("rel", expect.stringContaining("noopener"));

@@ -9,7 +9,7 @@ describe("about page", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Galaxy Class" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aphelion Run" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /play aphelion run/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /follow aphelion run/i })).toHaveAttribute(
       "href",
       "https://aphelionrun.com",
     );
