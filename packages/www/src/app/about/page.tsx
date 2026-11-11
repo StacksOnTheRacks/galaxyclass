@@ -34,8 +34,8 @@ export default function About() {
             Aphelion Run
           </h2>
           <p className="max-w-[52ch] text-ink-muted md:text-body-l">
-            The first large game from Galaxy Class: a solar-system game of ships,
-            orbits, and the long run between worlds.
+            The first large game from Galaxy Class, now in development: a
+            solar-system game of ships, orbits, and the long run between worlds.
           </p>
           <a
             href={APHELION_HREF}
@@ -43,7 +43,7 @@ export default function About() {
             rel="noopener noreferrer"
             className={buttonClass("primary", "lg", "self-start max-sm:w-full")}
           >
-            Play Aphelion Run
+            Follow Aphelion Run
             <span className="sr-only"> (opens in a new tab)</span>
           </a>
         </section>
@@ -51,11 +51,12 @@ export default function About() {
         <section aria-labelledby="about-arcade" className="flex max-w-[40rem] flex-col gap-4">
           <HudLabel tone="muted">The Arcade</HudLabel>
           <h2 id="about-arcade" className="font-display text-title font-medium">
-            Smaller games, still open
+            Online board and table games, always open
           </h2>
           <p className="max-w-[52ch] text-ink-muted md:text-body-l">
-            Riffle Poker, Scribble, Warships, and Whodunit? stay up in The Arcade.
-            Social chips only — nothing to buy.
+            Riffle Poker, Scribble, Warships, and Whodunit? are all in The Arcade,
+            a growing library to play with friends or strangers. Social chips
+            only — nothing to buy.
           </p>
           <ButtonLink href={ARCADE_HREF} variant="secondary" arrow className="self-start max-sm:w-full">
             The Arcade

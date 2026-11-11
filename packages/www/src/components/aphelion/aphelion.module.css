@@ -1,0 +1,900 @@
+/*
+ * Aphelion Run promo section. Scoped to this module: nothing here leaks into the
+ * Arcade or other studio pages. Palette comes from the `--ar-*` channels declared in
+ * studio.css (they mirror the game's palette.ts). Every animated element also carries
+ * a `gc-` marker class so the studio Motion-Off rule stops it, and each loop is gated
+ * on `prefers-reduced-motion: no-preference` as well.
+ */
+
+/* ---------------------------------------------------------------------------
+   Section: black space, gold light
+   ------------------------------------------------------------------------ */
+
+.section {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background-color: rgb(var(--gc-deep));
+  background-image:
+    radial-gradient(64rem 38rem at 90% -8%, rgb(255 215 61 / 0.2), transparent 68%),
+    radial-gradient(46rem 30rem at 4% 104%, rgb(196 138 46 / 0.16), transparent 70%),
+    linear-gradient(180deg, rgb(var(--gc-void)) 0, transparent 14rem);
+}
+
+/* A hand-placed star scatter, faded at the top and bottom edges. */
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 22px 46px, rgb(243 239 230 / 0.55) 50%, transparent 100%),
+    radial-gradient(1px 1px at 132px 168px, rgb(255 226 160 / 0.5) 50%, transparent 100%),
+    radial-gradient(1px 1px at 210px 84px, rgb(243 239 230 / 0.4) 50%, transparent 100%),
+    radial-gradient(1.4px 1.4px at 74px 282px, rgb(255 226 160 / 0.4) 50%, transparent 100%),
+    radial-gradient(1px 1px at 318px 104px, rgb(243 239 230 / 0.35) 50%, transparent 100%),
+    radial-gradient(1px 1px at 446px 226px, rgb(243 239 230 / 0.3) 50%, transparent 100%);
+  background-size:
+    240px 240px,
+    300px 300px,
+    360px 360px,
+    420px 420px,
+    480px 480px,
+    540px 540px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+}
+
+/* A long diagonal shaft of solar light from the upper right. */
+.section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgb(255 215 61 / 0.09) 0,
+    rgb(255 215 61 / 0.03) 26%,
+    transparent 46%
+  );
+  -webkit-mask-image: linear-gradient(180deg, #000 0, transparent 70%);
+  mask-image: linear-gradient(180deg, #000 0, transparent 70%);
+}
+
+.eyebrow {
+  color: var(--ar-gold);
+}
+
+.section .title {
+  color: var(--ar-bone);
+  font-variation-settings: "wdth" 135;
+  letter-spacing: 0.04em;
+}
+
+.section .tagline {
+  color: var(--ar-gold);
+  text-shadow: 0 0 36px rgb(255 215 61 / 0.28);
+}
+
+/* ---------------------------------------------------------------------------
+   Promo stage
+   ------------------------------------------------------------------------ */
+
+.stageWrap {
+  --p: 1;
+}
+
+.stageScale {
+  transform-origin: 50% 0;
+}
+
+@media (min-width: 768px) {
+  .stageScale {
+    scale: calc(0.92 + 0.08 * min(1, var(--p) / 0.38));
+    will-change: scale;
+  }
+}
+
+.section .frame {
+  --gc-hud-line: var(--ar-rule);
+  --gc-hud-bracket: var(--ar-gold);
+  container-type: inline-size;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: var(--ar-plate);
+  box-shadow:
+    0 0 0 1px rgb(255 215 61 / 0.1),
+    0 50px 120px -40px rgb(255 215 61 / 0.18),
+    var(--gc-shadow-2);
+}
+
+.frameVignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, transparent 58%, rgb(0 0 0 / 0.5) 100%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.45) 0, transparent 22%, transparent 78%, rgb(0 0 0 / 0.4) 100%);
+}
+
+.hudLabel {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ar-bone);
+  pointer-events: none;
+}
+.hudTopLeft {
+  top: 1.125rem;
+  left: 1.5rem;
+}
+.hudTopRight {
+  top: 1.125rem;
+  right: 1.5rem;
+  color: var(--ar-gold);
+}
+
+@media (max-width: 639px) {
+  .hudLabel {
+    font-size: 0.625rem;
+    letter-spacing: 0.16em;
+  }
+  .hudTopLeft {
+    top: 0.875rem;
+    left: 1.125rem;
+  }
+  .hudTopRight {
+    top: 0.875rem;
+    right: 1.125rem;
+  }
+}
+
+.ctrl {
+  position: absolute;
+  z-index: 4;
+  right: 1rem;
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--ar-gold);
+  background-color: rgb(17 20 26 / 0.82);
+  border: 1px solid var(--ar-rule);
+  cursor: pointer;
+  transition:
+    border-color var(--gc-dur-2) var(--gc-ease-out),
+    background-color var(--gc-dur-2) var(--gc-ease-out),
+    color var(--gc-dur-2) var(--gc-ease-out);
+}
+.ctrl:hover {
+  border-color: var(--ar-gold);
+  background-color: rgb(17 20 26 / 0.95);
+  color: rgb(var(--gc-flare));
+}
+.ctrl svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.caption {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Stills: layered shots with a slow drift, and the beat rail
+   ------------------------------------------------------------------------ */
+
+.stills {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 0.4rem + 1.4vw, 1.25rem);
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--ar-plate);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1200ms var(--gc-ease-in-out);
+}
+.layer[data-active="true"] {
+  opacity: 1;
+  z-index: 1;
+}
+
+.still {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: 50% 50%;
+}
+
+/* Ken Burns: a slow push and drift. Each still carries its own end point (--dx, --dy). */
+.layer[data-drift="true"] .still {
+  animation: arDrift 16s linear forwards;
+  will-change: transform;
+}
+.stage[data-playing="false"] .still {
+  animation-play-state: paused;
+}
+@keyframes arDrift {
+  from {
+    transform: scale(1.02) translate(0, 0);
+  }
+  to {
+    transform: scale(1.11) translate(var(--dx, 0), var(--dy, 0));
+  }
+}
+
+.hudBottomLeft {
+  bottom: 1.125rem;
+  left: 1.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  color: var(--ar-gold);
+  max-width: calc(100% - 6rem);
+}
+.hudReadout {
+  color: var(--ar-bone);
+  letter-spacing: 0.14em;
+  opacity: 0.86;
+}
+@media (max-width: 639px) {
+  .hudBottomLeft {
+    bottom: 0.875rem;
+    left: 1.125rem;
+  }
+  .hudReadout {
+    display: none;
+  }
+}
+.hudMark {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  background-color: var(--ar-gold);
+  box-shadow: 0 0 10px rgb(255 215 61 / 0.7);
+}
+
+/* Time left on the shown still. Only rendered while the slideshow is playing. */
+.dwell {
+  position: absolute;
+  z-index: 3;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: var(--ar-gold);
+  transform-origin: 0 50%;
+  animation: arDwell 6500ms linear forwards;
+}
+@keyframes arDwell {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(0.5rem, 0.2rem + 1.2vw, 1rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.375rem;
+  text-align: left;
+  color: var(--ar-bone);
+  background-color: rgb(17 20 26 / 0.7);
+  border: 1px solid var(--ar-rule);
+  cursor: pointer;
+  transition:
+    border-color var(--gc-dur-2) var(--gc-ease-out),
+    box-shadow var(--gc-dur-3) var(--gc-ease-out);
+}
+.railItem:hover {
+  border-color: rgb(255 215 61 / 0.55);
+}
+.railItem:focus-visible {
+  outline: 2px solid rgb(var(--gc-stellar));
+  outline-offset: 3px;
+}
+.railItem[data-current="true"] {
+  border-color: var(--ar-gold);
+  box-shadow:
+    0 0 0 1px rgb(255 215 61 / 0.3),
+    0 0 36px -10px rgb(255 215 61 / 0.45);
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: var(--ar-plate);
+}
+.thumbImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.7) brightness(0.72);
+  transition: filter var(--gc-dur-3) var(--gc-ease-out);
+}
+.railItem:hover .thumbImg,
+.railItem[data-current="true"] .thumbImg {
+  filter: none;
+}
+
+.railLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0 0.25rem 0.25rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.railIndex {
+  color: var(--ar-gold);
+}
+.railVerb {
+  color: var(--ar-bone);
+}
+.railItem[data-current="true"] .railVerb {
+  color: rgb(var(--gc-flare));
+}
+@media (max-width: 639px) {
+  .railLabel {
+    flex-direction: column;
+    gap: 0.125rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.14em;
+  }
+  .railItem {
+    padding: 0.25rem;
+  }
+}
+
+/* Reduced motion and Motion Off: no drift, no fade, no countdown. One still holds. */
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    transition: none;
+  }
+  .layer[data-drift="true"] .still {
+    animation: none;
+  }
+}
+:global(.studio[data-motion="off"]) .layer {
+  transition: none;
+}
+:global(.studio[data-motion="off"]) .layer[data-drift="true"] .still {
+  animation: none;
+}
+
+/* ---------------------------------------------------------------------------
+   CSS planets
+   ------------------------------------------------------------------------ */
+
+.planet {
+  --d: 160px;
+  position: relative;
+  flex: none;
+  width: var(--d);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+}
+
+.disc {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: #0b0c10;
+  /* Terminator (shadow side, bottom right), rim light (lit side, top left), thin atmosphere line. */
+  box-shadow:
+    inset -28px -18px 46px 6px rgb(0 0 0 / 0.88),
+    inset 5px 4px 14px rgb(255 255 255 / 0.1),
+    0 0 0 1px rgb(255 255 255 / 0.05),
+    0 0 44px var(--glow, rgb(232 228 217 / 0.12));
+}
+/* Sunward light falloff drawn over the map. */
+.disc::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 26%, rgb(255 243 196 / 0.16), transparent 42%),
+    radial-gradient(circle at 70% 76%, rgb(0 0 0 / 0.5), transparent 62%);
+}
+
+.planet .strip {
+  /* Two 2:1 maps side by side. Each is twice the disc wide, so the disc is filled
+     edge to edge and -50% is exactly one map: a seamless loop. */
+  width: 400%;
+  height: 100%;
+  animation-duration: var(--spin, 60s);
+}
+.planet .strip img {
+  display: block;
+  flex: none;
+  width: 50%;
+  height: 100%;
+  object-fit: cover;
+  max-width: none;
+}
+
+.toneMoon {
+  --glow: rgb(232 228 217 / 0.14);
+}
+.toneEarth {
+  --glow: rgb(143 216 245 / 0.34);
+}
+.toneMars {
+  --glow: rgb(217 121 43 / 0.34);
+}
+
+/* Sun: pure CSS. Core, corona, and slow rays. */
+.sun {
+  --glow: rgb(255 215 61 / 0.5);
+}
+.sunCore {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 50% 50%, #fff3c4 0, #fff3c4 16%, #ffd73d 34%, #e8b23a 56%, #c48a2e 78%, #8f5a1f 100%);
+  box-shadow:
+    0 0 0 1px rgb(255 243 196 / 0.4),
+    0 0 60px 10px rgb(255 215 61 / 0.55),
+    0 0 160px 40px rgb(232 178 58 / 0.32);
+}
+.sunCorona {
+  position: absolute;
+  inset: -55%;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(255 226 160 / 0.5) 0, rgb(255 215 61 / 0.18) 30%, transparent 62%);
+}
+.sunRays {
+  position: absolute;
+  inset: -70%;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0.5;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgb(255 226 160 / 0.5) 0deg 1.2deg,
+    transparent 1.2deg 11.25deg
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 20%, #000 28%, transparent 60%);
+  mask-image: radial-gradient(circle, transparent 20%, #000 28%, transparent 60%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sunRays {
+    animation: arSunSpin 120s linear infinite;
+  }
+  .sunCorona {
+    animation: arSunBreathe 6s var(--gc-ease-in-out) infinite;
+  }
+}
+
+@keyframes arSunSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes arSunBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+:global(.studio[data-motion="off"]) .sunRays,
+:global(.studio[data-motion="off"]) .sunCorona {
+  animation: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Beats (stacked default)
+   ------------------------------------------------------------------------ */
+
+.beats {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.beatsRail {
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  left: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgb(255 215 61 / 0.55) 8%, rgb(255 215 61 / 0.55) 92%, transparent);
+}
+
+.beat {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  padding-block: 2.5rem;
+  padding-left: 1.75rem;
+  border-top: 1px solid rgb(var(--gc-rule));
+}
+.beat:first-child {
+  border-top: 0;
+}
+.beat::before {
+  content: "";
+  position: absolute;
+  top: 3.1rem;
+  left: -0.3125rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid var(--ar-gold);
+  border-radius: 9999px;
+  background: rgb(var(--gc-deep));
+  box-shadow: 0 0 14px rgb(255 215 61 / 0.5);
+}
+
+@media (min-width: 768px) {
+  .beat {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3rem;
+    padding-block: 3.5rem;
+  }
+  .beat:nth-child(even) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .beat:nth-child(even) .beatPlanet {
+    order: -1;
+  }
+  .beat::before {
+    top: 4.2rem;
+  }
+}
+
+.beat .beatPlanet {
+  --d: 160px;
+  display: flex;
+  justify-content: center;
+}
+@media (min-width: 768px) {
+  .beat .beatPlanet {
+    --d: 220px;
+  }
+}
+
+.beatIndex {
+  color: var(--ar-gold);
+}
+
+.beatVerb {
+  margin-top: 0.75rem;
+  color: var(--ar-bone);
+}
+
+.beatBody {
+  max-width: 44ch;
+  margin-top: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Beats (pinned stage: md and up, motion on)
+   ------------------------------------------------------------------------ */
+
+.pin {
+  position: relative;
+  height: 400vh;
+}
+
+.pinStage {
+  position: sticky;
+  top: var(--gc-nav-h);
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  height: calc(100svh - var(--gc-nav-h));
+  min-height: 32rem;
+  padding-block: 2rem 3.5rem;
+}
+
+.pinCopy {
+  display: grid;
+}
+.pinBeat {
+  grid-area: 1 / 1;
+  align-self: center;
+  opacity: 0;
+  transform: translateY(18px);
+  pointer-events: none;
+  transition:
+    opacity var(--gc-dur-4) var(--gc-ease-out),
+    transform var(--gc-dur-4) var(--gc-ease-out);
+}
+.pinBeat[data-active="true"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.pinArt {
+  position: relative;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 4 / 3;
+  justify-self: center;
+  container-type: inline-size;
+}
+
+.pinArt .pinPlanet {
+  --d: 31cqw;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  opacity: 0;
+  scale: 0.9;
+  transition:
+    opacity var(--gc-dur-4) var(--gc-ease-out),
+    scale var(--gc-dur-4) var(--gc-ease-out);
+}
+.pinArt .pinPlanet[data-active="true"] {
+  opacity: 1;
+  scale: 1;
+}
+
+.orbitSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.orbitBase {
+  fill: none;
+  stroke: rgb(var(--gc-rule-2));
+  stroke-width: 1;
+  stroke-dasharray: 2 7;
+  vector-effect: non-scaling-stroke;
+}
+.orbitDraw {
+  fill: none;
+  stroke: var(--ar-gold);
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px rgb(255 215 61 / 0.7));
+}
+.waypoint {
+  fill: rgb(var(--gc-deep));
+  stroke: rgb(var(--gc-rule-2));
+  stroke-width: 1.5;
+  transition:
+    fill var(--gc-dur-3) var(--gc-ease-out),
+    stroke var(--gc-dur-3) var(--gc-ease-out);
+}
+.waypoint[data-reached="true"] {
+  fill: var(--ar-gold);
+  stroke: var(--ar-gold);
+}
+.waypointLabel {
+  fill: rgb(var(--gc-ink-3));
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transition: fill var(--gc-dur-3) var(--gc-ease-out);
+}
+.waypointLabel[data-reached="true"] {
+  fill: var(--ar-gold);
+}
+.shipHalo {
+  fill: rgb(255 215 61 / 0.22);
+}
+.shipDot {
+  fill: rgb(var(--gc-flare));
+  filter: drop-shadow(0 0 5px rgb(255 215 61 / 0.9));
+}
+
+.pinReadout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgb(var(--gc-ink-3));
+}
+.pinRail {
+  position: relative;
+  flex: 1;
+  height: 1px;
+  background: rgb(var(--gc-rule));
+}
+.pinRailFill {
+  position: absolute;
+  inset: 0;
+  background: var(--ar-gold);
+  box-shadow: 0 0 10px rgb(255 215 61 / 0.7);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+}
+
+/* ---------------------------------------------------------------------------
+   Facts strip, CTA, credit
+   ------------------------------------------------------------------------ */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--ar-rule);
+  background: rgb(17 20 26 / 0.55);
+}
+@media (min-width: 1024px) {
+  .facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.fact {
+  position: relative;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border-top: 1px solid var(--ar-rule);
+}
+.fact:nth-child(-n + 2) {
+  border-top: 0;
+}
+.fact:nth-child(even) {
+  border-left: 1px solid var(--ar-rule);
+}
+@media (min-width: 1024px) {
+  .fact {
+    border-top: 0;
+    border-left: 1px solid var(--ar-rule);
+  }
+  .fact:first-child {
+    border-left: 0;
+  }
+}
+.fact::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  width: 1.5rem;
+  height: 2px;
+  background: var(--ar-gold);
+}
+.fact:nth-child(-n + 2)::before {
+  top: -1px;
+}
+.factTerm {
+  color: var(--ar-gold);
+}
+.factDetail {
+  margin: 0.625rem 0 0;
+  font-family: var(--font-geist), system-ui, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ar-bone);
+}
+
+.launch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem 2rem;
+}
+
+/* Gold chamfer CTA: sets the button channels on the element (element + class beats the variant). */
+a.gold {
+  --gc-btn-line: var(--ar-gold);
+  --gc-btn-fill: var(--ar-gold);
+  --gc-btn-ink: var(--ar-plate);
+}
+a.gold:hover {
+  --gc-btn-line: rgb(var(--gc-flare));
+  --gc-btn-fill: rgb(var(--gc-flare));
+  filter: drop-shadow(0 0 16px rgb(255 215 61 / 0.45));
+}
+
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  font-family: var(--font-geist), system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--ar-bone);
+  text-decoration: underline;
+  text-decoration-color: rgb(255 215 61 / 0.45);
+  text-underline-offset: 0.3em;
+  transition: color var(--gc-dur-2) var(--gc-ease-out), text-decoration-color var(--gc-dur-2) var(--gc-ease-out);
+}
+.textLink:hover {
+  color: var(--ar-gold);
+  text-decoration-color: var(--ar-gold);
+}
+.textLink svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.status {
+  color: rgb(var(--gc-ink-3));
+}
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.75rem;
+  border-radius: 9999px;
+  background: var(--ar-gold);
+  box-shadow: 0 0 12px rgb(255 215 61 / 0.7);
+  vertical-align: 0.05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stageScale {
+    scale: none;
+  }
+}
+
+:global(.studio[data-motion="off"]) .stageScale {
+  scale: none;
+}

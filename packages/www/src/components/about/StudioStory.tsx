@@ -25,8 +25,9 @@ export function StudioStory() {
             starting with Aphelion Run.
           </p>
           <p>
-            The Arcade is where the smaller games live: Riffle Poker, Scribble,
-            Warships, and Whodunit?. They run in the browser. Arcade play uses
+            The Arcade is our growing library of online board and table games:
+            Riffle Poker, Scribble, Warships, and Whodunit?. They run in the
+            browser with friends or strangers. Arcade play uses
             social chips, and there is nothing to buy.
           </p>
         </div>
